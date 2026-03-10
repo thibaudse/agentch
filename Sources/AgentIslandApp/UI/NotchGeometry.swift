@@ -26,18 +26,36 @@ struct NotchGeometry: Equatable {
         notchHeight + AppConfig.expandedExtraHeight
     }
 
-    var collapsedScaleX: CGFloat {
-        notchWidth / expandedWidth
+    var interactiveWidth: CGFloat {
+        max(notchWidth + AppConfig.interactivePaddingWidth, AppConfig.minInteractiveWidth)
     }
 
-    var collapsedScaleY: CGFloat {
-        notchHeight / expandedHeight
+    var interactiveHeight: CGFloat {
+        notchHeight + AppConfig.interactiveExtraHeight
     }
 
-    var windowFrame: CGRect {
-        let originX = screenFrame.midX - expandedWidth / 2
-        let originY = screenFrame.maxY - expandedHeight
-        return CGRect(x: originX, y: originY, width: expandedWidth, height: expandedHeight)
+    func effectiveWidth(interactive: Bool) -> CGFloat {
+        interactive ? interactiveWidth : expandedWidth
+    }
+
+    func effectiveHeight(interactive: Bool) -> CGFloat {
+        interactive ? interactiveHeight : expandedHeight
+    }
+
+    func collapsedScaleX(interactive: Bool) -> CGFloat {
+        notchWidth / effectiveWidth(interactive: interactive)
+    }
+
+    func collapsedScaleY(interactive: Bool) -> CGFloat {
+        notchHeight / effectiveHeight(interactive: interactive)
+    }
+
+    func windowFrame(interactive: Bool = false) -> CGRect {
+        let width = effectiveWidth(interactive: interactive)
+        let height = effectiveHeight(interactive: interactive)
+        let originX = screenFrame.midX - width / 2
+        let originY = screenFrame.maxY - height
+        return CGRect(x: originX, y: originY, width: width, height: height)
     }
 
     static func detect(on screen: NSScreen? = nil) -> NotchGeometry {

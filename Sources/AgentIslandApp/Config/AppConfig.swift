@@ -9,6 +9,10 @@ enum AppConfig {
     static let expandedPaddingWidth: CGFloat = 120
     static let expandedExtraHeight: CGFloat = 40
 
+    static let minInteractiveWidth: CGFloat = 440
+    static let interactivePaddingWidth: CGFloat = 200
+    static let interactiveExtraHeight: CGFloat = 84
+
     static let appearDuration: TimeInterval = 0.35
     static let disappearDuration: TimeInterval = 0.35
     static let appearDelayNanos: UInt64 = 20_000_000

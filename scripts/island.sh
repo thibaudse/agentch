@@ -3,6 +3,7 @@ set -euo pipefail
 # island.sh - Bridge script to communicate with the AgentIsland helper app
 # Usage:
 #   island.sh show "message" [agent_name] [duration_secs] [pid]
+#   island.sh prompt [message] [agent_name] [pid]   # interactive text input
 #   island.sh dismiss
 #   island.sh start   # launch the helper daemon
 #   island.sh stop    # stop the helper daemon
@@ -79,6 +80,14 @@ case "${1:-show}" in
         agent_json="$(json_escape "$agent")"
         send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":$duration,\"pid\":$pid}"
         ;;
+    prompt)
+        message="${2:-}"
+        agent="${3:-}"
+        pid="${4:-0}"
+        message_json="$(json_escape "$message")"
+        agent_json="$(json_escape "$agent")"
+        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":0,\"pid\":$pid,\"interactive\":true}"
+        ;;
     dismiss)
         send_message '{"action":"dismiss"}'
         ;;
@@ -89,7 +98,7 @@ case "${1:-show}" in
         stop_daemon
         ;;
     *)
-        echo "Usage: island.sh {show|dismiss|start|stop} [message] [agent] [duration] [pid]" >&2
+        echo "Usage: island.sh {show|prompt|dismiss|start|stop} [message] [agent] [duration] [pid]" >&2
         exit 1
         ;;
 esac

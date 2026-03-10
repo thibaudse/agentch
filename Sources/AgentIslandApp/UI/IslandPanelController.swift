@@ -2,7 +2,9 @@ import AppKit
 import SwiftUI
 
 private final class OverlayPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
+    var acceptsKeyInput = false
+
+    override var canBecomeKey: Bool { acceptsKeyInput }
     override var canBecomeMain: Bool { false }
 
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
@@ -18,6 +20,7 @@ final class IslandPanelController: NSObject {
 
     private var panel: OverlayPanel?
     private var isPresented = false
+    private var previousApp: NSRunningApplication?
     private var autoDismissTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
     private var trackingTask: Task<Void, Never>?
@@ -34,7 +37,13 @@ final class IslandPanelController: NSObject {
         trackingTask?.cancel()
     }
 
-    func show(message: String, agent: String, duration: TimeInterval = AppConfig.defaultDisplayDuration, pid: pid_t = 0) {
+    func show(
+        message: String,
+        agent: String,
+        duration: TimeInterval = AppConfig.defaultDisplayDuration,
+        pid: pid_t = 0,
+        interactive: Bool = false
+    ) {
         cancelPendingTasks()
 
         // Monitor the agent process — auto-dismiss if it exits
@@ -43,18 +52,37 @@ final class IslandPanelController: NSObject {
         }
 
         let geometry = NotchGeometry.detect()
-        viewModel.update(message: message, agentName: agent, geometry: geometry)
+        viewModel.update(message: message, agentName: agent, geometry: geometry, interactive: interactive)
         viewModel.expanded = false
+
+        if interactive {
+            viewModel.onSubmit = { [weak self] text in
+                self?.handleSubmit(text: text)
+            }
+            previousApp = NSWorkspace.shared.frontmostApplication
+        } else {
+            viewModel.onSubmit = nil
+            previousApp = nil
+        }
 
         ensurePanel()
         guard let panel else { return }
 
+        let frame = geometry.windowFrame(interactive: interactive)
         isPresented = true
         panel.ignoresMouseEvents = false
-        panel.setFrame(geometry.windowFrame, display: true)
+        panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
         topmostSpaceManager.attach(window: panel)
         startTrackingLoop()
+
+        if interactive {
+            TerminalPaster.ensureAccessibility()
+            panel.acceptsKeyInput = true
+            panel.makeKeyAndOrderFront(nil)
+        } else {
+            panel.acceptsKeyInput = false
+        }
 
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
@@ -82,6 +110,11 @@ final class IslandPanelController: NSObject {
         autoDismissTask = nil
         hideTask?.cancel()
         panel?.ignoresMouseEvents = true
+        panel?.acceptsKeyInput = false
+
+        let wasInteractive = viewModel.interactive
+        let appToRestore = previousApp
+        previousApp = nil
 
         withAnimation(.smooth(duration: AppConfig.disappearDuration)) {
             viewModel.expanded = false
@@ -97,9 +130,23 @@ final class IslandPanelController: NSObject {
                 self.topmostSpaceManager.detach(window: panel)
                 panel.orderOut(nil)
                 self.stopTrackingLoop()
+
+                if wasInteractive, let app = appToRestore {
+                    app.activate()
+                }
             }
         }
     }
+
+    // MARK: - Input Handling
+
+    private func handleSubmit(text: String) {
+        let app = previousApp
+        dismiss()
+        TerminalPaster.paste(text: text, into: app)
+    }
+
+    // MARK: - System Layout
 
     @objc private func handleSystemLayoutChange(_: Notification) {
         refreshGeometry(force: true)
@@ -114,7 +161,7 @@ final class IslandPanelController: NSObject {
 
         let hostingView = NSHostingView(rootView: view)
         let panel = OverlayPanel(
-            contentRect: viewModel.geometry.windowFrame,
+            contentRect: viewModel.geometry.windowFrame(),
             styleMask: [.borderless, .nonactivatingPanel, .utilityWindow, .hudWindow],
             backing: .buffered,
             defer: false
@@ -143,15 +190,17 @@ final class IslandPanelController: NSObject {
             viewModel.geometry = latestGeometry
         }
 
+        let targetFrame = latestGeometry.windowFrame(interactive: viewModel.interactive)
+
         if !isPresented {
-            if force, panel.frame != latestGeometry.windowFrame {
-                panel.setFrame(latestGeometry.windowFrame, display: false)
+            if force, panel.frame != targetFrame {
+                panel.setFrame(targetFrame, display: false)
             }
             return
         }
 
-        if panel.frame != latestGeometry.windowFrame {
-            panel.setFrame(latestGeometry.windowFrame, display: true)
+        if panel.frame != targetFrame {
+            panel.setFrame(targetFrame, display: true)
         }
         panel.level = AppConfig.panelWindowLevel
         panel.orderFrontRegardless()
