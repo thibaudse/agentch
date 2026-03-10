@@ -1,24 +1,22 @@
 #!/bin/bash
-# build.sh - Compile the AgentIsland Swift helper
-set -e
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 INSTALL_DIR="${AGENT_ISLAND_HOME:-$HOME/.agent-island}"
+BINARY_NAME="AgentIsland"
 
-echo "Building AgentIsland..."
+echo "Building ${BINARY_NAME} with SwiftPM..."
+
+swift build --configuration release --product "$BINARY_NAME" --package-path "$PROJECT_DIR"
+BIN_DIR="$(swift build --configuration release --product "$BINARY_NAME" --package-path "$PROJECT_DIR" --show-bin-path)"
 
 mkdir -p "$INSTALL_DIR"
+cp "$BIN_DIR/$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
+chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
-swiftc \
-    -O \
-    -whole-module-optimization \
-    -framework AppKit \
-    -framework SwiftUI \
-    -o "$INSTALL_DIR/AgentIsland" \
-    "$PROJECT_DIR/swift/AgentIsland.swift"
-
-echo "Built successfully: $INSTALL_DIR/AgentIsland"
+echo "Built successfully: $INSTALL_DIR/$BINARY_NAME"
 echo ""
-echo "To test: $INSTALL_DIR/AgentIsland &"
-echo "Then:    $SCRIPT_DIR/island.sh show 'Hello World' 'test'"
+echo "Quick test:"
+echo "  $SCRIPT_DIR/island.sh start"
+echo "  $SCRIPT_DIR/island.sh show 'Hello World' 'test'"

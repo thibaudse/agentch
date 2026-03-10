@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 # island.sh - Bridge script to communicate with the AgentIsland helper app
 # Usage:
 #   island.sh show "message" [agent_name] [duration_secs]
@@ -15,33 +16,56 @@ PID_FILE="/tmp/agent-island.pid"
 send_message() {
     local json="$1"
     if [ ! -S "$SOCKET" ]; then
-        # Auto-start the daemon if not running
         start_daemon
-        sleep 0.5
+        wait_for_socket
     fi
     echo "$json" | nc -U "$SOCKET" -w 1 2>/dev/null
 }
 
+json_escape() {
+    python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"
+}
+
 start_daemon() {
-    if [ -S "$SOCKET" ] && kill -0 "$(cat "$PID_FILE" 2>/dev/null)" 2>/dev/null; then
-        return 0  # Already running
+    if [ -S "$SOCKET" ]; then
+        return 0
     fi
+
     if [ ! -f "$BINARY_PATH" ]; then
         echo "Error: AgentIsland binary not found at $BINARY_PATH" >&2
         echo "Run: cd $(dirname "$0")/.. && ./scripts/build.sh" >&2
         return 1
     fi
+
     "$BINARY_PATH" &
     echo $! > "$PID_FILE"
-    sleep 0.3  # Give it time to start
+    wait_for_socket
+}
+
+wait_for_socket() {
+    local retries=30
+    while [ "$retries" -gt 0 ]; do
+        if [ -S "$SOCKET" ]; then
+            return 0
+        fi
+        sleep 0.1
+        retries=$((retries - 1))
+    done
+
+    echo "Error: AgentIsland did not create socket at $SOCKET" >&2
+    return 1
 }
 
 stop_daemon() {
-    send_message '{"action":"quit"}' 2>/dev/null
+    if [ -S "$SOCKET" ]; then
+        send_message '{"action":"quit"}' 2>/dev/null || true
+    fi
+
     if [ -f "$PID_FILE" ]; then
-        kill "$(cat "$PID_FILE")" 2>/dev/null
+        kill "$(cat "$PID_FILE")" 2>/dev/null || true
         rm -f "$PID_FILE"
     fi
+
     rm -f "$SOCKET"
 }
 
@@ -50,7 +74,9 @@ case "${1:-show}" in
         message="${2:-Hello World}"
         agent="${3:-}"
         duration="${4:-0}"
-        send_message "{\"action\":\"show\",\"message\":\"$message\",\"agent\":\"$agent\",\"duration\":$duration}"
+        message_json="$(json_escape "$message")"
+        agent_json="$(json_escape "$agent")"
+        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":$duration}"
         ;;
     dismiss)
         send_message '{"action":"dismiss"}'
