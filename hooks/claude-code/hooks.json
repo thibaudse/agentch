@@ -1,0 +1,42 @@
+{
+  "description": "Agent Island - Dynamic Island notifications for Claude Code",
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "idle_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh show 'Waiting for input' 'Claude'",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh show 'Waiting for input' 'Claude'",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh dismiss",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
