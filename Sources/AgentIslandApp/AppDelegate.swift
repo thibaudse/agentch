@@ -37,8 +37,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handle(_ command: IslandCommand) {
         switch command {
-        case let .show(message, agent, duration):
-            panelController.show(message: message, agent: agent, duration: duration)
+        case let .show(message, agent, duration, pid):
+            panelController.show(message: message, agent: agent, duration: duration, pid: pid)
         case .dismiss:
             panelController.dismiss()
         case .quit:

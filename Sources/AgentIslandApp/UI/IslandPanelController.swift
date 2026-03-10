@@ -14,8 +14,10 @@ private final class OverlayPanel: NSPanel {
 final class IslandPanelController: NSObject {
     private let viewModel = IslandViewModel()
     private let topmostSpaceManager = TopmostSpaceManager()
+    private let processMonitor = ProcessMonitor()
 
     private var panel: OverlayPanel?
+    private var isPresented = false
     private var autoDismissTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
     private var trackingTask: Task<Void, Never>?
@@ -32,8 +34,13 @@ final class IslandPanelController: NSObject {
         trackingTask?.cancel()
     }
 
-    func show(message: String, agent: String, duration: TimeInterval = AppConfig.defaultDisplayDuration) {
+    func show(message: String, agent: String, duration: TimeInterval = AppConfig.defaultDisplayDuration, pid: pid_t = 0) {
         cancelPendingTasks()
+
+        // Monitor the agent process — auto-dismiss if it exits
+        processMonitor.monitor(pid: pid) { [weak self] in
+            self?.dismiss()
+        }
 
         let geometry = NotchGeometry.detect()
         viewModel.update(message: message, agentName: agent, geometry: geometry)
@@ -42,6 +49,8 @@ final class IslandPanelController: NSObject {
         ensurePanel()
         guard let panel else { return }
 
+        isPresented = true
+        panel.ignoresMouseEvents = false
         panel.setFrame(geometry.windowFrame, display: true)
         panel.orderFrontRegardless()
         topmostSpaceManager.attach(window: panel)
@@ -68,9 +77,11 @@ final class IslandPanelController: NSObject {
     }
 
     func dismiss() {
+        processMonitor.stop()
         autoDismissTask?.cancel()
         autoDismissTask = nil
         hideTask?.cancel()
+        panel?.ignoresMouseEvents = true
 
         withAnimation(.smooth(duration: AppConfig.disappearDuration)) {
             viewModel.expanded = false
@@ -82,6 +93,7 @@ final class IslandPanelController: NSObject {
             await MainActor.run {
                 guard !self.viewModel.expanded else { return }
                 guard let panel = self.panel else { return }
+                self.isPresented = false
                 self.topmostSpaceManager.detach(window: panel)
                 panel.orderOut(nil)
                 self.stopTrackingLoop()
@@ -108,11 +120,11 @@ final class IslandPanelController: NSObject {
             defer: false
         )
 
-        panel.level = .mainMenu + 3
+        panel.level = AppConfig.panelWindowLevel
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
-        panel.ignoresMouseEvents = false
+        panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.isFloatingPanel = true
         panel.isMovable = false
@@ -121,6 +133,29 @@ final class IslandPanelController: NSObject {
         panel.contentView = hostingView
 
         self.panel = panel
+    }
+
+    private func refreshGeometry(force: Bool) {
+        guard let panel else { return }
+
+        let latestGeometry = NotchGeometry.detect()
+        if latestGeometry != viewModel.geometry {
+            viewModel.geometry = latestGeometry
+        }
+
+        if !isPresented {
+            if force, panel.frame != latestGeometry.windowFrame {
+                panel.setFrame(latestGeometry.windowFrame, display: false)
+            }
+            return
+        }
+
+        if panel.frame != latestGeometry.windowFrame {
+            panel.setFrame(latestGeometry.windowFrame, display: true)
+        }
+        panel.level = AppConfig.panelWindowLevel
+        panel.orderFrontRegardless()
+        topmostSpaceManager.attach(window: panel)
     }
 
     private func startTrackingLoop() {
@@ -138,28 +173,25 @@ final class IslandPanelController: NSObject {
         trackingTask = nil
     }
 
-    private func refreshGeometry(force: Bool) {
-        guard let panel else { return }
-        guard panel.isVisible || force else { return }
-
-        let latestGeometry = NotchGeometry.detect()
-        if latestGeometry != viewModel.geometry {
-            viewModel.geometry = latestGeometry
-        }
-
-        if panel.frame != latestGeometry.windowFrame {
-            panel.setFrame(latestGeometry.windowFrame, display: true)
-        }
-
-        panel.orderFrontRegardless()
-        topmostSpaceManager.attach(window: panel)
-    }
-
     private func installObservers() {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleSystemLayoutChange(_:)),
             name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSystemLayoutChange(_:)),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSystemLayoutChange(_:)),
+            name: NSApplication.didBecomeActiveNotification,
             object: nil
         )
 
@@ -186,6 +218,7 @@ final class IslandPanelController: NSObject {
     }
 
     private func cancelPendingTasks() {
+        processMonitor.stop()
         autoDismissTask?.cancel()
         autoDismissTask = nil
         hideTask?.cancel()

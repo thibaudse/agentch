@@ -1,124 +1,106 @@
 import AppKit
-import Darwin
 import Foundation
 
 @MainActor
 final class TopmostSpaceManager {
-    private typealias ConnectionID = Int32
-    private typealias SpaceID = Int32
-
-    private typealias MainConnectionFn = @convention(c) () -> ConnectionID
-    private typealias SpaceCreateFn = @convention(c) (ConnectionID, Int32, Int32) -> SpaceID
-    private typealias SpaceSetAbsoluteLevelFn = @convention(c) (ConnectionID, SpaceID, Int32) -> Int32
-    private typealias ShowSpacesFn = @convention(c) (ConnectionID, CFArray) -> Int32
-    private typealias AddWindowAndRemoveFromSpacesFn = @convention(c) (ConnectionID, SpaceID, CFArray, Int32) -> Int32
-    private typealias RemoveWindowsFromSpacesFn = @convention(c) (ConnectionID, CFArray, CFArray) -> Int32
+    private static let topSpaceLevel = 2_147_483_647
+    private typealias ConnectionID = UInt
+    private typealias SpaceID = UInt64
 
     private let isEnabled: Bool
-
-    private var attemptedSetup = false
-    private var skyLightHandle: UnsafeMutableRawPointer?
-
-    private var mainConnection: MainConnectionFn?
-    private var spaceCreate: SpaceCreateFn?
-    private var spaceSetAbsoluteLevel: SpaceSetAbsoluteLevelFn?
-    private var showSpaces: ShowSpacesFn?
-    private var addWindowAndRemoveFromSpaces: AddWindowAndRemoveFromSpacesFn?
-    private var removeWindowsFromSpaces: RemoveWindowsFromSpacesFn?
-
-    private var connectionID: ConnectionID = 0
-    private var spaceID: SpaceID = 0
+    private var spaceID: SpaceID?
+    private var attachedWindowNumbers: Set<Int> = []
 
     init(isEnabled: Bool = AppConfig.enablePrivateTopSpace) {
         self.isEnabled = isEnabled
+        guard isEnabled else { return }
+
+        let connection = _CGSDefaultConnection()
+        let flag = 0x1
+        let createdSpace = CGSSpaceCreate(connection, flag, nil)
+
+        guard createdSpace != 0 else {
+            NSLog("AgentIsland: Unable to create private top space")
+            return
+        }
+
+        CGSSpaceSetAbsoluteLevel(connection, createdSpace, Self.topSpaceLevel)
+        CGSShowSpaces(connection, [createdSpace] as NSArray)
+        spaceID = createdSpace
+        NSLog("AgentIsland: Private top space enabled")
     }
 
     deinit {
-        if let handle = skyLightHandle {
-            dlclose(handle)
+        guard let spaceID else { return }
+        let connection = _CGSDefaultConnection()
+
+        if !attachedWindowNumbers.isEmpty {
+            CGSRemoveWindowsFromSpaces(
+                connection,
+                attachedWindowNumbers.map(NSNumber.init(value:)) as NSArray,
+                [spaceID] as NSArray
+            )
         }
+
+        CGSHideSpaces(connection, [spaceID] as NSArray)
+        CGSSpaceDestroy(connection, spaceID)
     }
 
     func attach(window: NSWindow) {
-        guard ensureSpace() else { return }
-        guard let addWindowAndRemoveFromSpaces else { return }
-        guard window.windowNumber > 0 else { return }
+        guard isEnabled, let spaceID else { return }
+        let windowNumber = window.windowNumber
+        guard windowNumber > 0 else { return }
+        attachedWindowNumbers.insert(windowNumber)
 
-        _ = addWindowAndRemoveFromSpaces(
-            connectionID,
-            spaceID,
-            [window.windowNumber] as CFArray,
-            7
+        let connection = _CGSDefaultConnection()
+        CGSShowSpaces(connection, [spaceID] as NSArray)
+
+        CGSAddWindowsToSpaces(
+            connection,
+            [windowNumber] as NSArray,
+            [spaceID] as NSArray
         )
     }
 
     func detach(window: NSWindow) {
-        guard ensureSpace() else { return }
-        guard let removeWindowsFromSpaces else { return }
-        guard window.windowNumber > 0 else { return }
+        guard isEnabled, let spaceID else { return }
+        let windowNumber = window.windowNumber
+        guard windowNumber > 0 else { return }
+        attachedWindowNumbers.remove(windowNumber)
 
-        _ = removeWindowsFromSpaces(
-            connectionID,
-            [window.windowNumber] as CFArray,
-            [spaceID] as CFArray
+        CGSRemoveWindowsFromSpaces(
+            _CGSDefaultConnection(),
+            [windowNumber] as NSArray,
+            [spaceID] as NSArray
         )
-    }
-
-    private func ensureSpace() -> Bool {
-        guard isEnabled else { return false }
-        loadSymbolsAndCreateSpaceIfNeeded()
-        return connectionID != 0 && spaceID != 0
-    }
-
-    private func loadSymbolsAndCreateSpaceIfNeeded() {
-        guard !attemptedSetup else { return }
-        attemptedSetup = true
-
-        let frameworkPath = "/System/Library/PrivateFrameworks/SkyLight.framework/Versions/A/SkyLight"
-        skyLightHandle = dlopen(frameworkPath, RTLD_NOW | RTLD_LOCAL)
-        guard skyLightHandle != nil else {
-            NSLog("AgentIsland: SkyLight unavailable, falling back to public window stacking")
-            return
-        }
-
-        mainConnection = loadSymbol(named: "SLSMainConnectionID", as: MainConnectionFn.self)
-        spaceCreate = loadSymbol(named: "SLSSpaceCreate", as: SpaceCreateFn.self)
-        spaceSetAbsoluteLevel = loadSymbol(named: "SLSSpaceSetAbsoluteLevel", as: SpaceSetAbsoluteLevelFn.self)
-        showSpaces = loadSymbol(named: "SLSShowSpaces", as: ShowSpacesFn.self)
-        addWindowAndRemoveFromSpaces = loadSymbol(
-            named: "SLSSpaceAddWindowsAndRemoveFromSpaces",
-            as: AddWindowAndRemoveFromSpacesFn.self
-        )
-        removeWindowsFromSpaces = loadSymbol(named: "SLSRemoveWindowsFromSpaces", as: RemoveWindowsFromSpacesFn.self)
-
-        guard
-            let mainConnection,
-            let spaceCreate,
-            let spaceSetAbsoluteLevel,
-            let showSpaces
-        else {
-            NSLog("AgentIsland: SkyLight symbols not fully available, falling back")
-            return
-        }
-
-        let connectionID = mainConnection()
-        let createdSpace = spaceCreate(connectionID, 1, 0)
-        guard connectionID != 0, createdSpace != 0 else {
-            NSLog("AgentIsland: Unable to create SkyLight top space")
-            return
-        }
-
-        _ = spaceSetAbsoluteLevel(connectionID, createdSpace, 400)
-        _ = showSpaces(connectionID, [createdSpace] as CFArray)
-
-        self.connectionID = connectionID
-        self.spaceID = createdSpace
-        NSLog("AgentIsland: SkyLight top space enabled")
-    }
-
-    private func loadSymbol<T>(named name: String, as type: T.Type) -> T? {
-        guard let skyLightHandle else { return nil }
-        guard let rawSymbol = dlsym(skyLightHandle, name) else { return nil }
-        return unsafeBitCast(rawSymbol, to: type)
     }
 }
+
+// MARK: - Private CGS Symbols
+
+private typealias CGSConnectionID = UInt
+private typealias CGSSpaceID = UInt64
+
+@_silgen_name("_CGSDefaultConnection")
+private func _CGSDefaultConnection() -> CGSConnectionID
+
+@_silgen_name("CGSSpaceCreate")
+private func CGSSpaceCreate(_ connection: CGSConnectionID, _ flag: Int, _ options: NSDictionary?) -> CGSSpaceID
+
+@_silgen_name("CGSSpaceDestroy")
+private func CGSSpaceDestroy(_ connection: CGSConnectionID, _ space: CGSSpaceID)
+
+@_silgen_name("CGSSpaceSetAbsoluteLevel")
+private func CGSSpaceSetAbsoluteLevel(_ connection: CGSConnectionID, _ space: CGSSpaceID, _ level: Int)
+
+@_silgen_name("CGSAddWindowsToSpaces")
+private func CGSAddWindowsToSpaces(_ connection: CGSConnectionID, _ windows: NSArray, _ spaces: NSArray)
+
+@_silgen_name("CGSRemoveWindowsFromSpaces")
+private func CGSRemoveWindowsFromSpaces(_ connection: CGSConnectionID, _ windows: NSArray, _ spaces: NSArray)
+
+@_silgen_name("CGSHideSpaces")
+private func CGSHideSpaces(_ connection: CGSConnectionID, _ spaces: NSArray)
+
+@_silgen_name("CGSShowSpaces")
+private func CGSShowSpaces(_ connection: CGSConnectionID, _ spaces: NSArray)

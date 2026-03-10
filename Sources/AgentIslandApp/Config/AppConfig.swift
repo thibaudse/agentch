@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 enum AppConfig {
@@ -14,5 +15,9 @@ enum AppConfig {
     static let hideDelayNanos: UInt64 = 400_000_000
     static let trackingIntervalNanos: UInt64 = 80_000_000
 
+    static let processMonitorIntervalNanos: UInt64 = 2_000_000_000
+
     static let enablePrivateTopSpace = ProcessInfo.processInfo.environment["AGENTCH_DISABLE_PRIVATE_TOPSPACE"] != "1"
+
+    static let panelWindowLevel = NSWindow.Level.mainMenu + 3
 }

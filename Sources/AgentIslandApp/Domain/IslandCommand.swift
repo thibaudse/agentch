@@ -1,7 +1,7 @@
 import Foundation
 
 enum IslandCommand {
-    case show(message: String, agent: String, duration: TimeInterval)
+    case show(message: String, agent: String, duration: TimeInterval, pid: pid_t)
     case dismiss
     case quit
 
@@ -15,7 +15,8 @@ enum IslandCommand {
             self = .show(
                 message: payload.message ?? "Hello World",
                 agent: payload.agent ?? "",
-                duration: payload.duration ?? AppConfig.defaultDisplayDuration
+                duration: payload.duration ?? AppConfig.defaultDisplayDuration,
+                pid: pid_t(payload.pid ?? 0)
             )
         case "dismiss":
             self = .dismiss
@@ -32,4 +33,5 @@ private struct Payload: Decodable {
     let message: String?
     let agent: String?
     let duration: TimeInterval?
+    let pid: Int?
 }
