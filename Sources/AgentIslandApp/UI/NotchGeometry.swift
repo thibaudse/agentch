@@ -38,6 +38,11 @@ struct NotchGeometry: Equatable {
         notchHeight + AppConfig.fullExpandedExtraHeight
     }
 
+    /// Maximum panel height — used for the NSPanel frame so it can contain any content-driven island height
+    var maxPanelHeight: CGFloat {
+        notchHeight + AppConfig.maxIslandExtraHeight
+    }
+
     var fullExpandedWidth: CGFloat {
         max(interactiveWidth, AppConfig.minFullExpandedWidth)
     }
@@ -62,7 +67,9 @@ struct NotchGeometry: Equatable {
 
     func windowFrame(interactive: Bool = false, fullExpanded: Bool = false) -> CGRect {
         let width = effectiveWidth(interactive: interactive, fullExpanded: fullExpanded)
-        let height = effectiveHeight(interactive: interactive, fullExpanded: fullExpanded)
+        // For interactive/fullExpanded modes, use maxPanelHeight so the clear panel
+        // is large enough for any content-driven island height
+        let height = fullExpanded ? maxPanelHeight : effectiveHeight(interactive: interactive, fullExpanded: false)
         let originX = screenFrame.midX - width / 2
         let originY = screenFrame.maxY - height
         return CGRect(x: originX, y: originY, width: width, height: height)

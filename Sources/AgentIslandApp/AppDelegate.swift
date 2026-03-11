@@ -41,6 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelController.show(message: message, agent: agent, duration: duration, pid: pid, interactive: interactive, terminalBundle: terminalBundle, tabMarker: tabMarker, ttyPath: ttyPath, conversation: conversation)
         case let .permission(tool, command, agent, pid, responsePipe, suggestions):
             panelController.showPermission(tool: tool, command: command, agent: agent, pid: pid, responsePipe: responsePipe, suggestions: suggestions)
+        case let .elicitation(question, agent, pid, responsePipe):
+            panelController.showElicitation(question: question, agent: agent, pid: pid, responsePipe: responsePipe)
         case .dismiss:
             panelController.dismiss()
         case .quit:

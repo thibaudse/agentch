@@ -260,6 +260,75 @@ final class IslandPanelController: NSObject {
         dismiss()
     }
 
+    // MARK: - Elicitation (AskUserQuestion)
+
+    func showElicitation(question: Elicitation, agent: String, pid: pid_t, responsePipe: String) {
+        cancelPendingTasks()
+
+        processMonitor.monitor(pid: pid) { [weak self] in
+            self?.handlePermissionDecision(allow: false)
+        }
+
+        let geometry = NotchGeometry.detect()
+        NSLog("AgentIsland: showElicitation() question=%@, options=%d, pipe=%@",
+              question.question, question.options.count, responsePipe)
+        viewModel.updateElicitation(question: question, agentName: agent, geometry: geometry)
+        viewModel.expanded = false
+        permissionResponsePipe = responsePipe
+
+        viewModel.onElicitationAnswer = { [weak self] answer in
+            self?.handleElicitationAnswer(answer)
+        }
+
+        ensurePanel()
+        guard let panel else { return }
+
+        let frame = geometry.windowFrame(interactive: true, fullExpanded: true)
+        isPresented = true
+        panel.ignoresMouseEvents = false
+        panel.setFrame(frame, display: true)
+        panel.orderFrontRegardless()
+        topmostSpaceManager.attach(window: panel)
+        startTrackingLoop()
+
+        panel.acceptsKeyInput = true
+
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
+            guard let self, !Task.isCancelled else { return }
+            await MainActor.run {
+                withAnimation(.bouncy(duration: AppConfig.appearDuration)) {
+                    self.viewModel.expanded = true
+                }
+            }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            await MainActor.run { [weak self] in
+                self?.panel?.makeKeyAndOrderFront(nil)
+            }
+        }
+    }
+
+    private func handleElicitationAnswer(_ answer: String) {
+        let pipe = permissionResponsePipe
+        permissionResponsePipe = ""
+        NSLog("AgentIsland: elicitation answer=%@, pipe=%@", answer, pipe)
+
+        if !pipe.isEmpty {
+            Task.detached {
+                guard let fh = FileHandle(forWritingAtPath: pipe) else {
+                    NSLog("AgentIsland: Failed to open response pipe %@", pipe)
+                    return
+                }
+                let msg = "answer:\(answer)\n"
+                fh.write(msg.data(using: .utf8)!)
+                fh.closeFile()
+                NSLog("AgentIsland: Wrote elicitation answer to pipe: %@", answer)
+            }
+        }
+
+        dismiss()
+    }
+
     private func handlePermissionSuggestion(_ suggestion: PermissionSuggestion) {
         let pipe = permissionResponsePipe
         permissionResponsePipe = ""

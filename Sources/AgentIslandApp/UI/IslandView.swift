@@ -2,11 +2,19 @@ import SwiftUI
 
 private let islandAccent = Color(red: 0.4, green: 0.7, blue: 1.0)
 
+private struct ContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 struct IslandView: View {
     @ObservedObject var model: IslandViewModel
     let onClose: () -> Void
 
     @FocusState private var isInputFocused: Bool
+    @State private var contentHeight: CGFloat = 0
 
     private var displayText: String {
         model.isFullExpanded && !model.conversation.isEmpty
@@ -18,20 +26,42 @@ struct IslandView: View {
         model.isFullExpanded ? 260 : 52
     }
 
+    /// The island width — determined by mode
+    private var islandWidth: CGFloat {
+        let geometry = model.geometry
+        let needsWide = model.isFullExpanded || model.isElicitation || model.isPermission
+        return geometry.effectiveWidth(interactive: model.interactive, fullExpanded: needsWide)
+    }
+
+    /// The island height — content-driven, clamped between notch height and panel max.
+    /// contentHeight is measured from the full VStack (which includes a notch-area spacer at top).
+    private var islandHeight: CGFloat {
+        let geometry = model.geometry
+        let minH = geometry.notchHeight
+        let maxH = geometry.maxPanelHeight
+        return max(minH, min(contentHeight, maxH))
+    }
+
     var body: some View {
         let geometry = model.geometry
-        let width = geometry.effectiveWidth(interactive: model.interactive, fullExpanded: model.isFullExpanded)
-        let height = geometry.effectiveHeight(interactive: model.interactive, fullExpanded: model.isFullExpanded)
 
         // The island shape — animates its own size within the fixed panel
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: .top) {
+            // Black background fills the island shape
             Color.black
 
+            // Content VStack — measured for intrinsic height
             VStack(spacing: 8) {
+                // Spacer to push content below the notch area
+                Spacer()
+                    .frame(height: max(geometry.notchHeight - 10, 0))
+
                 // Header: agent name + expand + close
                 headerView
 
-                if model.isPermission {
+                if model.isElicitation {
+                    elicitationView
+                } else if model.isPermission {
                     permissionView
                 } else {
                     // Scrollable message/conversation area
@@ -47,8 +77,20 @@ struct IslandView: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 10)
+            .fixedSize(horizontal: false, vertical: true)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: ContentHeightKey.self, value: geo.size.height)
+                }
+            )
+            .onPreferenceChange(ContentHeightKey.self) { newHeight in
+                // Only update if meaningfully different to avoid animation loops
+                if abs(contentHeight - newHeight) > 1 {
+                    contentHeight = newHeight
+                }
+            }
         }
-        .frame(width: width, height: height)
+        .frame(width: islandWidth, height: islandHeight)
         .clipShape(
             UnevenRoundedRectangle(
                 cornerRadii: .init(
@@ -63,15 +105,16 @@ struct IslandView: View {
         // Anchor at top-center so expand grows downward from the notch
         .frame(
             maxWidth: geometry.fullExpandedWidth,
-            maxHeight: geometry.fullExpandedHeight,
+            maxHeight: geometry.notchHeight + AppConfig.maxIslandExtraHeight,
             alignment: .top
         )
         .scaleEffect(
-            x: model.expanded ? 1 : geometry.collapsedScaleX(interactive: model.interactive),
-            y: model.expanded ? 1 : geometry.collapsedScaleY(interactive: model.interactive),
+            x: model.expanded ? 1 : geometry.notchWidth / max(islandWidth, 1),
+            y: model.expanded ? 1 : geometry.notchHeight / max(islandHeight, 1),
             anchor: .top
         )
         .animation(.smooth(duration: 0.3), value: model.isFullExpanded)
+        .animation(.smooth(duration: 0.3), value: contentHeight)
         .onExitCommand { onClose() }
         .onChange(of: model.expanded) { _, expanded in
             if expanded && model.interactive && !model.isPermission {
@@ -87,9 +130,9 @@ struct IslandView: View {
     private var headerView: some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(model.isPermission ? Color.orange : Color.green)
+                .fill(model.isElicitation ? islandAccent : model.isPermission ? Color.orange : Color.green)
                 .frame(width: 8, height: 8)
-                .shadow(color: (model.isPermission ? Color.orange : Color.green).opacity(0.7), radius: 5)
+                .shadow(color: (model.isElicitation ? islandAccent : model.isPermission ? Color.orange : Color.green).opacity(0.7), radius: 5)
 
             if !model.agentName.isEmpty {
                 Text(model.agentName)
@@ -97,7 +140,11 @@ struct IslandView: View {
                     .foregroundColor(.white.opacity(0.5))
             }
 
-            if model.isPermission {
+            if model.isElicitation {
+                Text("asks")
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundColor(.white.opacity(0.4))
+            } else if model.isPermission {
                 Text("wants to use")
                     .font(.system(size: 12, design: .rounded))
                     .foregroundColor(.white.opacity(0.4))
@@ -136,6 +183,90 @@ struct IslandView: View {
                     .background(Circle().fill(Color.white.opacity(0.1)))
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: - Elicitation View
+
+    private var elicitationView: some View {
+        VStack(spacing: 10) {
+            // Question text
+            Text(model.elicitationQuestion)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundColor(.white.opacity(0.9))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Option buttons
+            ForEach(model.elicitationOptions) { option in
+                Button(action: { model.answerElicitation(option.label) }) {
+                    HStack(spacing: 8) {
+                        Text(option.label)
+                            .font(.system(size: 13, weight: .semibold, design: .rounded))
+                            .foregroundColor(.white)
+                        if let desc = option.description, !desc.isEmpty {
+                            Text(desc)
+                                .font(.system(size: 11, design: .rounded))
+                                .foregroundColor(.white.opacity(0.5))
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(0.08))
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(islandAccent.opacity(0.4), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+
+            // Text field for custom answer
+            HStack(spacing: 8) {
+                ZStack(alignment: .leading) {
+                    if model.inputText.isEmpty {
+                        Text("Type a custom answer...")
+                            .font(.system(size: 12, design: .rounded))
+                            .foregroundColor(Color(white: 0.45))
+                    }
+                    TextField("", text: $model.inputText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, design: .rounded))
+                        .foregroundColor(.white)
+                        .tint(islandAccent)
+                        .focused($isInputFocused)
+                        .onSubmit { model.answerElicitation(model.inputText) }
+                }
+
+                Button(action: {
+                    let text = model.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !text.isEmpty { model.answerElicitation(text) }
+                }) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(
+                            model.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                ? .white.opacity(0.15) : islandAccent
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+            )
         }
     }
 

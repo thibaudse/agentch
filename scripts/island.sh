@@ -20,7 +20,7 @@ send_message() {
         start_daemon
         wait_for_socket
     fi
-    echo "$json" | nc -U "$SOCKET" -w 1 2>/dev/null
+    echo "$json" | nc -U "$SOCKET" -w 1 >/dev/null 2>&1
 }
 
 json_escape() {
@@ -110,6 +110,17 @@ case "${1:-show}" in
         pipe_json="$(json_escape "$response_pipe")"
         # suggestions is already JSON, inject it directly
         send_message "{\"action\":\"permission\",\"tool\":$tool_json,\"message\":$command_json,\"agent\":$agent_json,\"pid\":$pid,\"response_pipe\":$pipe_json,\"permission_suggestions\":$suggestions}"
+        ;;
+    elicitation)
+        # elicitation_json is already a JSON object: {"question":"...","options":[...]}
+        elicitation_json="${2:-"{}"}"
+        agent="${3:-}"
+        pid="${4:-0}"
+        response_pipe="${5:-}"
+        agent_json="$(json_escape "$agent")"
+        pipe_json="$(json_escape "$response_pipe")"
+        # elicitation_json is raw JSON, inject directly
+        send_message "{\"action\":\"elicitation\",\"elicitation\":$elicitation_json,\"agent\":$agent_json,\"pid\":$pid,\"response_pipe\":$pipe_json}"
         ;;
     dismiss)
         send_message '{"action":"dismiss"}'

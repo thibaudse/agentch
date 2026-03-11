@@ -45,9 +45,23 @@ struct PermissionSuggestion: Decodable, Identifiable {
     }
 }
 
+/// A question from an AskUserQuestion elicitation.
+struct ElicitationOption: Decodable, Identifiable {
+    let label: String
+    let description: String?
+
+    var id: String { label }
+}
+
+struct Elicitation: Decodable {
+    let question: String
+    let options: [ElicitationOption]
+}
+
 enum IslandCommand {
     case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool, terminalBundle: String, tabMarker: String, ttyPath: String, conversation: String)
     case permission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion])
+    case elicitation(question: Elicitation, agent: String, pid: pid_t, responsePipe: String)
     case dismiss
     case quit
 
@@ -78,6 +92,14 @@ enum IslandCommand {
                 responsePipe: payload.response_pipe ?? "",
                 suggestions: payload.permission_suggestions ?? []
             )
+        case "elicitation":
+            guard let elicitation = payload.elicitation else { return nil }
+            self = .elicitation(
+                question: elicitation,
+                agent: payload.agent ?? "",
+                pid: pid_t(payload.pid ?? 0),
+                responsePipe: payload.response_pipe ?? ""
+            )
         case "dismiss":
             self = .dismiss
         case "quit":
@@ -102,4 +124,5 @@ private struct Payload: Decodable {
     let tool: String?
     let response_pipe: String?
     let permission_suggestions: [PermissionSuggestion]?
+    let elicitation: Elicitation?
 }

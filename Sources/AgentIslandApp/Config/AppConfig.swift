@@ -16,6 +16,9 @@ enum AppConfig {
     static let fullExpandedExtraHeight: CGFloat = 340
     static let minFullExpandedWidth: CGFloat = 620
 
+    /// Maximum extra height the island can grow beyond the notch (content-driven cap)
+    static let maxIslandExtraHeight: CGFloat = 500
+
     static let appearDuration: TimeInterval = 0.35
     static let disappearDuration: TimeInterval = 0.35
     static let appearDelayNanos: UInt64 = 20_000_000
