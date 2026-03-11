@@ -34,25 +34,35 @@ struct NotchGeometry: Equatable {
         notchHeight + AppConfig.interactiveExtraHeight
     }
 
-    func effectiveWidth(interactive: Bool) -> CGFloat {
-        interactive ? interactiveWidth : expandedWidth
+    var fullExpandedHeight: CGFloat {
+        notchHeight + AppConfig.fullExpandedExtraHeight
     }
 
-    func effectiveHeight(interactive: Bool) -> CGFloat {
-        interactive ? interactiveHeight : expandedHeight
+    var fullExpandedWidth: CGFloat {
+        max(interactiveWidth, AppConfig.minFullExpandedWidth)
     }
 
-    func collapsedScaleX(interactive: Bool) -> CGFloat {
-        notchWidth / effectiveWidth(interactive: interactive)
+    func effectiveWidth(interactive: Bool, fullExpanded: Bool = false) -> CGFloat {
+        if fullExpanded { return fullExpandedWidth }
+        return interactive ? interactiveWidth : expandedWidth
     }
 
-    func collapsedScaleY(interactive: Bool) -> CGFloat {
-        notchHeight / effectiveHeight(interactive: interactive)
+    func effectiveHeight(interactive: Bool, fullExpanded: Bool = false) -> CGFloat {
+        if fullExpanded { return fullExpandedHeight }
+        return interactive ? interactiveHeight : expandedHeight
     }
 
-    func windowFrame(interactive: Bool = false) -> CGRect {
-        let width = effectiveWidth(interactive: interactive)
-        let height = effectiveHeight(interactive: interactive)
+    func collapsedScaleX(interactive: Bool, fullExpanded: Bool = false) -> CGFloat {
+        notchWidth / effectiveWidth(interactive: interactive, fullExpanded: fullExpanded)
+    }
+
+    func collapsedScaleY(interactive: Bool, fullExpanded: Bool = false) -> CGFloat {
+        notchHeight / effectiveHeight(interactive: interactive, fullExpanded: fullExpanded)
+    }
+
+    func windowFrame(interactive: Bool = false, fullExpanded: Bool = false) -> CGRect {
+        let width = effectiveWidth(interactive: interactive, fullExpanded: fullExpanded)
+        let height = effectiveHeight(interactive: interactive, fullExpanded: fullExpanded)
         let originX = screenFrame.midX - width / 2
         let originY = screenFrame.maxY - height
         return CGRect(x: originX, y: originY, width: width, height: height)

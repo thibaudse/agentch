@@ -14,6 +14,17 @@
         ]
       }
     ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-permission.sh",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

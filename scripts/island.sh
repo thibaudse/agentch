@@ -88,12 +88,28 @@ case "${1:-show}" in
         terminal_bundle="${5:-}"
         tab_marker="${6:-}"
         tty_path="${7:-}"
+        conversation="${8:-}"
         message_json="$(json_escape "$message")"
         agent_json="$(json_escape "$agent")"
         terminal_json="$(json_escape "$terminal_bundle")"
         marker_json="$(json_escape "$tab_marker")"
         tty_json="$(json_escape "$tty_path")"
-        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":0,\"pid\":$pid,\"interactive\":true,\"terminal_bundle\":$terminal_json,\"tab_marker\":$marker_json,\"tty_path\":$tty_json}"
+        convo_json="$(json_escape "$conversation")"
+        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":0,\"pid\":$pid,\"interactive\":true,\"terminal_bundle\":$terminal_json,\"tab_marker\":$marker_json,\"tty_path\":$tty_json,\"conversation\":$convo_json}"
+        ;;
+    permission)
+        tool="${2:-}"
+        command="${3:-}"
+        agent="${4:-}"
+        pid="${5:-0}"
+        response_pipe="${6:-}"
+        suggestions="${7:-[]}"
+        tool_json="$(json_escape "$tool")"
+        command_json="$(json_escape "$command")"
+        agent_json="$(json_escape "$agent")"
+        pipe_json="$(json_escape "$response_pipe")"
+        # suggestions is already JSON, inject it directly
+        send_message "{\"action\":\"permission\",\"tool\":$tool_json,\"message\":$command_json,\"agent\":$agent_json,\"pid\":$pid,\"response_pipe\":$pipe_json,\"permission_suggestions\":$suggestions}"
         ;;
     dismiss)
         send_message '{"action":"dismiss"}'

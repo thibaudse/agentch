@@ -2,6 +2,33 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 
+/// Serializes paste operations so two overlapping pastes don't race on the clipboard.
+private actor PasteQueue {
+    private var pending: [CheckedContinuation<Void, Never>] = []
+    private var busy = false
+
+    func acquire() async {
+        if busy {
+            await withCheckedContinuation { cont in
+                pending.append(cont)
+            }
+        }
+        busy = true
+    }
+
+    func release() {
+        if let next = pending.first {
+            pending.removeFirst()
+            next.resume()
+        } else {
+            busy = false
+        }
+    }
+}
+
+/// Global paste queue — ensures only one clipboard paste happens at a time.
+private let pasteQueue = PasteQueue()
+
 /// Sends text to the correct terminal tab. Tries three strategies in order:
 /// 1. **TIOCSTI** — inject chars directly into the TTY input queue (no focus switch)
 /// 2. **Clipboard + brief focus switch** — Cmd+V, then restore focus automatically
@@ -86,47 +113,101 @@ enum TerminalPaster {
 
     // MARK: - Strategy 2: Clipboard + Focus Switch
 
+    /// Save the current clipboard contents so we can restore them after pasting.
+    private static func saveClipboard() -> (String?, [NSPasteboardItem])? {
+        let pasteboard = NSPasteboard.general
+        guard let items = pasteboard.pasteboardItems, !items.isEmpty else { return nil }
+
+        // Deep-copy all items and their type data, since pasteboardItems are invalidated on clearContents
+        var copiedItems: [NSPasteboardItem] = []
+        for item in items {
+            let copy = NSPasteboardItem()
+            for type in item.types {
+                if let data = item.data(forType: type) {
+                    copy.setData(data, forType: type)
+                }
+            }
+            copiedItems.append(copy)
+        }
+        let changeCount = pasteboard.changeCount
+        NSLog("AgentIsland: Saved clipboard (%d items, changeCount=%d)", copiedItems.count, changeCount)
+        return (nil, copiedItems)
+    }
+
+    /// Restore clipboard contents that were saved before pasting.
+    private static func restoreClipboard(savedItems: [NSPasteboardItem]) {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.writeObjects(savedItems)
+        NSLog("AgentIsland: Restored clipboard (%d items)", savedItems.count)
+    }
+
     private static func pasteViaClipboard(
         text: String,
         app: NSRunningApplication?,
         tabMarker: String,
         ttyPath: String
     ) {
-        // Remember the user's current app so we can restore focus
-        let userApp = NSWorkspace.shared.frontmostApplication
-
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(text, forType: .string)
-
-        // Activate the terminal
-        if let app {
-            app.activate(from: NSRunningApplication.current)
-        }
-
-        // Select the right tab
-        if let app, !tabMarker.isEmpty {
-            let found = selectTab(matching: tabMarker, pid: app.processIdentifier)
-            NSLog("AgentIsland: selectTab(marker=%@) → %d", tabMarker, found ? 1 : 0)
-        }
-
         Task { @MainActor in
+            // Serialize paste operations so overlapping pastes don't race on the clipboard
+            await pasteQueue.acquire()
+            defer { Task { await pasteQueue.release() } }
+
+            // Remember the user's current app so we can restore focus
+            let userApp = NSWorkspace.shared.frontmostApplication
+
+            // Save current clipboard so we can restore it after pasting
+            let savedClipboard = saveClipboard()
+
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+
+            // Activate the terminal
+            if let app {
+                app.activate(from: NSRunningApplication.current)
+            }
+
+            // Select the right tab
+            if let app, !tabMarker.isEmpty {
+                let found = selectTab(matching: tabMarker, pid: app.processIdentifier)
+                NSLog("AgentIsland: selectTab(marker=%@) → %d", tabMarker, found ? 1 : 0)
+            }
+
             try? await Task.sleep(nanoseconds: 600_000_000) // 600ms for activation + tab switch
-            NSLog("AgentIsland: Posting Cmd+V")
-            postKeyCombo(key: 0x09, flags: .maskCommand)
+
+            // Debug: verify clipboard and frontmost app before pasting
+            let clipCheck = NSPasteboard.general.string(forType: .string) ?? "<nil>"
+            let frontApp = NSWorkspace.shared.frontmostApplication
+            NSLog("AgentIsland: PRE-PASTE clipboard=%@, frontApp=%@, expectedApp=%@",
+                  clipCheck.prefix(60).description,
+                  frontApp?.bundleIdentifier ?? "nil",
+                  app?.bundleIdentifier ?? "nil")
+
+            NSLog("AgentIsland: Posting Cmd+V via AppleScript")
+            sendPasteKeystroke()
             try? await Task.sleep(nanoseconds: 200_000_000) // 200ms between keys
-            NSLog("AgentIsland: Posting Enter")
-            postKey(key: 0x24)
+            NSLog("AgentIsland: Posting Enter via AppleScript")
+            sendReturnKeystroke()
 
             // Wait for Ghostty to fully process the keystrokes before switching away
             try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+
+            // Restore the user's original clipboard contents
+            if let (_, items) = savedClipboard, !items.isEmpty {
+                restoreClipboard(savedItems: items)
+            } else {
+                // Nothing was on the clipboard before — just clear our paste text
+                pasteboard.clearContents()
+                NSLog("AgentIsland: Cleared clipboard (was empty before paste)")
+            }
 
             if !ttyPath.isEmpty { clearTabTitle(ttyPath: ttyPath) }
             if let userApp, userApp.bundleIdentifier != app?.bundleIdentifier {
                 userApp.activate(from: NSRunningApplication.current)
                 NSLog("AgentIsland: Restored focus to %@", userApp.localizedName ?? "?")
             }
-            NSLog("AgentIsland: Clipboard paste complete")
+            NSLog("AgentIsland: Clipboard paste complete, clipboard restored")
         }
     }
 
@@ -218,22 +299,33 @@ enum TerminalPaster {
         NSLog("AgentIsland: Cleared tab title via %@", ttyPath)
     }
 
-    // MARK: - Key Posting
+    // MARK: - Key Posting via AppleScript (more reliable with Ghostty/GPU terminals)
 
-    private static func postKeyCombo(key: CGKeyCode, flags: CGEventFlags) {
-        let source = CGEventSource(stateID: .hidSystemState)
-        guard let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
-              let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) else { return }
-        down.flags = flags
-        down.post(tap: .cghidEventTap)
-        up.post(tap: .cghidEventTap)
+    /// Use System Events to send Cmd+V — works where CGEvent sometimes doesn't.
+    private static func sendPasteKeystroke() {
+        let script = NSAppleScript(source: """
+            tell application "System Events"
+                keystroke "v" using command down
+            end tell
+            """)
+        var error: NSDictionary?
+        script?.executeAndReturnError(&error)
+        if let error {
+            NSLog("AgentIsland: AppleScript Cmd+V error: %@", error)
+        }
     }
 
-    private static func postKey(key: CGKeyCode) {
-        let source = CGEventSource(stateID: .hidSystemState)
-        guard let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
-              let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) else { return }
-        down.post(tap: .cghidEventTap)
-        up.post(tap: .cghidEventTap)
+    /// Use System Events to send Return key.
+    private static func sendReturnKeystroke() {
+        let script = NSAppleScript(source: """
+            tell application "System Events"
+                key code 36
+            end tell
+            """)
+        var error: NSDictionary?
+        script?.executeAndReturnError(&error)
+        if let error {
+            NSLog("AgentIsland: AppleScript Return error: %@", error)
+        }
     }
 }

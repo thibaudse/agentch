@@ -11,7 +11,10 @@ enum AppConfig {
 
     static let minInteractiveWidth: CGFloat = 440
     static let interactivePaddingWidth: CGFloat = 200
-    static let interactiveExtraHeight: CGFloat = 84
+    static let interactiveExtraHeight: CGFloat = 130
+
+    static let fullExpandedExtraHeight: CGFloat = 340
+    static let minFullExpandedWidth: CGFloat = 620
 
     static let appearDuration: TimeInterval = 0.35
     static let disappearDuration: TimeInterval = 0.35

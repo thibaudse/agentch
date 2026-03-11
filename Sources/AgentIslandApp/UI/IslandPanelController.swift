@@ -48,7 +48,8 @@ final class IslandPanelController: NSObject {
         interactive: Bool = false,
         terminalBundle: String = "",
         tabMarker: String = "",
-        ttyPath: String = ""
+        ttyPath: String = "",
+        conversation: String = ""
     ) {
         cancelPendingTasks()
 
@@ -58,12 +59,16 @@ final class IslandPanelController: NSObject {
         }
 
         let geometry = NotchGeometry.detect()
-        viewModel.update(message: message, agentName: agent, geometry: geometry, interactive: interactive)
+        NSLog("AgentIsland: show() message=%@", message)
+        viewModel.update(message: message, agentName: agent, geometry: geometry, interactive: interactive, conversation: conversation)
         viewModel.expanded = false
 
         if interactive {
             viewModel.onSubmit = { [weak self] text in
                 self?.handleSubmit(text: text)
+            }
+            viewModel.onExpandToggle = { [weak self] in
+                self?.handleExpandToggle()
             }
             // Find the terminal app by bundle ID so we paste into the right window
             if !terminalBundle.isEmpty {
@@ -92,7 +97,11 @@ final class IslandPanelController: NSObject {
         ensurePanel()
         guard let panel else { return }
 
-        let frame = geometry.windowFrame(interactive: interactive)
+        // Use full-expanded frame for interactive mode so the panel never resizes on expand/collapse.
+        // SwiftUI animates the island shape within the fixed clear panel.
+        let frame = interactive
+            ? geometry.windowFrame(interactive: true, fullExpanded: true)
+            : geometry.windowFrame(interactive: false)
         isPresented = true
         panel.ignoresMouseEvents = false
         panel.setFrame(frame, display: true)
@@ -135,6 +144,12 @@ final class IslandPanelController: NSObject {
     }
 
     func dismiss() {
+        // If a permission prompt is active and user dismisses, deny it
+        if !permissionResponsePipe.isEmpty {
+            handlePermissionDecision(allow: false)
+            return
+        }
+
         processMonitor.stop()
         autoDismissTask?.cancel()
         autoDismissTask = nil
@@ -169,6 +184,111 @@ final class IslandPanelController: NSObject {
                 }
             }
         }
+    }
+
+    // MARK: - Permission Request
+
+    private var permissionResponsePipe: String = ""
+
+    func showPermission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion] = []) {
+        cancelPendingTasks()
+
+        processMonitor.monitor(pid: pid) { [weak self] in
+            self?.handlePermissionDecision(allow: false)
+        }
+
+        let geometry = NotchGeometry.detect()
+        NSLog("AgentIsland: showPermission() tool=%@, command=%@, pipe=%@, suggestions=%d", tool, command, responsePipe, suggestions.count)
+        viewModel.updatePermission(tool: tool, command: command, agentName: agent, geometry: geometry, suggestions: suggestions)
+        viewModel.expanded = false
+        permissionResponsePipe = responsePipe
+
+        viewModel.onPermissionDecision = { [weak self] allow in
+            self?.handlePermissionDecision(allow: allow)
+        }
+        viewModel.onPermissionSuggestion = { [weak self] suggestion in
+            self?.handlePermissionSuggestion(suggestion)
+        }
+
+        ensurePanel()
+        guard let panel else { return }
+
+        let frame = geometry.windowFrame(interactive: true, fullExpanded: true)
+        isPresented = true
+        panel.ignoresMouseEvents = false
+        panel.setFrame(frame, display: true)
+        panel.orderFrontRegardless()
+        topmostSpaceManager.attach(window: panel)
+        startTrackingLoop()
+
+        panel.acceptsKeyInput = true
+
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
+            guard let self, !Task.isCancelled else { return }
+            await MainActor.run {
+                withAnimation(.bouncy(duration: AppConfig.appearDuration)) {
+                    self.viewModel.expanded = true
+                }
+            }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            await MainActor.run { [weak self] in
+                self?.panel?.makeKeyAndOrderFront(nil)
+            }
+        }
+    }
+
+    private func handlePermissionDecision(allow: Bool) {
+        let pipe = permissionResponsePipe
+        permissionResponsePipe = ""
+        NSLog("AgentIsland: permission decision=%@, pipe=%@", allow ? "allow" : "deny", pipe)
+
+        // Write decision to the FIFO so the blocking hook script can return
+        if !pipe.isEmpty {
+            Task.detached {
+                guard let fh = FileHandle(forWritingAtPath: pipe) else {
+                    NSLog("AgentIsland: Failed to open response pipe %@", pipe)
+                    return
+                }
+                let decision = allow ? "allow\n" : "deny\n"
+                fh.write(decision.data(using: .utf8)!)
+                fh.closeFile()
+                NSLog("AgentIsland: Wrote '%@' to pipe", allow ? "allow" : "deny")
+            }
+        }
+
+        dismiss()
+    }
+
+    private func handlePermissionSuggestion(_ suggestion: PermissionSuggestion) {
+        let pipe = permissionResponsePipe
+        permissionResponsePipe = ""
+        NSLog("AgentIsland: permission suggestion selected=%@, pipe=%@", suggestion.label, pipe)
+
+        // Write "allow_always:<json>" so the hook script can parse the suggestion
+        if !pipe.isEmpty {
+            let json = suggestion.rawJSON
+            Task.detached {
+                guard let fh = FileHandle(forWritingAtPath: pipe) else {
+                    NSLog("AgentIsland: Failed to open response pipe %@", pipe)
+                    return
+                }
+                let msg = "allow_always:\(json)\n"
+                fh.write(msg.data(using: .utf8)!)
+                fh.closeFile()
+                NSLog("AgentIsland: Wrote allow_always to pipe: %@", json)
+            }
+        }
+
+        dismiss()
+    }
+
+    // MARK: - Expand/Collapse
+
+    private func handleExpandToggle() {
+        // Panel is already at full-expanded size — SwiftUI animates the island shape.
+        // Just ensure it stays on top.
+        panel?.orderFrontRegardless()
     }
 
     // MARK: - Input Handling
@@ -261,7 +381,9 @@ final class IslandPanelController: NSObject {
             viewModel.geometry = latestGeometry
         }
 
-        let targetFrame = latestGeometry.windowFrame(interactive: viewModel.interactive)
+        let targetFrame = viewModel.interactive
+            ? latestGeometry.windowFrame(interactive: true, fullExpanded: true)
+            : latestGeometry.windowFrame(interactive: false)
 
         if !isPresented {
             if force, panel.frame != targetFrame {

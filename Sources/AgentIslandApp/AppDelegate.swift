@@ -37,8 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handle(_ command: IslandCommand) {
         switch command {
-        case let .show(message, agent, duration, pid, interactive, terminalBundle, tabMarker, ttyPath):
-            panelController.show(message: message, agent: agent, duration: duration, pid: pid, interactive: interactive, terminalBundle: terminalBundle, tabMarker: tabMarker, ttyPath: ttyPath)
+        case let .show(message, agent, duration, pid, interactive, terminalBundle, tabMarker, ttyPath, conversation):
+            panelController.show(message: message, agent: agent, duration: duration, pid: pid, interactive: interactive, terminalBundle: terminalBundle, tabMarker: tabMarker, ttyPath: ttyPath, conversation: conversation)
+        case let .permission(tool, command, agent, pid, responsePipe, suggestions):
+            panelController.showPermission(tool: tool, command: command, agent: agent, pid: pid, responsePipe: responsePipe, suggestions: suggestions)
         case .dismiss:
             panelController.dismiss()
         case .quit:

@@ -1,7 +1,53 @@
 import Foundation
 
+/// Represents an "always allow" suggestion from Claude Code's PermissionRequest.
+/// The raw JSON is preserved so we can echo it back verbatim.
+struct PermissionSuggestion: Decodable, Identifiable {
+    let type: String               // e.g. "toolAlwaysAllow", "addRules"
+    let tool: String?              // for toolAlwaysAllow
+    let rules: [[String: String]]? // for addRules: [{"toolName":"...", "ruleContent":"..."}]
+
+    var id: String { label }
+
+    /// Human-readable label for the button
+    var label: String {
+        switch type {
+        case "toolAlwaysAllow":
+            return "Always allow \(tool ?? "this tool")"
+        case "addRules":
+            if let rules, let first = rules.first {
+                let toolName = first["toolName"] ?? ""
+                let rule = first["ruleContent"] ?? ""
+                if !rule.isEmpty {
+                    return "Allow \(toolName): \(rule)"
+                }
+                return "Always allow \(toolName)"
+            }
+            return "Always allow"
+        default:
+            return "Always allow"
+        }
+    }
+
+    /// JSON string to pass back to the hook script
+    var rawJSON: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        // Re-encode from original Decodable data isn't possible, so reconstruct
+        var dict: [String: Any] = ["type": type]
+        if let tool { dict["tool"] = tool }
+        if let rules { dict["rules"] = rules }
+        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
+           let str = String(data: data, encoding: .utf8) {
+            return str
+        }
+        return "{}"
+    }
+}
+
 enum IslandCommand {
-    case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool, terminalBundle: String, tabMarker: String, ttyPath: String)
+    case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool, terminalBundle: String, tabMarker: String, ttyPath: String, conversation: String)
+    case permission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion])
     case dismiss
     case quit
 
@@ -20,7 +66,17 @@ enum IslandCommand {
                 interactive: payload.interactive ?? false,
                 terminalBundle: payload.terminal_bundle ?? "",
                 tabMarker: payload.tab_marker ?? "",
-                ttyPath: payload.tty_path ?? ""
+                ttyPath: payload.tty_path ?? "",
+                conversation: payload.conversation ?? ""
+            )
+        case "permission":
+            self = .permission(
+                tool: payload.tool ?? "Unknown",
+                command: payload.message ?? "",
+                agent: payload.agent ?? "",
+                pid: pid_t(payload.pid ?? 0),
+                responsePipe: payload.response_pipe ?? "",
+                suggestions: payload.permission_suggestions ?? []
             )
         case "dismiss":
             self = .dismiss
@@ -42,4 +98,8 @@ private struct Payload: Decodable {
     let terminal_bundle: String?
     let tab_marker: String?
     let tty_path: String?
+    let conversation: String?
+    let tool: String?
+    let response_pipe: String?
+    let permission_suggestions: [PermissionSuggestion]?
 }

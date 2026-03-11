@@ -1,17 +1,19 @@
 #!/bin/bash
-set -euo pipefail
 # Claude Code Stop/Notification hook.
-# 1. Reads the transcript to get Claude's last message
-# 2. Detects the terminal app via TERM_PROGRAM
-# 3. Shows the interactive island prompt
+# 1. Reads the transcript to get the full conversation
+# 2. Uses last_assistant_message from hook input (always fresh)
+# 3. Detects the terminal app via TERM_PROGRAM
+# 4. Shows the interactive island prompt
 
+LOG="/tmp/agent-island-hook.log"
 ISLAND="${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh"
 INPUT=$(cat)
 
+echo "$(date '+%H:%M:%S') RAW INPUT: $(echo "$INPUT" | head -c 500)" >> "$LOG"
+
 # Get the TTY of the Claude Code process (our parent).
 # `tty` won't work here because Claude pipes stdin to hooks.
-# Instead, look up the TTY via ps on the parent PID.
-TTY_DEV=$(ps -o tty= -p "$PPID" 2>/dev/null | tr -d ' ')
+TTY_DEV=$(ps -o tty= -p "$PPID" 2>/dev/null | tr -d ' ' || true)
 if [ -n "$TTY_DEV" ] && [ "$TTY_DEV" != "??" ]; then
     TTY_PATH="/dev/$TTY_DEV"
 else
@@ -24,63 +26,99 @@ if [ -n "$TTY_PATH" ] && [ -w "$TTY_PATH" ]; then
     printf '\033]2;%s\007' "$TAB_MARKER" > "$TTY_PATH"
 fi
 
-# Extract last assistant message from transcript
-MSG=$(echo "$INPUT" | python3 -c "
-import json, sys, re
+# Extract message + conversation from hook input and transcript.
+EXTRACT=$(printf '%s' "$INPUT" | python3 -c "
+import json, sys, time
 
-try:
-    input_data = json.loads(sys.stdin.read())
-except Exception:
-    sys.exit(0)
-
+input_data = json.loads(sys.stdin.read())
 transcript = input_data.get('transcript_path', '')
-if not transcript:
+
+# The hook input has the latest message directly — always prefer this
+last_msg = input_data.get('last_assistant_message', '')
+
+# For Stop hooks without last_assistant_message, wait for transcript flush
+hook_event = input_data.get('hook_event_name', '')
+if not last_msg and hook_event == 'Stop' and transcript:
+    time.sleep(1.0)
+
+if not transcript and not last_msg:
     sys.exit(0)
 
-last_text = ''
-try:
-    with open(transcript) as f:
-        for line in f:
-            try:
-                entry = json.loads(line)
-                if entry.get('type') == 'assistant':
-                    content = entry.get('message', {}).get('content', [])
-                    for block in content:
-                        if isinstance(block, dict) and block.get('type') == 'text':
-                            last_text = block['text']
-                        elif isinstance(block, str):
-                            last_text = block
-            except (json.JSONDecodeError, KeyError):
-                pass
-except Exception:
-    pass
+if not transcript:
+    print(json.dumps({'message': last_msg, 'conversation': ''}))
+    sys.exit(0)
 
-# Build a concise summary: take the first meaningful sentence/line
-lines = [l.strip() for l in last_text.strip().split('\n') if l.strip()]
-# Skip markdown noise: code fences, dividers, headings, list markers, blank-ish
-skip = re.compile(r'^(\`\`\`|---|===|#{1,6}\s|!\[)')
-lines = [l for l in lines if not skip.match(l)]
+# Read all transcript entries
+all_entries = []
+with open(transcript) as f:
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            all_entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
 
-# Strip leading markdown artifacts (bullets, bold markers, etc.)
-cleaned = []
-for l in lines:
-    l = re.sub(r'^[\-\*>]+\s*', '', l)
-    l = re.sub(r'\*\*(.+?)\*\*', r'\1', l)  # remove bold
-    l = re.sub(r'\*(.+?)\*', r'\1', l)        # remove italic
-    l = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', l)  # links -> text
-    l = l.strip()
-    if l:
-        cleaned.append(l)
+# Extract text from a message content field (handles both list-of-blocks and plain string)
+def extract_text(message):
+    if isinstance(message, str):
+        return message.strip()
+    content = message.get('content', []) if isinstance(message, dict) else []
+    if isinstance(content, str):
+        return content.strip()
+    parts = []
+    for block in content:
+        if isinstance(block, dict) and block.get('type') == 'text':
+            parts.append(block['text'].strip())
+        elif isinstance(block, str):
+            parts.append(block.strip())
+    return '\n\n'.join(parts)
 
-# Pick the first meaningful line (usually the opening sentence / summary)
-summary = cleaned[0] if cleaned else ''
+# Check last assistant entry has text (not mid-turn tool_use only)
+assistant_entries = [e for e in all_entries if e.get('type') == 'assistant']
+if not last_msg:
+    if not assistant_entries:
+        sys.exit(0)
+    last_content = assistant_entries[-1].get('message', {}).get('content', [])
+    if isinstance(last_content, str):
+        last_msg = last_content
+    else:
+        text_blocks = [b for b in last_content
+                       if (isinstance(b, dict) and b.get('type') == 'text') or isinstance(b, str)]
+        if not text_blocks:
+            sys.exit(0)  # Mid-turn: only tool_use blocks
+        last_msg = extract_text(assistant_entries[-1].get('message', {}))
 
-# Truncate for the notch display
-if len(summary) > 60:
-    summary = summary[:57] + '...'
+# Build conversation from all user + assistant entries
+conversation_parts = []
+for entry in all_entries:
+    entry_type = entry.get('type', '')
+    msg = entry.get('message', {})
 
-print(summary)
-" 2>/dev/null)
+    if entry_type in ('human', 'user'):
+        text = extract_text(msg)
+        if text:
+            conversation_parts.append('**You:** ' + text)
+    elif entry_type == 'assistant':
+        text = extract_text(msg)
+        if text:
+            conversation_parts.append('**Claude:** ' + text)
+
+result = {
+    'message': last_msg.strip(),
+    'conversation': '\n\n'.join(conversation_parts) if conversation_parts else ''
+}
+print(json.dumps(result))
+" 2>>"$LOG") || true
+
+echo "$(date '+%H:%M:%S') EXTRACT: $(echo "$EXTRACT" | head -c 300)" >> "$LOG"
+
+# Parse the JSON result
+if [ -n "$EXTRACT" ]; then
+    MSG=$(printf '%s' "$EXTRACT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('message',''))" 2>/dev/null) || true
+    CONVO=$(printf '%s' "$EXTRACT" | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(d.get('conversation',''))" 2>/dev/null) || true
+fi
 
 if [ -z "$MSG" ]; then
     MSG="Done"
@@ -97,4 +135,4 @@ case "${TERM_PROGRAM:-}" in
     kitty)         TERM_BUNDLE="net.kovidgoyal.kitty" ;;
 esac
 
-exec "$ISLAND" prompt "$MSG" "Claude" "$PPID" "$TERM_BUNDLE" "$TAB_MARKER" "$TTY_PATH"
+exec "$ISLAND" prompt "$MSG" "Claude" "$PPID" "$TERM_BUNDLE" "$TAB_MARKER" "$TTY_PATH" "$CONVO"
