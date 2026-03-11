@@ -6,6 +6,7 @@ final class IslandViewModel: ObservableObject {
     @Published var conversation: String = ""
     @Published var agentName: String = ""
     @Published var expanded: Bool = false
+    @Published var contentVisible: Bool = true
     @Published var isFullExpanded: Bool = false
     @Published var geometry: NotchGeometry = .detect()
     @Published var interactive: Bool = false
@@ -42,6 +43,7 @@ final class IslandViewModel: ObservableObject {
         self.elicitationOptions = []
         self.isFullExpanded = false
         self.inputText = ""
+        self.contentVisible = true
     }
 
     func updatePermission(tool: String, command: String, agentName: String, geometry: NotchGeometry, suggestions: [PermissionSuggestion] = []) {
@@ -57,6 +59,7 @@ final class IslandViewModel: ObservableObject {
         self.inputText = ""
         self.conversation = ""
         self.permissionSuggestions = suggestions
+        self.contentVisible = true
     }
 
     func updateElicitation(question: Elicitation, agentName: String, geometry: NotchGeometry) {
@@ -71,6 +74,7 @@ final class IslandViewModel: ObservableObject {
         self.inputText = ""
         self.conversation = ""
         self.message = question.question
+        self.contentVisible = true
     }
 
     func toggleExpand() {

@@ -5,19 +5,19 @@ enum AppConfig {
     static let socketPath = "/tmp/agent-island.sock"
     static let defaultDisplayDuration: TimeInterval = 0
 
-    static let minExpandedWidth: CGFloat = 340
-    static let expandedPaddingWidth: CGFloat = 120
-    static let expandedExtraHeight: CGFloat = 40
+    static let minExpandedWidth: CGFloat = 520
+    static let expandedPaddingWidth: CGFloat = 240
+    static let expandedExtraHeight: CGFloat = 56
 
-    static let minInteractiveWidth: CGFloat = 440
-    static let interactivePaddingWidth: CGFloat = 200
-    static let interactiveExtraHeight: CGFloat = 130
+    static let minInteractiveWidth: CGFloat = 640
+    static let interactivePaddingWidth: CGFloat = 380
+    static let interactiveExtraHeight: CGFloat = 200
 
-    static let fullExpandedExtraHeight: CGFloat = 340
-    static let minFullExpandedWidth: CGFloat = 620
+    static let fullExpandedExtraHeight: CGFloat = 480
+    static let minFullExpandedWidth: CGFloat = 820
 
     /// Maximum extra height the island can grow beyond the notch (content-driven cap)
-    static let maxIslandExtraHeight: CGFloat = 500
+    static let maxIslandExtraHeight: CGFloat = 700
 
     static let appearDuration: TimeInterval = 0.4
     static let disappearDuration: TimeInterval = 0.3

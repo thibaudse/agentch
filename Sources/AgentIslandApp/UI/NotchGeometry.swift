@@ -71,7 +71,7 @@ struct NotchGeometry: Equatable {
         // is large enough for any content-driven island height
         let height = fullExpanded ? maxPanelHeight : effectiveHeight(interactive: interactive, fullExpanded: false)
         let originX = screenFrame.midX - width / 2
-        let originY = screenFrame.maxY - height
+        let originY = screenFrame.maxY - height + 1
         return CGRect(x: originX, y: originY, width: width, height: height)
     }
 

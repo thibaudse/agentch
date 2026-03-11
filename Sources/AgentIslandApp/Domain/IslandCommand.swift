@@ -2,7 +2,7 @@ import Foundation
 
 /// Represents an "always allow" suggestion from Claude Code's PermissionRequest.
 /// Preserves the full raw JSON so we can echo it back verbatim.
-struct PermissionSuggestion: Identifiable {
+struct PermissionSuggestion: Identifiable, @unchecked Sendable {
     /// The complete original dictionary — echoed back to the hook script as-is
     let raw: [String: Any]
 
@@ -88,19 +88,19 @@ private struct SuggestionHelper: Decodable {
 }
 
 /// A question from an AskUserQuestion elicitation.
-struct ElicitationOption: Decodable, Identifiable {
+struct ElicitationOption: Decodable, Identifiable, Sendable {
     let label: String
     let description: String?
 
     var id: String { label }
 }
 
-struct Elicitation: Decodable {
+struct Elicitation: Decodable, Sendable {
     let question: String
     let options: [ElicitationOption]
 }
 
-enum IslandCommand {
+enum IslandCommand: Sendable {
     case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool, terminalBundle: String, tabMarker: String, ttyPath: String, conversation: String, responsePipe: String)
     case permission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion])
     case elicitation(question: Elicitation, agent: String, pid: pid_t, responsePipe: String)

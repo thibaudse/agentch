@@ -133,7 +133,7 @@ struct MarkdownText: View {
                 if !lang.isEmpty {
                     Text(lang)
                         .font(.system(size: fontSize - 2, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.3))
+                        .foregroundColor(DS.text3)
                         .padding(.horizontal, 10)
                         .padding(.top, 6)
                         .padding(.bottom, 2)
@@ -147,19 +147,19 @@ struct MarkdownText: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.white.opacity(0.06))
+                RoundedRectangle(cornerRadius: DS.radiusS, style: .continuous)
+                    .fill(DS.surface2)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: DS.radiusS, style: .continuous)
+                    .strokeBorder(DS.border1, lineWidth: 0.5)
             )
 
         case .listItem(let depth, let text):
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("•")
                     .font(.system(size: fontSize - 1, design: .rounded))
-                    .foregroundColor(.white.opacity(0.3))
+                    .foregroundColor(DS.text3)
                 inlineMarkdown(text)
             }
             .padding(.leading, CGFloat(depth) * 12)
@@ -171,7 +171,7 @@ struct MarkdownText: View {
 
         case .divider:
             Rectangle()
-                .fill(Color.white.opacity(0.08))
+                .fill(DS.border1)
                 .frame(height: 0.5)
                 .padding(.vertical, 3)
         }
@@ -214,7 +214,7 @@ struct MarkdownText: View {
             if let (matched, rest) = extractSingleDelimited(&remaining, delimiter: "`") {
                 result = result + Text(matched)
                     .font(.system(size: fontSize - 1, design: .monospaced))
-                    .foregroundColor(Color(red: 0.45, green: 0.75, blue: 1.0))
+                    .foregroundColor(DS.accentCyan.opacity(0.85))
                 remaining = rest
                 continue
             }
@@ -225,7 +225,7 @@ struct MarkdownText: View {
                remaining[remaining.index(after: closeBracket)] == "(" {
                 let linkText = remaining[remaining.index(after: remaining.startIndex)..<closeBracket]
                 if let closeParen = remaining[closeBracket...].firstIndex(of: ")") {
-                    result = result + Text(linkText).underline().foregroundColor(Color(red: 0.45, green: 0.75, blue: 1.0))
+                    result = result + Text(linkText).underline().foregroundColor(DS.accent)
                     remaining = remaining[remaining.index(after: closeParen)...]
                     continue
                 }
@@ -236,7 +236,7 @@ struct MarkdownText: View {
 
         return result
             .font(.system(size: fontSize, design: .rounded))
-            .foregroundColor(.white.opacity(0.85))
+            .foregroundColor(DS.text1)
     }
 
     // Extract text between paired delimiters like ** or ***

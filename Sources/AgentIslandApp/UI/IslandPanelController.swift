@@ -27,7 +27,7 @@ final class IslandPanelController: NSObject {
     private var responsePipe: String = ""
     private var autoDismissTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
-    private var trackingTask: Task<Void, Never>?
+    nonisolated(unsafe) private var trackingTask: Task<Void, Never>?
 
     override init() {
         super.init()
@@ -124,7 +124,7 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation(.spring(response: AppConfig.appearDuration, dampingFraction: 0.82)) {
+                withAnimation(DS.Anim.appear) {
                     self.viewModel.expanded = true
                 }
             }
@@ -173,20 +173,34 @@ final class IslandPanelController: NSObject {
         tabMarker = ""
         ttyPath = ""
 
-        withAnimation(.smooth(duration: AppConfig.disappearDuration)) {
-            viewModel.expanded = false
+        // Step 1: Fade out content
+        withAnimation(DS.Anim.dismiss) {
+            viewModel.contentVisible = false
         }
 
+        // Step 2: After content fades, collapse the shape
         hideTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: AppConfig.hideDelayNanos)
+            try? await Task.sleep(nanoseconds: 180_000_000) // 180ms for content fade
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
+                withAnimation(DS.Anim.dismiss) {
+                    self.viewModel.expanded = false
+                }
+            }
+
+            // Step 3: After collapse animation, remove the panel
+            try? await Task.sleep(nanoseconds: 280_000_000) // 280ms for collapse
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self else { return }
                 guard !self.viewModel.expanded else { return }
                 guard let panel = self.panel else { return }
                 self.isPresented = false
                 self.topmostSpaceManager.detach(window: panel)
                 panel.orderOut(nil)
                 self.stopTrackingLoop()
+                // Reset contentVisible for next show
+                self.viewModel.contentVisible = true
 
                 if wasInteractive, let app = appToRestore {
                     app.activate()
@@ -236,7 +250,7 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation(.spring(response: AppConfig.appearDuration, dampingFraction: 0.82)) {
+                withAnimation(DS.Anim.appear) {
                     self.viewModel.expanded = true
                 }
             }
@@ -302,7 +316,7 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation(.spring(response: AppConfig.appearDuration, dampingFraction: 0.82)) {
+                withAnimation(DS.Anim.appear) {
                     self.viewModel.expanded = true
                 }
             }

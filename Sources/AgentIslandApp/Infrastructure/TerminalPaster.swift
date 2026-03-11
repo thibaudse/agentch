@@ -36,7 +36,8 @@ private let pasteQueue = PasteQueue()
 enum TerminalPaster {
     @discardableResult
     static func ensureAccessibility() -> Bool {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue(): true] as CFDictionary
+        let promptKey = "AXTrustedCheckOptionPrompt" as CFString
+        let options = [promptKey: true] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
     }
 
