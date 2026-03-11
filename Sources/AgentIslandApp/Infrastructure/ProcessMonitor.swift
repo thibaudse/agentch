@@ -12,7 +12,7 @@ final class ProcessMonitor {
         guard pid > 0 else { return }
 
         monitoredPID = pid
-        NSLog("AgentIsland: Monitoring process %d", pid)
+        NSLog("agentch: Monitoring process %d", pid)
 
         task = Task {
             while !Task.isCancelled {
@@ -21,7 +21,7 @@ final class ProcessMonitor {
 
                 // signal 0 checks existence without actually signaling
                 if kill(pid, 0) != 0, errno == ESRCH {
-                    NSLog("AgentIsland: Process %d exited, auto-dismissing", pid)
+                    NSLog("agentch: Process %d exited, auto-dismissing", pid)
                     onExit()
                     return
                 }

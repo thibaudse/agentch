@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 INSTALL_DIR="${AGENT_ISLAND_HOME:-$HOME/.agent-island}"
 
-echo "=== Agent Island Installer ==="
+echo "=== agentch Installer ==="
 echo ""
 
 # Step 1: Build the Swift helper

@@ -61,7 +61,7 @@ final class IslandPanelController: NSObject {
         }
 
         let geometry = NotchGeometry.detect()
-        NSLog("AgentIsland: show() message=%@", message)
+        NSLog("agentch: show() message=%@", message)
         viewModel.update(message: message, agentName: agent, geometry: geometry, interactive: interactive, conversation: conversation)
         viewModel.expanded = false
 
@@ -87,7 +87,7 @@ final class IslandPanelController: NSObject {
             if let app = previousApp {
                 previousWindowID = TerminalPaster.frontmostWindowID(of: app)
             }
-            NSLog("AgentIsland: interactive — app=%@, marker=%@, tty=%@, windowID=%d, pipe=%@",
+            NSLog("agentch: interactive — app=%@, marker=%@, tty=%@, windowID=%d, pipe=%@",
                   previousApp?.bundleIdentifier ?? "nil", tabMarker, ttyPath, previousWindowID ?? 0, responsePipe)
         } else {
             viewModel.onSubmit = nil
@@ -124,7 +124,7 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation(.bouncy(duration: AppConfig.appearDuration)) {
+                withAnimation(.spring(response: AppConfig.appearDuration, dampingFraction: 0.82)) {
                     self.viewModel.expanded = true
                 }
             }
@@ -155,7 +155,7 @@ final class IslandPanelController: NSObject {
                 guard let fh = FileHandle(forWritingAtPath: pipe) else { return }
                 fh.write("__dismiss__\n".data(using: .utf8)!)
                 fh.closeFile()
-                NSLog("AgentIsland: Wrote __dismiss__ to response pipe %@", pipe)
+                NSLog("agentch: Wrote __dismiss__ to response pipe %@", pipe)
             }
         }
 
@@ -207,7 +207,7 @@ final class IslandPanelController: NSObject {
         }
 
         let geometry = NotchGeometry.detect()
-        NSLog("AgentIsland: showPermission() tool=%@, command=%@, pipe=%@, suggestions=%d", tool, command, responsePipe, suggestions.count)
+        NSLog("agentch: showPermission() tool=%@, command=%@, pipe=%@, suggestions=%d", tool, command, responsePipe, suggestions.count)
         viewModel.updatePermission(tool: tool, command: command, agentName: agent, geometry: geometry, suggestions: suggestions)
         viewModel.expanded = false
         permissionResponsePipe = responsePipe
@@ -236,7 +236,7 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation(.bouncy(duration: AppConfig.appearDuration)) {
+                withAnimation(.spring(response: AppConfig.appearDuration, dampingFraction: 0.82)) {
                     self.viewModel.expanded = true
                 }
             }
@@ -246,19 +246,19 @@ final class IslandPanelController: NSObject {
     private func handlePermissionDecision(allow: Bool) {
         let pipe = permissionResponsePipe
         permissionResponsePipe = ""
-        NSLog("AgentIsland: permission decision=%@, pipe=%@", allow ? "allow" : "deny", pipe)
+        NSLog("agentch: permission decision=%@, pipe=%@", allow ? "allow" : "deny", pipe)
 
         // Write decision to the FIFO so the blocking hook script can return
         if !pipe.isEmpty {
             Task.detached {
                 guard let fh = FileHandle(forWritingAtPath: pipe) else {
-                    NSLog("AgentIsland: Failed to open response pipe %@", pipe)
+                    NSLog("agentch: Failed to open response pipe %@", pipe)
                     return
                 }
                 let decision = allow ? "allow\n" : "deny\n"
                 fh.write(decision.data(using: .utf8)!)
                 fh.closeFile()
-                NSLog("AgentIsland: Wrote '%@' to pipe", allow ? "allow" : "deny")
+                NSLog("agentch: Wrote '%@' to pipe", allow ? "allow" : "deny")
             }
         }
 
@@ -275,7 +275,7 @@ final class IslandPanelController: NSObject {
         }
 
         let geometry = NotchGeometry.detect()
-        NSLog("AgentIsland: showElicitation() question=%@, options=%d, pipe=%@",
+        NSLog("agentch: showElicitation() question=%@, options=%d, pipe=%@",
               question.question, question.options.count, responsePipe)
         viewModel.updateElicitation(question: question, agentName: agent, geometry: geometry)
         viewModel.expanded = false
@@ -302,7 +302,7 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
-                withAnimation(.bouncy(duration: AppConfig.appearDuration)) {
+                withAnimation(.spring(response: AppConfig.appearDuration, dampingFraction: 0.82)) {
                     self.viewModel.expanded = true
                 }
             }
@@ -312,18 +312,18 @@ final class IslandPanelController: NSObject {
     private func handleElicitationAnswer(_ answer: String) {
         let pipe = permissionResponsePipe
         permissionResponsePipe = ""
-        NSLog("AgentIsland: elicitation answer=%@, pipe=%@", answer, pipe)
+        NSLog("agentch: elicitation answer=%@, pipe=%@", answer, pipe)
 
         if !pipe.isEmpty {
             Task.detached {
                 guard let fh = FileHandle(forWritingAtPath: pipe) else {
-                    NSLog("AgentIsland: Failed to open response pipe %@", pipe)
+                    NSLog("agentch: Failed to open response pipe %@", pipe)
                     return
                 }
                 let msg = "answer:\(answer)\n"
                 fh.write(msg.data(using: .utf8)!)
                 fh.closeFile()
-                NSLog("AgentIsland: Wrote elicitation answer to pipe: %@", answer)
+                NSLog("agentch: Wrote elicitation answer to pipe: %@", answer)
             }
         }
 
@@ -333,20 +333,20 @@ final class IslandPanelController: NSObject {
     private func handlePermissionSuggestion(_ suggestion: PermissionSuggestion) {
         let pipe = permissionResponsePipe
         permissionResponsePipe = ""
-        NSLog("AgentIsland: permission suggestion selected=%@, pipe=%@", suggestion.label, pipe)
+        NSLog("agentch: permission suggestion selected=%@, pipe=%@", suggestion.label, pipe)
 
         // Write "allow_always:<json>" so the hook script can parse the suggestion
         if !pipe.isEmpty {
             let json = suggestion.rawJSON
             Task.detached {
                 guard let fh = FileHandle(forWritingAtPath: pipe) else {
-                    NSLog("AgentIsland: Failed to open response pipe %@", pipe)
+                    NSLog("agentch: Failed to open response pipe %@", pipe)
                     return
                 }
                 let msg = "allow_always:\(json)\n"
                 fh.write(msg.data(using: .utf8)!)
                 fh.closeFile()
-                NSLog("AgentIsland: Wrote allow_always to pipe: %@", json)
+                NSLog("agentch: Wrote allow_always to pipe: %@", json)
             }
         }
 
@@ -370,7 +370,7 @@ final class IslandPanelController: NSObject {
         let marker = tabMarker
         let tty = ttyPath
 
-        NSLog("AgentIsland: handleSubmit text=%@, pipe=%@, app=%@, marker=%@",
+        NSLog("agentch: handleSubmit text=%@, pipe=%@, app=%@, marker=%@",
               text, pipe, previousApp?.localizedName ?? "nil", marker)
 
         responsePipe = ""
@@ -380,12 +380,12 @@ final class IslandPanelController: NSObject {
         if !pipe.isEmpty {
             Task.detached {
                 guard let fh = FileHandle(forWritingAtPath: pipe) else {
-                    NSLog("AgentIsland: Failed to open response pipe %@", pipe)
+                    NSLog("agentch: Failed to open response pipe %@", pipe)
                     return
                 }
                 fh.write("\(text)\n".data(using: .utf8)!)
                 fh.closeFile()
-                NSLog("AgentIsland: Wrote response to pipe: %@", text)
+                NSLog("agentch: Wrote response to pipe: %@", text)
             }
         }
 

@@ -66,18 +66,18 @@ enum TerminalPaster {
         tabMarker: String = "",
         ttyPath: String = ""
     ) {
-        NSLog("AgentIsland: paste() — text=%@, app=%@, marker=%@, tty=%@, trusted=%d",
+        NSLog("agentch: paste() — text=%@, app=%@, marker=%@, tty=%@, trusted=%d",
               text, app?.bundleIdentifier ?? "nil", tabMarker, ttyPath, AXIsProcessTrusted() ? 1 : 0)
 
         // Strategy 1: Direct TTY injection (no focus switch needed)
         if !ttyPath.isEmpty {
             let injected = injectViaTTY(text: text + "\n", ttyPath: ttyPath)
             if injected {
-                NSLog("AgentIsland: TIOCSTI injection succeeded — no focus switch needed")
+                NSLog("agentch: TIOCSTI injection succeeded — no focus switch needed")
                 if !ttyPath.isEmpty { clearTabTitle(ttyPath: ttyPath) }
                 return
             }
-            NSLog("AgentIsland: TIOCSTI failed, falling back to clipboard paste")
+            NSLog("agentch: TIOCSTI failed, falling back to clipboard paste")
         }
 
         // Strategy 2: Clipboard + brief focus switch + auto-restore
@@ -92,7 +92,7 @@ enum TerminalPaster {
     private static func injectViaTTY(text: String, ttyPath: String) -> Bool {
         let fd = open(ttyPath, O_RDWR)
         guard fd >= 0 else {
-            NSLog("AgentIsland: Cannot open TTY %@ (errno %d)", ttyPath, errno)
+            NSLog("agentch: Cannot open TTY %@ (errno %d)", ttyPath, errno)
             return false
         }
         defer { close(fd) }
@@ -104,7 +104,7 @@ enum TerminalPaster {
             var b = byte
             let result = ioctl(fd, TIOCSTI, &b)
             if result != 0 {
-                NSLog("AgentIsland: TIOCSTI failed at byte %d (errno %d)", byte, errno)
+                NSLog("agentch: TIOCSTI failed at byte %d (errno %d)", byte, errno)
                 return false
             }
         }
@@ -130,7 +130,7 @@ enum TerminalPaster {
             copiedItems.append(copy)
         }
         let changeCount = pasteboard.changeCount
-        NSLog("AgentIsland: Saved clipboard (%d items, changeCount=%d)", copiedItems.count, changeCount)
+        NSLog("agentch: Saved clipboard (%d items, changeCount=%d)", copiedItems.count, changeCount)
         return (nil, copiedItems)
     }
 
@@ -139,7 +139,7 @@ enum TerminalPaster {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.writeObjects(savedItems)
-        NSLog("AgentIsland: Restored clipboard (%d items)", savedItems.count)
+        NSLog("agentch: Restored clipboard (%d items)", savedItems.count)
     }
 
     private static func pasteViaClipboard(
@@ -171,7 +171,7 @@ enum TerminalPaster {
             // Select the right tab
             if let app, !tabMarker.isEmpty {
                 let found = selectTab(matching: tabMarker, pid: app.processIdentifier)
-                NSLog("AgentIsland: selectTab(marker=%@) → %d", tabMarker, found ? 1 : 0)
+                NSLog("agentch: selectTab(marker=%@) → %d", tabMarker, found ? 1 : 0)
             }
 
             try? await Task.sleep(nanoseconds: 600_000_000) // 600ms for activation + tab switch
@@ -179,15 +179,15 @@ enum TerminalPaster {
             // Debug: verify clipboard and frontmost app before pasting
             let clipCheck = NSPasteboard.general.string(forType: .string) ?? "<nil>"
             let frontApp = NSWorkspace.shared.frontmostApplication
-            NSLog("AgentIsland: PRE-PASTE clipboard=%@, frontApp=%@, expectedApp=%@",
+            NSLog("agentch: PRE-PASTE clipboard=%@, frontApp=%@, expectedApp=%@",
                   clipCheck.prefix(60).description,
                   frontApp?.bundleIdentifier ?? "nil",
                   app?.bundleIdentifier ?? "nil")
 
-            NSLog("AgentIsland: Posting Cmd+V via AppleScript")
+            NSLog("agentch: Posting Cmd+V via AppleScript")
             sendPasteKeystroke()
             try? await Task.sleep(nanoseconds: 200_000_000) // 200ms between keys
-            NSLog("AgentIsland: Posting Enter via AppleScript")
+            NSLog("agentch: Posting Enter via AppleScript")
             sendReturnKeystroke()
 
             // Wait for Ghostty to fully process the keystrokes before switching away
@@ -199,15 +199,15 @@ enum TerminalPaster {
             } else {
                 // Nothing was on the clipboard before — just clear our paste text
                 pasteboard.clearContents()
-                NSLog("AgentIsland: Cleared clipboard (was empty before paste)")
+                NSLog("agentch: Cleared clipboard (was empty before paste)")
             }
 
             if !ttyPath.isEmpty { clearTabTitle(ttyPath: ttyPath) }
             if let userApp, userApp.bundleIdentifier != app?.bundleIdentifier {
                 userApp.activate(from: NSRunningApplication.current)
-                NSLog("AgentIsland: Restored focus to %@", userApp.localizedName ?? "?")
+                NSLog("agentch: Restored focus to %@", userApp.localizedName ?? "?")
             }
-            NSLog("AgentIsland: Clipboard paste complete, clipboard restored")
+            NSLog("agentch: Clipboard paste complete, clipboard restored")
         }
     }
 
@@ -219,7 +219,7 @@ enum TerminalPaster {
         var windowsRef: CFTypeRef?
         guard AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsRef) == .success,
               let windows = windowsRef as? [AXUIElement] else {
-            NSLog("AgentIsland: Failed to get AX windows for pid %d", pid)
+            NSLog("agentch: Failed to get AX windows for pid %d", pid)
             return false
         }
 
@@ -230,17 +230,17 @@ enum TerminalPaster {
                 AXUIElementPerformAction(window, kAXRaiseAction as CFString)
                 // THEN select the tab within the now-frontmost window
                 AXUIElementPerformAction(tab, kAXPressAction as CFString)
-                NSLog("AgentIsland: Raised window + selected tab matching marker")
+                NSLog("agentch: Raised window + selected tab matching marker")
                 return true
             }
             if titleMatches(element: window, marker: marker) {
                 AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-                NSLog("AgentIsland: Raised window matching marker (single-tab)")
+                NSLog("agentch: Raised window matching marker (single-tab)")
                 return true
             }
         }
 
-        NSLog("AgentIsland: No tab found matching marker %@", marker)
+        NSLog("agentch: No tab found matching marker %@", marker)
         return false
     }
 
@@ -300,7 +300,7 @@ enum TerminalPaster {
             fh.write(data)
         }
         fh.closeFile()
-        NSLog("AgentIsland: Cleared tab title via %@", ttyPath)
+        NSLog("agentch: Cleared tab title via %@", ttyPath)
     }
 
     // MARK: - Key Posting via AppleScript (more reliable with Ghostty/GPU terminals)
@@ -315,7 +315,7 @@ enum TerminalPaster {
         var error: NSDictionary?
         script?.executeAndReturnError(&error)
         if let error {
-            NSLog("AgentIsland: AppleScript Cmd+V error: %@", error)
+            NSLog("agentch: AppleScript Cmd+V error: %@", error)
         }
     }
 
@@ -329,7 +329,7 @@ enum TerminalPaster {
         var error: NSDictionary?
         script?.executeAndReturnError(&error)
         if let error {
-            NSLog("AgentIsland: AppleScript Return error: %@", error)
+            NSLog("agentch: AppleScript Return error: %@", error)
         }
     }
 }

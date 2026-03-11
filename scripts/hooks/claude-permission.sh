@@ -90,7 +90,7 @@ output = {
         'hookEventName': 'PermissionRequest',
         'decision': {
             'behavior': 'deny',
-            'message': 'The user answered via Agent Island notch UI. Their selection: ' + answer
+            'message': 'The user answered via agentch notch UI. Their selection: ' + answer
         }
     }
 }
@@ -100,7 +100,7 @@ print(json.dumps(output))
         echo "$(date '+%H:%M:%S') ELICITATION: output deny-with-answer JSON, exiting 0" >> "$LOG"
         exit 0
     else
-        echo "Elicitation dismissed by user via Agent Island" >&2
+        echo "Elicitation dismissed by user via agentch" >&2
         echo "$(date '+%H:%M:%S') ELICITATION: dismissed via exit 2" >> "$LOG"
         exit 2
     fi
@@ -138,7 +138,7 @@ output = {
         'hookEventName': 'PermissionRequest',
         'decision': {
             'behavior': 'allow',
-            'updatedPermissions': suggestion
+            'updatedPermissions': [suggestion]
         }
     }
 }
@@ -154,8 +154,8 @@ print(json.dumps(output))
             exit 0
         fi
     else
-        echo "Permission denied by user via Agent Island" >&2
-        echo "$(date '+%H:%M:%S') PERMISSION: denied via exit 2" >> "$LOG"
-        exit 2
+        echo '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny","message":"Permission denied by user via agentch"}}}'
+        echo "$(date '+%H:%M:%S') PERMISSION: output deny JSON, exiting 0" >> "$LOG"
+        exit 0
     fi
 fi

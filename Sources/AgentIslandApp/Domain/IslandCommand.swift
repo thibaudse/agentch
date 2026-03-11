@@ -1,21 +1,23 @@
 import Foundation
 
 /// Represents an "always allow" suggestion from Claude Code's PermissionRequest.
-/// The raw JSON is preserved so we can echo it back verbatim.
-struct PermissionSuggestion: Decodable, Identifiable {
-    let type: String               // e.g. "toolAlwaysAllow", "addRules"
-    let tool: String?              // for toolAlwaysAllow
-    let rules: [[String: String]]? // for addRules: [{"toolName":"...", "ruleContent":"..."}]
+/// Preserves the full raw JSON so we can echo it back verbatim.
+struct PermissionSuggestion: Identifiable {
+    /// The complete original dictionary — echoed back to the hook script as-is
+    let raw: [String: Any]
 
-    var id: String { label }
+    var type: String { raw["type"] as? String ?? "" }
+
+    var id: String { "\(type):\(label)" }
 
     /// Human-readable label for the button
     var label: String {
         switch type {
         case "toolAlwaysAllow":
-            return "Always allow \(tool ?? "this tool")"
+            let tool = raw["tool"] as? String ?? "this tool"
+            return "Always allow \(tool)"
         case "addRules":
-            if let rules, let first = rules.first {
+            if let rules = raw["rules"] as? [[String: String]], let first = rules.first {
                 let toolName = first["toolName"] ?? ""
                 let rule = first["ruleContent"] ?? ""
                 if !rule.isEmpty {
@@ -24,24 +26,64 @@ struct PermissionSuggestion: Decodable, Identifiable {
                 return "Always allow \(toolName)"
             }
             return "Always allow"
+        case "addDirectories":
+            if let dirs = raw["directories"] as? [String], let first = dirs.first {
+                let scope = raw["destination"] as? String ?? "session"
+                return "Allow access to \(first) (\(scope))"
+            }
+            return "Allow directory access"
+        case "setMode":
+            let mode = raw["mode"] as? String ?? "unknown"
+            return "Switch to \(mode) mode"
         default:
             return "Always allow"
         }
     }
 
-    /// JSON string to pass back to the hook script
+    /// JSON string to pass back to the hook script — preserves all original fields
     var rawJSON: String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        // Re-encode from original Decodable data isn't possible, so reconstruct
-        var dict: [String: Any] = ["type": type]
-        if let tool { dict["tool"] = tool }
-        if let rules { dict["rules"] = rules }
-        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.sortedKeys]),
+        if let data = try? JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys]),
            let str = String(data: data, encoding: .utf8) {
             return str
         }
         return "{}"
+    }
+}
+
+extension PermissionSuggestion: Decodable {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        // Decode via JSONSerialization to preserve all fields
+        // We get here from JSONDecoder, so we need a workaround:
+        // decode as a known-shape struct, then reconstruct the dict
+        let helper = try container.decode(SuggestionHelper.self)
+        self.raw = helper.asDict()
+    }
+}
+
+/// Helper to decode the suggestion and then reconstruct a full dictionary
+private struct SuggestionHelper: Decodable {
+    let type: String
+    let tool: String?
+    let rules: [[String: String]]?
+    let directories: [String]?
+    let destination: String?
+    let mode: String?
+    let behavior: String?
+    let ruleContent: String?
+    let toolName: String?
+
+    func asDict() -> [String: Any] {
+        var d: [String: Any] = ["type": type]
+        if let tool { d["tool"] = tool }
+        if let rules { d["rules"] = rules }
+        if let directories { d["directories"] = directories }
+        if let destination { d["destination"] = destination }
+        if let mode { d["mode"] = mode }
+        if let behavior { d["behavior"] = behavior }
+        if let ruleContent { d["ruleContent"] = ruleContent }
+        if let toolName { d["toolName"] = toolName }
+        return d
     }
 }
 

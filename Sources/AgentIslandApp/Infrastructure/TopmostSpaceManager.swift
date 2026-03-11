@@ -20,14 +20,14 @@ final class TopmostSpaceManager {
         let createdSpace = CGSSpaceCreate(connection, flag, nil)
 
         guard createdSpace != 0 else {
-            NSLog("AgentIsland: Unable to create private top space")
+            NSLog("agentch: Unable to create private top space")
             return
         }
 
         CGSSpaceSetAbsoluteLevel(connection, createdSpace, Self.topSpaceLevel)
         CGSShowSpaces(connection, [createdSpace] as NSArray)
         spaceID = createdSpace
-        NSLog("AgentIsland: Private top space enabled")
+        NSLog("agentch: Private top space enabled")
     }
 
     deinit {

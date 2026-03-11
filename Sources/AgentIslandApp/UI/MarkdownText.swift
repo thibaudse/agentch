@@ -12,7 +12,7 @@ struct MarkdownText: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 5) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 blockView(block)
             }
@@ -128,23 +128,38 @@ struct MarkdownText: View {
         case .paragraph(let text):
             inlineMarkdown(text)
 
-        case .codeBlock(_, let code):
-            Text(code)
-                .font(.system(size: fontSize - 1, design: .monospaced))
-                .foregroundColor(.white.opacity(0.8))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.white.opacity(0.08))
-                )
+        case .codeBlock(let lang, let code):
+            VStack(alignment: .leading, spacing: 0) {
+                if !lang.isEmpty {
+                    Text(lang)
+                        .font(.system(size: fontSize - 2, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.3))
+                        .padding(.horizontal, 10)
+                        .padding(.top, 6)
+                        .padding(.bottom, 2)
+                }
+                Text(code)
+                    .font(.system(size: fontSize - 1, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.8))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, lang.isEmpty ? 8 : 4)
+                    .padding(.bottom, lang.isEmpty ? 0 : 2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+            )
 
         case .listItem(let depth, let text):
-            HStack(alignment: .top, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("•")
-                    .font(.system(size: fontSize, design: .rounded))
-                    .foregroundColor(.white.opacity(0.4))
+                    .font(.system(size: fontSize - 1, design: .rounded))
+                    .foregroundColor(.white.opacity(0.3))
                 inlineMarkdown(text)
             }
             .padding(.leading, CGFloat(depth) * 12)
@@ -152,12 +167,13 @@ struct MarkdownText: View {
         case .header(let level, let text):
             inlineMarkdown(text)
                 .font(.system(size: headerSize(level), weight: .bold, design: .rounded))
+                .padding(.top, level <= 2 ? 2 : 0)
 
         case .divider:
             Rectangle()
-                .fill(Color.white.opacity(0.1))
-                .frame(height: 1)
-                .padding(.vertical, 2)
+                .fill(Color.white.opacity(0.08))
+                .frame(height: 0.5)
+                .padding(.vertical, 3)
         }
     }
 
@@ -198,7 +214,7 @@ struct MarkdownText: View {
             if let (matched, rest) = extractSingleDelimited(&remaining, delimiter: "`") {
                 result = result + Text(matched)
                     .font(.system(size: fontSize - 1, design: .monospaced))
-                    .foregroundColor(Color(red: 0.5, green: 0.8, blue: 1.0))
+                    .foregroundColor(Color(red: 0.45, green: 0.75, blue: 1.0))
                 remaining = rest
                 continue
             }
@@ -209,7 +225,7 @@ struct MarkdownText: View {
                remaining[remaining.index(after: closeBracket)] == "(" {
                 let linkText = remaining[remaining.index(after: remaining.startIndex)..<closeBracket]
                 if let closeParen = remaining[closeBracket...].firstIndex(of: ")") {
-                    result = result + Text(linkText).underline()
+                    result = result + Text(linkText).underline().foregroundColor(Color(red: 0.45, green: 0.75, blue: 1.0))
                     remaining = remaining[remaining.index(after: closeParen)...]
                     continue
                 }

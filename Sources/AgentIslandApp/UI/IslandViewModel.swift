@@ -80,7 +80,7 @@ final class IslandViewModel: ObservableObject {
 
     func submit() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        NSLog("AgentIsland: submit() called, text=%@, hasCallback=%d", text, onSubmit != nil ? 1 : 0)
+        NSLog("agentch: submit() called, text=%@, hasCallback=%d", text, onSubmit != nil ? 1 : 0)
         guard !text.isEmpty else { return }
 
         // Append the user's input to the conversation so it shows in expanded view
@@ -94,22 +94,22 @@ final class IslandViewModel: ObservableObject {
     }
 
     func approvePermission() {
-        NSLog("AgentIsland: permission approved")
+        NSLog("agentch: permission approved")
         onPermissionDecision?(true)
     }
 
     func denyPermission() {
-        NSLog("AgentIsland: permission denied")
+        NSLog("agentch: permission denied")
         onPermissionDecision?(false)
     }
 
     func selectSuggestion(_ suggestion: PermissionSuggestion) {
-        NSLog("AgentIsland: suggestion selected: %@", suggestion.label)
+        NSLog("agentch: suggestion selected: %@", suggestion.label)
         onPermissionSuggestion?(suggestion)
     }
 
     func answerElicitation(_ option: String) {
-        NSLog("AgentIsland: elicitation answered: %@", option)
+        NSLog("agentch: elicitation answered: %@", option)
         onElicitationAnswer?(option)
     }
 }

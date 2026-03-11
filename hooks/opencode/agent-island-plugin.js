@@ -1,5 +1,5 @@
 /**
- * OpenCode plugin for Agent Island.
+ * OpenCode plugin for agentch.
  *
  * Install:
  *   Copy this file to .opencode/plugins/agent-island-plugin.js

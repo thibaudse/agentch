@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Codex CLI notify hook for Agent Island.
+Codex CLI notify hook for agentch.
 
 Configure in ~/.codex/config.toml:
     notify = ["python3", "<path-to>/agent-island/hooks/codex/notify.py"]
 
 When the agent completes a turn (and is waiting for input), this script
-sends a message to the Agent Island helper app.
+sends a message to the agentch helper app.
 """
 import json
 import os

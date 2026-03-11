@@ -1,5 +1,5 @@
 {
-  "description": "Agent Island - Dynamic Island notifications for Claude Code",
+  "description": "agentch - Dynamic Island notifications for Claude Code",
   "hooks": {
     "Notification": [
       {

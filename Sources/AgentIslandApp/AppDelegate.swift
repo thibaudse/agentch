@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         installSignalHandlers()
         startSocketServer()
-        NSLog("AgentIsland: Ready")
+        NSLog("agentch: Ready")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -28,9 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try server.start()
             socketServer = server
-            NSLog("AgentIsland: Listening on \(AppConfig.socketPath)")
+            NSLog("agentch: Listening on \(AppConfig.socketPath)")
         } catch {
-            NSLog("AgentIsland: Failed to start socket server: \(String(describing: error))")
+            NSLog("agentch: Failed to start socket server: \(String(describing: error))")
             NSApp.terminate(nil)
         }
     }
