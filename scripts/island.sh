@@ -89,13 +89,15 @@ case "${1:-show}" in
         tab_marker="${6:-}"
         tty_path="${7:-}"
         conversation="${8:-}"
+        response_pipe="${9:-}"
         message_json="$(json_escape "$message")"
         agent_json="$(json_escape "$agent")"
         terminal_json="$(json_escape "$terminal_bundle")"
         marker_json="$(json_escape "$tab_marker")"
         tty_json="$(json_escape "$tty_path")"
         convo_json="$(json_escape "$conversation")"
-        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":0,\"pid\":$pid,\"interactive\":true,\"terminal_bundle\":$terminal_json,\"tab_marker\":$marker_json,\"tty_path\":$tty_json,\"conversation\":$convo_json}"
+        pipe_json="$(json_escape "$response_pipe")"
+        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":0,\"pid\":$pid,\"interactive\":true,\"terminal_bundle\":$terminal_json,\"tab_marker\":$marker_json,\"tty_path\":$tty_json,\"conversation\":$convo_json,\"response_pipe\":$pipe_json}"
         ;;
     permission)
         tool="${2:-}"

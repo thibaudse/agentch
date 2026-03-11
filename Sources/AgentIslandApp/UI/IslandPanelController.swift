@@ -24,6 +24,7 @@ final class IslandPanelController: NSObject {
     private var previousWindowID: CGWindowID?
     private var tabMarker: String = ""
     private var ttyPath: String = ""
+    private var responsePipe: String = ""
     private var autoDismissTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
     private var trackingTask: Task<Void, Never>?
@@ -49,7 +50,8 @@ final class IslandPanelController: NSObject {
         terminalBundle: String = "",
         tabMarker: String = "",
         ttyPath: String = "",
-        conversation: String = ""
+        conversation: String = "",
+        responsePipe: String = ""
     ) {
         cancelPendingTasks()
 
@@ -80,18 +82,20 @@ final class IslandPanelController: NSObject {
             // Store tab marker and TTY path for targeting the right tab
             self.tabMarker = tabMarker
             self.ttyPath = ttyPath
+            self.responsePipe = responsePipe
             // Also capture the window ID as fallback
             if let app = previousApp {
                 previousWindowID = TerminalPaster.frontmostWindowID(of: app)
             }
-            NSLog("AgentIsland: interactive — app=%@, marker=%@, tty=%@, windowID=%d",
-                  previousApp?.bundleIdentifier ?? "nil", tabMarker, ttyPath, previousWindowID ?? 0)
+            NSLog("AgentIsland: interactive — app=%@, marker=%@, tty=%@, windowID=%d, pipe=%@",
+                  previousApp?.bundleIdentifier ?? "nil", tabMarker, ttyPath, previousWindowID ?? 0, responsePipe)
         } else {
             viewModel.onSubmit = nil
             previousApp = nil
             previousWindowID = nil
             self.tabMarker = ""
             self.ttyPath = ""
+            self.responsePipe = ""
         }
 
         ensurePanel()
@@ -124,13 +128,6 @@ final class IslandPanelController: NSObject {
                     self.viewModel.expanded = true
                 }
             }
-            // After expansion animation, make the panel key so the text field can focus
-            if interactive {
-                try? await Task.sleep(nanoseconds: 200_000_000) // 200ms for animation
-                await MainActor.run { [weak self] in
-                    self?.panel?.makeKeyAndOrderFront(nil)
-                }
-            }
         }
 
         if duration > 0 {
@@ -148,6 +145,18 @@ final class IslandPanelController: NSObject {
         if !permissionResponsePipe.isEmpty {
             handlePermissionDecision(allow: false)
             return
+        }
+
+        // If a response pipe is active, write dismiss to unblock the background worker
+        if !responsePipe.isEmpty {
+            let pipe = responsePipe
+            responsePipe = ""
+            Task.detached {
+                guard let fh = FileHandle(forWritingAtPath: pipe) else { return }
+                fh.write("__dismiss__\n".data(using: .utf8)!)
+                fh.closeFile()
+                NSLog("AgentIsland: Wrote __dismiss__ to response pipe %@", pipe)
+            }
         }
 
         processMonitor.stop()
@@ -231,10 +240,6 @@ final class IslandPanelController: NSObject {
                     self.viewModel.expanded = true
                 }
             }
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            await MainActor.run { [weak self] in
-                self?.panel?.makeKeyAndOrderFront(nil)
-            }
         }
     }
 
@@ -301,10 +306,6 @@ final class IslandPanelController: NSObject {
                     self.viewModel.expanded = true
                 }
             }
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            await MainActor.run { [weak self] in
-                self?.panel?.makeKeyAndOrderFront(nil)
-            }
         }
     }
 
@@ -363,14 +364,32 @@ final class IslandPanelController: NSObject {
     // MARK: - Input Handling
 
     private func handleSubmit(text: String) {
-        NSLog("AgentIsland: handleSubmit text=%@, app=%@, marker=%@, tty=%@",
-              text, previousApp?.localizedName ?? "nil", tabMarker, ttyPath)
+        let pipe = responsePipe
         let app = previousApp
         let windowID = previousWindowID
         let marker = tabMarker
         let tty = ttyPath
-        // Dismiss without restoring the terminal — we handle focus ourselves via paste
+
+        NSLog("AgentIsland: handleSubmit text=%@, pipe=%@, app=%@, marker=%@",
+              text, pipe, previousApp?.localizedName ?? "nil", marker)
+
+        responsePipe = ""
         dismissForSubmit()
+
+        // Signal the background worker via FIFO (it handles cleanup)
+        if !pipe.isEmpty {
+            Task.detached {
+                guard let fh = FileHandle(forWritingAtPath: pipe) else {
+                    NSLog("AgentIsland: Failed to open response pipe %@", pipe)
+                    return
+                }
+                fh.write("\(text)\n".data(using: .utf8)!)
+                fh.closeFile()
+                NSLog("AgentIsland: Wrote response to pipe: %@", text)
+            }
+        }
+
+        // Paste into the correct terminal tab (TerminalPaster handles tab selection via AX)
         TerminalPaster.paste(text: text, into: app, windowID: windowID, tabMarker: marker, ttyPath: tty)
     }
 
@@ -387,6 +406,7 @@ final class IslandPanelController: NSObject {
         previousWindowID = nil
         tabMarker = ""
         ttyPath = ""
+        responsePipe = ""
 
         withAnimation(.smooth(duration: AppConfig.disappearDuration)) {
             viewModel.expanded = false

@@ -59,7 +59,7 @@ struct Elicitation: Decodable {
 }
 
 enum IslandCommand {
-    case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool, terminalBundle: String, tabMarker: String, ttyPath: String, conversation: String)
+    case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool, terminalBundle: String, tabMarker: String, ttyPath: String, conversation: String, responsePipe: String)
     case permission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion])
     case elicitation(question: Elicitation, agent: String, pid: pid_t, responsePipe: String)
     case dismiss
@@ -72,17 +72,17 @@ enum IslandCommand {
 
         switch payload.action {
         case "show":
-            self = .show(
-                message: payload.message ?? "Hello World",
-                agent: payload.agent ?? "",
-                duration: payload.duration ?? AppConfig.defaultDisplayDuration,
-                pid: pid_t(payload.pid ?? 0),
-                interactive: payload.interactive ?? false,
-                terminalBundle: payload.terminal_bundle ?? "",
-                tabMarker: payload.tab_marker ?? "",
-                ttyPath: payload.tty_path ?? "",
-                conversation: payload.conversation ?? ""
-            )
+            let msg = payload.message ?? "Hello World"
+            let agt = payload.agent ?? ""
+            let dur = payload.duration ?? AppConfig.defaultDisplayDuration
+            let p = pid_t(payload.pid ?? 0)
+            let inter = payload.interactive ?? false
+            let tb = payload.terminal_bundle ?? ""
+            let tm = payload.tab_marker ?? ""
+            let tp = payload.tty_path ?? ""
+            let conv = payload.conversation ?? ""
+            let rp = payload.response_pipe ?? ""
+            self = .show(message: msg, agent: agt, duration: dur, pid: p, interactive: inter, terminalBundle: tb, tabMarker: tm, ttyPath: tp, conversation: conv, responsePipe: rp)
         case "permission":
             self = .permission(
                 tool: payload.tool ?? "Unknown",

@@ -135,4 +135,17 @@ case "${TERM_PROGRAM:-}" in
     kitty)         TERM_BUNDLE="net.kovidgoyal.kitty" ;;
 esac
 
-exec "$ISLAND" prompt "$MSG" "Claude" "$PPID" "$TERM_BUNDLE" "$TAB_MARKER" "$TTY_PATH" "$CONVO"
+# Create FIFO for the island to write the user's response back
+RESPONSE_PIPE="/tmp/agent-island-response-$$"
+mkfifo "$RESPONSE_PIPE" 2>/dev/null || true
+
+# Background worker: reads FIFO to unblock, then cleans up.
+# The island handles the actual paste with proper tab selection via AX API.
+(
+    RESPONSE=$(head -n1 "$RESPONSE_PIPE" 2>/dev/null | tr -d '\n')
+    rm -f "$RESPONSE_PIPE"
+    echo "$(date '+%H:%M:%S') RESPONSE WORKER: got '$RESPONSE'" >> "$LOG"
+) &
+
+# Send to island with the response pipe — island writes to FIFO on submit
+exec "$ISLAND" prompt "$MSG" "Claude" "$PPID" "$TERM_BUNDLE" "$TAB_MARKER" "$TTY_PATH" "$CONVO" "$RESPONSE_PIPE"

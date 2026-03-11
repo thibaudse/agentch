@@ -223,12 +223,19 @@ enum TerminalPaster {
             return false
         }
 
+        // First pass: find which window contains the matching tab (without clicking)
         for window in windows {
-            if let found = findAndSelectTab(in: window, matching: marker) {
-                return found
+            if let tab = findTab(in: window, matching: marker) {
+                // Raise the window FIRST so it's frontmost
+                AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+                // THEN select the tab within the now-frontmost window
+                AXUIElementPerformAction(tab, kAXPressAction as CFString)
+                NSLog("AgentIsland: Raised window + selected tab matching marker")
+                return true
             }
             if titleMatches(element: window, marker: marker) {
                 AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+                NSLog("AgentIsland: Raised window matching marker (single-tab)")
                 return true
             }
         }
@@ -237,7 +244,8 @@ enum TerminalPaster {
         return false
     }
 
-    private static func findAndSelectTab(in element: AXUIElement, matching marker: String) -> Bool? {
+    /// Walk the AX tree to find a tab element matching the marker. Returns the element without clicking it.
+    private static func findTab(in element: AXUIElement, matching marker: String) -> AXUIElement? {
         var roleRef: CFTypeRef?
         AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
         let role = roleRef as? String ?? ""
@@ -248,9 +256,7 @@ enum TerminalPaster {
                let tabs = tabsRef as? [AXUIElement] {
                 for tab in tabs {
                     if titleMatches(element: tab, marker: marker) {
-                        AXUIElementPerformAction(tab, kAXPressAction as CFString)
-                        NSLog("AgentIsland: Selected tab matching marker in tab group")
-                        return true
+                        return tab
                     }
                 }
             }
@@ -258,9 +264,7 @@ enum TerminalPaster {
 
         if role == "AXRadioButton" || role == "AXTab" {
             if titleMatches(element: element, marker: marker) {
-                AXUIElementPerformAction(element, kAXPressAction as CFString)
-                NSLog("AgentIsland: Pressed tab element matching marker")
-                return true
+                return element
             }
         }
 
@@ -268,8 +272,8 @@ enum TerminalPaster {
         if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
            let children = childrenRef as? [AXUIElement] {
             for child in children {
-                if let result = findAndSelectTab(in: child, matching: marker) {
-                    return result
+                if let found = findTab(in: child, matching: marker) {
+                    return found
                 }
             }
         }

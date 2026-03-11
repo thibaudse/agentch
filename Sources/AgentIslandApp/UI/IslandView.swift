@@ -116,13 +116,6 @@ struct IslandView: View {
         .animation(.smooth(duration: 0.3), value: model.isFullExpanded)
         .animation(.smooth(duration: 0.3), value: contentHeight)
         .onExitCommand { onClose() }
-        .onChange(of: model.expanded) { _, expanded in
-            if expanded && model.interactive && !model.isPermission {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    isInputFocused = true
-                }
-            }
-        }
     }
 
     // MARK: - Header
