@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh prompt 'Your turn' 'Claude' $PPID",
+            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-show.sh",
             "async": true,
             "timeout": 5
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh prompt 'Done' 'Claude' $PPID",
+            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-show.sh",
             "async": true,
             "timeout": 5
           }

@@ -12,11 +12,11 @@ import { createConnection } from "net";
 
 const SOCKET_PATH = "/tmp/agent-island.sock";
 
-function sendToIsland(action, message = "", agent = "OpenCode", duration = 0) {
+function sendToIsland(action, message = "", agent = "OpenCode", { duration = 0, pid = 0, interactive = false } = {}) {
   return new Promise((resolve) => {
     try {
       const client = createConnection(SOCKET_PATH, () => {
-        const payload = JSON.stringify({ action, message, agent, duration });
+        const payload = JSON.stringify({ action, message, agent, duration, pid, interactive });
         client.write(payload + "\n");
       });
       client.on("data", () => {
@@ -38,7 +38,7 @@ export const AgentIslandPlugin = async () => {
   return {
     event: async ({ event }) => {
       if (event.type === "session.idle") {
-        await sendToIsland("show", "Waiting for input", "OpenCode");
+        await sendToIsland("show", "Your turn", "OpenCode", { pid: process.ppid, interactive: true });
       }
       // Dismiss when user submits a new message
       if (

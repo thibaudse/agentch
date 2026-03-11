@@ -21,6 +21,7 @@ final class IslandViewModel: ObservableObject {
 
     func submit() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        NSLog("AgentIsland: submit() called, text=%@, hasCallback=%d", text, onSubmit != nil ? 1 : 0)
         guard !text.isEmpty else { return }
         onSubmit?(text)
     }

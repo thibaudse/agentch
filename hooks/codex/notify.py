@@ -15,12 +15,14 @@ import sys
 
 SOCKET_PATH = "/tmp/agent-island.sock"
 
-def send_to_island(action: str, message: str = "", agent: str = "Codex", duration: float = 0):
+def send_to_island(action: str, message: str = "", agent: str = "Codex", duration: float = 0, pid: int = 0, interactive: bool = False):
     payload = json.dumps({
         "action": action,
         "message": message,
         "agent": agent,
         "duration": duration,
+        "pid": pid,
+        "interactive": interactive,
     })
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -45,7 +47,7 @@ def main():
     event_type = event.get("type", "")
 
     if event_type == "agent-turn-complete":
-        send_to_island("show", "Waiting for input", "Codex")
+        send_to_island("show", "Your turn", "Codex", pid=os.getppid(), interactive=True)
 
 if __name__ == "__main__":
     main()

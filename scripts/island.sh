@@ -38,7 +38,8 @@ start_daemon() {
         return 1
     fi
 
-    "$BINARY_PATH" &
+    LOG_FILE="/tmp/agent-island.log"
+    "$BINARY_PATH" 2>>"$LOG_FILE" &
     echo $! > "$PID_FILE"
     wait_for_socket
 }
@@ -84,9 +85,15 @@ case "${1:-show}" in
         message="${2:-}"
         agent="${3:-}"
         pid="${4:-0}"
+        terminal_bundle="${5:-}"
+        tab_marker="${6:-}"
+        tty_path="${7:-}"
         message_json="$(json_escape "$message")"
         agent_json="$(json_escape "$agent")"
-        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":0,\"pid\":$pid,\"interactive\":true}"
+        terminal_json="$(json_escape "$terminal_bundle")"
+        marker_json="$(json_escape "$tab_marker")"
+        tty_json="$(json_escape "$tty_path")"
+        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":0,\"pid\":$pid,\"interactive\":true,\"terminal_bundle\":$terminal_json,\"tab_marker\":$marker_json,\"tty_path\":$tty_json}"
         ;;
     dismiss)
         send_message '{"action":"dismiss"}'

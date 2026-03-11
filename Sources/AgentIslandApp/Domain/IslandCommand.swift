@@ -1,7 +1,7 @@
 import Foundation
 
 enum IslandCommand {
-    case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool)
+    case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool, terminalBundle: String, tabMarker: String, ttyPath: String)
     case dismiss
     case quit
 
@@ -17,7 +17,10 @@ enum IslandCommand {
                 agent: payload.agent ?? "",
                 duration: payload.duration ?? AppConfig.defaultDisplayDuration,
                 pid: pid_t(payload.pid ?? 0),
-                interactive: payload.interactive ?? false
+                interactive: payload.interactive ?? false,
+                terminalBundle: payload.terminal_bundle ?? "",
+                tabMarker: payload.tab_marker ?? "",
+                ttyPath: payload.tty_path ?? ""
             )
         case "dismiss":
             self = .dismiss
@@ -36,4 +39,7 @@ private struct Payload: Decodable {
     let duration: TimeInterval?
     let pid: Int?
     let interactive: Bool?
+    let terminal_bundle: String?
+    let tab_marker: String?
+    let tty_path: String?
 }

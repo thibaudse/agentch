@@ -21,6 +21,9 @@ final class IslandPanelController: NSObject {
     private var panel: OverlayPanel?
     private var isPresented = false
     private var previousApp: NSRunningApplication?
+    private var previousWindowID: CGWindowID?
+    private var tabMarker: String = ""
+    private var ttyPath: String = ""
     private var autoDismissTask: Task<Void, Never>?
     private var hideTask: Task<Void, Never>?
     private var trackingTask: Task<Void, Never>?
@@ -42,7 +45,10 @@ final class IslandPanelController: NSObject {
         agent: String,
         duration: TimeInterval = AppConfig.defaultDisplayDuration,
         pid: pid_t = 0,
-        interactive: Bool = false
+        interactive: Bool = false,
+        terminalBundle: String = "",
+        tabMarker: String = "",
+        ttyPath: String = ""
     ) {
         cancelPendingTasks()
 
@@ -59,10 +65,28 @@ final class IslandPanelController: NSObject {
             viewModel.onSubmit = { [weak self] text in
                 self?.handleSubmit(text: text)
             }
-            previousApp = NSWorkspace.shared.frontmostApplication
+            // Find the terminal app by bundle ID so we paste into the right window
+            if !terminalBundle.isEmpty {
+                previousApp = NSRunningApplication.runningApplications(withBundleIdentifier: terminalBundle).first
+            }
+            if previousApp == nil {
+                previousApp = NSWorkspace.shared.frontmostApplication
+            }
+            // Store tab marker and TTY path for targeting the right tab
+            self.tabMarker = tabMarker
+            self.ttyPath = ttyPath
+            // Also capture the window ID as fallback
+            if let app = previousApp {
+                previousWindowID = TerminalPaster.frontmostWindowID(of: app)
+            }
+            NSLog("AgentIsland: interactive — app=%@, marker=%@, tty=%@, windowID=%d",
+                  previousApp?.bundleIdentifier ?? "nil", tabMarker, ttyPath, previousWindowID ?? 0)
         } else {
             viewModel.onSubmit = nil
             previousApp = nil
+            previousWindowID = nil
+            self.tabMarker = ""
+            self.ttyPath = ""
         }
 
         ensurePanel()
@@ -79,7 +103,6 @@ final class IslandPanelController: NSObject {
         if interactive {
             TerminalPaster.ensureAccessibility()
             panel.acceptsKeyInput = true
-            panel.makeKeyAndOrderFront(nil)
         } else {
             panel.acceptsKeyInput = false
         }
@@ -90,6 +113,13 @@ final class IslandPanelController: NSObject {
             await MainActor.run {
                 withAnimation(.bouncy(duration: AppConfig.appearDuration)) {
                     self.viewModel.expanded = true
+                }
+            }
+            // After expansion animation, make the panel key so the text field can focus
+            if interactive {
+                try? await Task.sleep(nanoseconds: 200_000_000) // 200ms for animation
+                await MainActor.run { [weak self] in
+                    self?.panel?.makeKeyAndOrderFront(nil)
                 }
             }
         }
@@ -115,6 +145,9 @@ final class IslandPanelController: NSObject {
         let wasInteractive = viewModel.interactive
         let appToRestore = previousApp
         previousApp = nil
+        previousWindowID = nil
+        tabMarker = ""
+        ttyPath = ""
 
         withAnimation(.smooth(duration: AppConfig.disappearDuration)) {
             viewModel.expanded = false
@@ -141,9 +174,47 @@ final class IslandPanelController: NSObject {
     // MARK: - Input Handling
 
     private func handleSubmit(text: String) {
+        NSLog("AgentIsland: handleSubmit text=%@, app=%@, marker=%@, tty=%@",
+              text, previousApp?.localizedName ?? "nil", tabMarker, ttyPath)
         let app = previousApp
-        dismiss()
-        TerminalPaster.paste(text: text, into: app)
+        let windowID = previousWindowID
+        let marker = tabMarker
+        let tty = ttyPath
+        // Dismiss without restoring the terminal — we handle focus ourselves via paste
+        dismissForSubmit()
+        TerminalPaster.paste(text: text, into: app, windowID: windowID, tabMarker: marker, ttyPath: tty)
+    }
+
+    /// Dismiss the island without reactivating the previous terminal app.
+    /// Used when submitting — TerminalPaster handles focus.
+    private func dismissForSubmit() {
+        processMonitor.stop()
+        autoDismissTask?.cancel()
+        autoDismissTask = nil
+        hideTask?.cancel()
+        panel?.ignoresMouseEvents = true
+        panel?.acceptsKeyInput = false
+        previousApp = nil
+        previousWindowID = nil
+        tabMarker = ""
+        ttyPath = ""
+
+        withAnimation(.smooth(duration: AppConfig.disappearDuration)) {
+            viewModel.expanded = false
+        }
+
+        hideTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: AppConfig.hideDelayNanos)
+            guard let self, !Task.isCancelled else { return }
+            await MainActor.run {
+                guard !self.viewModel.expanded else { return }
+                guard let panel = self.panel else { return }
+                self.isPresented = false
+                self.topmostSpaceManager.detach(window: panel)
+                panel.orderOut(nil)
+                self.stopTrackingLoop()
+            }
+        }
     }
 
     // MARK: - System Layout
