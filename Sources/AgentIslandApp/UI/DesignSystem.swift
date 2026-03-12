@@ -97,10 +97,21 @@ enum DS {
     // MARK: - Animation Presets
 
     enum Anim {
-        static let appear: Animation = .spring(response: 0.5, dampingFraction: 0.68)
-        static let expand: Animation = .spring(response: 0.4, dampingFraction: 0.85)
-        static let dismiss: Animation = .smooth(duration: 0.25)
-        static let content: Animation = .spring(response: 0.35, dampingFraction: 0.90)
+        /// Notch open — bouncy spring with slight overshoot (reverse curve feel)
+        static let notchOpen: Animation = .spring(response: 0.45, dampingFraction: 0.62, blendDuration: 0.1)
+        /// Notch close — snappy spring that pulls back into the notch
+        static let notchClose: Animation = .spring(response: 0.30, dampingFraction: 0.72)
+        /// Content fade in — smooth, no bounce
+        static let contentIn: Animation = .easeOut(duration: 0.30).delay(0.06)
+        /// Content fade out — quick fade before notch collapses
+        static let contentOut: Animation = .easeOut(duration: 0.15)
+        /// Expand/collapse content area — smooth spring
+        static let expand: Animation = .spring(response: 0.42, dampingFraction: 0.82)
+        /// Content height changes — responsive spring
+        static let content: Animation = .spring(response: 0.35, dampingFraction: 0.88)
+        /// Symbol transitions (SF Symbol morphs)
+        static let symbol: Animation = .spring(response: 0.30, dampingFraction: 0.70)
+        /// Hover feedback
         static let hover: Animation = .easeOut(duration: 0.15)
         static let focus: Animation = .easeOut(duration: 0.25)
         static let press: Animation = .spring(response: 0.2, dampingFraction: 0.6)
@@ -111,6 +122,10 @@ enum DS {
         static func stagger(index: Int, base: Double = 0.05) -> Animation {
             .spring(response: 0.35, dampingFraction: 0.80).delay(Double(index) * base)
         }
+
+        // Legacy aliases for backward compat
+        static let appear = notchOpen
+        static let dismiss = contentOut
     }
 
     // MARK: - Spacing & Radii
@@ -125,6 +140,7 @@ enum DS {
     static let sp16: CGFloat = 16
     static let sp18: CGFloat = 18
     static let sp20: CGFloat = 20
+    static let sp24: CGFloat = 24
 
     static let radiusS: CGFloat = 8
     static let radiusM: CGFloat = 12
@@ -267,19 +283,12 @@ struct DSHeaderButton: View {
                 .font(.system(size: 9.5, weight: .bold))
                 .foregroundColor(.white.opacity(isHovering ? 0.85 : 0.40))
                 .frame(width: 22, height: 22)
-                .background(fallbackCircle)
-                .liquidGlassCircle(interactive: true)
+                .animation(nil, value: icon)
+                .fadedCircleSurface(interactive: true)
                 .scaleEffect(isHovering ? 1.08 : 1.0)
         }
         .buttonStyle(.plain)
         .onHover { h in withAnimation(DS.Anim.hover) { isHovering = h } }
-    }
-
-    @ViewBuilder
-    private var fallbackCircle: some View {
-        if #unavailable(macOS 26.0) {
-            Circle().fill(Color.white.opacity(isHovering ? 0.14 : 0.06))
-        }
     }
 }
 
@@ -338,113 +347,52 @@ extension View {
     }
 }
 
-// MARK: - Liquid Glass Modifiers (macOS 26+ with fallback)
+// MARK: - Pill & Button Background Modifiers (faded white on black)
 
-/// Rounded‑rect liquid glass. Falls back to the existing dark surface+border on older OS.
-private struct LiquidGlassRectModifier: ViewModifier {
+private struct FadedRectModifier: ViewModifier {
     let cornerRadius: CGFloat
-    let tintColor: Color?
-    let isInteractive: Bool
 
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .glassEffect(glassConfig(), in: .rect(cornerRadius: cornerRadius, style: .continuous))
-        } else {
-            content
-                .background(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(DS.surface1)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(DS.border1, lineWidth: 0.5)
-                )
-        }
-    }
-
-    @available(macOS 26.0, *)
-    private func glassConfig() -> Glass {
-        var g = Glass.regular
-        if let c = tintColor { g = g.tint(c) }
-        if isInteractive { g = g.interactive() }
-        return g
+        content
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+            )
     }
 }
 
-/// Capsule liquid glass.
-private struct LiquidGlassCapsuleModifier: ViewModifier {
-    let tintColor: Color?
-    let isInteractive: Bool
-
+private struct FadedCapsuleModifier: ViewModifier {
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .glassEffect(glassConfig(), in: .capsule)
-        } else {
-            content
-                .background(Capsule(style: .continuous).fill(DS.surface1))
-                .overlay(Capsule(style: .continuous).strokeBorder(DS.border1, lineWidth: 0.5))
-        }
-    }
-
-    @available(macOS 26.0, *)
-    private func glassConfig() -> Glass {
-        var g = Glass.regular
-        if let c = tintColor { g = g.tint(c) }
-        if isInteractive { g = g.interactive() }
-        return g
+        content
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.08))
+            )
     }
 }
 
-/// Circle liquid glass.
-private struct LiquidGlassCircleModifier: ViewModifier {
-    let tintColor: Color?
+private struct FadedCircleModifier: ViewModifier {
     let isInteractive: Bool
 
     func body(content: Content) -> some View {
-        if #available(macOS 26.0, *) {
-            content
-                .glassEffect(glassConfig(), in: .circle)
-        } else {
-            content
-                .background(Circle().fill(DS.surface1))
-                .overlay(Circle().strokeBorder(DS.border1, lineWidth: 0.5))
-        }
-    }
-
-    @available(macOS 26.0, *)
-    private func glassConfig() -> Glass {
-        var g = Glass.regular
-        if let c = tintColor { g = g.tint(c) }
-        if isInteractive { g = g.interactive() }
-        return g
+        content
+            .background(
+                Circle()
+                    .fill(Color.white.opacity(isInteractive ? 0.10 : 0.08))
+            )
     }
 }
 
 extension View {
-    /// Apply liquid glass with a rounded rectangle shape. Falls back to dark surface on older OS.
-    func liquidGlass(
-        cornerRadius: CGFloat = DS.radiusM,
-        tint: Color? = nil,
-        interactive: Bool = false
-    ) -> some View {
-        modifier(LiquidGlassRectModifier(cornerRadius: cornerRadius, tintColor: tint, isInteractive: interactive))
+    func fadedSurface(cornerRadius: CGFloat = DS.radiusM) -> some View {
+        modifier(FadedRectModifier(cornerRadius: cornerRadius))
     }
 
-    /// Apply liquid glass with a capsule shape.
-    func liquidGlassCapsule(
-        tint: Color? = nil,
-        interactive: Bool = false
-    ) -> some View {
-        modifier(LiquidGlassCapsuleModifier(tintColor: tint, isInteractive: interactive))
+    func fadedCapsuleSurface() -> some View {
+        modifier(FadedCapsuleModifier())
     }
 
-    /// Apply liquid glass with a circle shape.
-    func liquidGlassCircle(
-        tint: Color? = nil,
-        interactive: Bool = false
-    ) -> some View {
-        modifier(LiquidGlassCircleModifier(tintColor: tint, isInteractive: interactive))
+    func fadedCircleSurface(interactive: Bool = false) -> some View {
+        modifier(FadedCircleModifier(isInteractive: interactive))
     }
 }

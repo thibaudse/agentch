@@ -7,13 +7,74 @@ private struct ContentHeightKey: PreferenceKey {
     }
 }
 
+private struct IslandShellShape: InsettableShape {
+    let geometry: NotchGeometry
+    var insetAmount: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        guard !r.isEmpty else { return Path() }
+
+        let w = r.width
+        let h = r.height
+        let notchBase = geometry.hasNotch ? geometry.notchHeight : min(h, 32)
+
+        let topInset = min(w, notchBase * 0.5)
+        let topDrop = min(h, notchBase * 0.5)
+        let sideXLeft = r.minX + topInset
+        let sideXRight = r.maxX - topInset
+
+        let cornerRadius = min(notchBase, h, sideXRight - sideXLeft)
+        let sideBottomY = max(topDrop, r.maxY - cornerRadius)
+
+        let leftTop = CGPoint(x: sideXLeft, y: r.minY + topDrop)
+        let rightTop = CGPoint(x: sideXRight, y: r.minY + topDrop)
+
+        var path = Path()
+        path.move(to: leftTop)
+        path.addCurve(
+            to: CGPoint(x: r.minX, y: r.minY),
+            control1: CGPoint(x: leftTop.x, y: r.minY + topDrop * 0.5),
+            control2: CGPoint(x: r.minX + topInset * 0.5, y: r.minY)
+        )
+        path.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+        path.addCurve(
+            to: rightTop,
+            control1: CGPoint(x: r.maxX - topInset * 0.5, y: r.minY),
+            control2: CGPoint(x: rightTop.x, y: r.minY + topDrop * 0.5)
+        )
+        path.addLine(to: CGPoint(x: sideXRight, y: sideBottomY))
+        path.addArc(
+            tangent1End: CGPoint(x: sideXRight, y: r.maxY),
+            tangent2End: CGPoint(x: sideXRight - cornerRadius, y: r.maxY),
+            radius: cornerRadius
+        )
+        path.addLine(to: CGPoint(x: sideXLeft + cornerRadius, y: r.maxY))
+        path.addArc(
+            tangent1End: CGPoint(x: sideXLeft, y: r.maxY),
+            tangent2End: CGPoint(x: sideXLeft, y: sideBottomY),
+            radius: cornerRadius
+        )
+        path.addLine(to: leftTop)
+        path.closeSubpath()
+        return path
+    }
+
+    func inset(by amount: CGFloat) -> some InsettableShape {
+        var copy = self
+        copy.insetAmount += amount
+        return copy
+    }
+}
+
 struct IslandView: View {
     @ObservedObject var model: IslandViewModel
     let onClose: () -> Void
 
     @FocusState private var isInputFocused: Bool
     @State private var contentHeight: CGFloat = 0
-    @State private var appeared = false
+    @State private var contentAppeared = false
+    @State private var contentAppearTask: Task<Void, Never>?
 
     private var displayText: String {
         model.isFullExpanded && !model.conversation.isEmpty
@@ -55,41 +116,46 @@ struct IslandView: View {
                 // These sit in the physical notch area; buttons at the
                 // edges are visible past the notch sides.
                 notchControls
-                    .padding(.horizontal, DS.sp18)
+                    .padding(.horizontal, DS.sp24)
                     .frame(height: geometry.notchHeight, alignment: .center)
+                    .padding(.bottom, model.interactive ? 0 : DS.sp6)
+                    .compositingGroup()
+                    .opacity(contentAppeared && model.contentVisible ? 1 : 0)
+                    .scaleEffect(contentAppeared && model.contentVisible ? 1 : 0.98, anchor: .top)
+                    .offset(y: contentAppeared && model.contentVisible ? 0 : -2)
+                    .animation(DS.Anim.expand, value: model.isFullExpanded)
 
                 // ── Below notch: interactive content ──
                 VStack(spacing: DS.sp6) {
                     Group {
                         if model.isElicitation {
                             elicitationView
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)).combined(with: .offset(y: -4)),
-                                    removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
-                                ))
+                                .transition(.blurReplace)
                         } else if model.isPermission {
                             permissionView
-                                .transition(.asymmetric(
-                                    insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)).combined(with: .offset(y: -4)),
-                                    removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
-                                ))
+                                .transition(.blurReplace)
                         } else {
+                            if !model.interactive && !model.message.isEmpty {
+                                notificationMessageView
+                                    .transition(.blurReplace)
+                            }
                             if model.interactive && !displayText.isEmpty {
                                 messageScrollView
-                                    .transition(.opacity)
+                                    .transition(.blurReplace)
                             }
                             if model.interactive {
                                 inputFieldView
-                                    .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .bottom)))
+                                    .transition(.blurReplace)
                             }
                         }
                     }
                 }
-                .padding(.horizontal, DS.sp18)
-                .padding(.bottom, DS.sp12)
-                .opacity(model.contentVisible ? 1 : 0)
-                .scaleEffect(model.contentVisible ? 1 : 0.97, anchor: .top)
-                .animation(DS.Anim.dismiss, value: model.contentVisible)
+                .padding(.horizontal, DS.sp24)
+                .padding(.top, DS.sp6)
+                .padding(.bottom, DS.sp14)
+                .opacity(contentAppeared && model.contentVisible ? 1 : 0)
+                .scaleEffect(contentAppeared && model.contentVisible ? 1 : 0.96, anchor: .top)
+                .offset(y: contentAppeared && model.contentVisible ? 0 : -4)
             }
             .fixedSize(horizontal: false, vertical: true)
             .background(
@@ -98,45 +164,72 @@ struct IslandView: View {
                 }
             )
             .onPreferenceChange(ContentHeightKey.self) { h in
-                if abs(contentHeight - h) > 1 { contentHeight = h }
+                if abs(contentHeight - h) > 1 {
+                    contentHeight = h
+                    model.onContentHeightChange?(h)
+                }
             }
         }
-        .frame(width: islandWidth, height: islandHeight)
+        .frame(
+            width: model.expanded ? islandWidth : geometry.notchWidth,
+            height: model.expanded ? islandHeight : geometry.notchHeight
+        )
         .clipShape(islandShape(geometry))
         .overlay(
             islandShape(geometry)
                 .strokeBorder(DS.borderGradient(top: 0.12, bottom: 0.03), lineWidth: 0.5)
         )
-        .shadow(color: Color.black.opacity(0.5), radius: 30, y: 10)
-        .shadow(color: DS.accent.opacity(0.05), radius: 50, y: 12)
         .frame(
             maxWidth: geometry.fullExpandedWidth,
             maxHeight: geometry.notchHeight + AppConfig.maxIslandExtraHeight,
             alignment: .top
         )
-        .scaleEffect(
-            x: model.expanded ? 1 : geometry.notchWidth / max(islandWidth, 1),
-            y: model.expanded ? 1 : geometry.notchHeight / max(islandHeight, 1),
-            anchor: .top
-        )
-        .animation(DS.Anim.expand, value: model.isFullExpanded)
+        .animation(model.expanded ? DS.Anim.notchOpen : DS.Anim.notchClose, value: model.expanded)
         .animation(DS.Anim.content, value: contentHeight)
-        .onExitCommand { onClose() }
+        .animation(DS.Anim.expand, value: model.isPermission)
+        .animation(DS.Anim.expand, value: model.isElicitation)
         .onAppear {
-            withAnimation(DS.Anim.appear) { appeared = true }
+            if model.expanded && model.contentVisible {
+                contentAppeared = true
+            }
+        }
+        .onDisappear { contentAppearTask?.cancel() }
+        .onExitCommand { onClose() }
+        .onChange(of: model.expanded) { _, expanded in
+            if expanded {
+                scheduleContentAppearanceAfterOpen()
+            } else {
+                contentAppearTask?.cancel()
+                withAnimation(DS.Anim.contentOut) { contentAppeared = false }
+            }
+        }
+        .onChange(of: model.contentVisible) { _, visible in
+            if !visible {
+                contentAppearTask?.cancel()
+                withAnimation(DS.Anim.contentOut) { contentAppeared = false }
+            } else if model.expanded {
+                scheduleContentAppearanceAfterOpen()
+            }
         }
     }
 
-    private func islandShape(_ geo: NotchGeometry) -> UnevenRoundedRectangle {
-        UnevenRoundedRectangle(
-            cornerRadii: .init(
-                topLeading: geo.hasNotch ? 8 : DS.radiusL,
-                bottomLeading: DS.radiusXL,
-                bottomTrailing: DS.radiusXL,
-                topTrailing: geo.hasNotch ? 8 : DS.radiusL
-            ),
-            style: .continuous
-        )
+    private func scheduleContentAppearanceAfterOpen() {
+        contentAppearTask?.cancel()
+        contentAppeared = false
+        guard model.contentVisible else { return }
+
+        contentAppearTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            guard !Task.isCancelled else { return }
+            guard model.expanded && model.contentVisible else { return }
+            withAnimation(DS.Anim.contentIn) {
+                contentAppeared = true
+            }
+        }
+    }
+
+    private func islandShape(_ geo: NotchGeometry) -> IslandShellShape {
+        IslandShellShape(geometry: geo)
     }
 
     // MARK: - Notch Controls + Header Pills (single row aligned to the notch)
@@ -152,8 +245,7 @@ struct IslandView: View {
                     .tracking(0.3)
                     .padding(.horizontal, DS.sp6)
                     .padding(.vertical, DS.sp2)
-                    .background(agentNameFallbackBg)
-                    .liquidGlassCapsule()
+                    .fadedCapsuleSurface()
             }
 
             if model.isElicitation {
@@ -162,34 +254,20 @@ struct IslandView: View {
                     .foregroundColor(DS.text3)
                     .padding(.horizontal, DS.sp6)
                     .padding(.vertical, DS.sp2)
-                    .background(asksBadgeFallbackBg)
-                    .liquidGlassCapsule()
+                    .fadedCapsuleSurface()
             } else if model.isPermission {
                 Text("wants to use")
                     .font(.system(size: 11.5, design: .rounded))
                     .foregroundColor(DS.text3)
                     .padding(.horizontal, DS.sp6)
                     .padding(.vertical, DS.sp2)
-                    .background(wantsToUseFallbackBg)
-                    .liquidGlassCapsule()
+                    .fadedCapsuleSurface()
                 Text(model.permissionTool)
                     .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                     .foregroundColor(DS.warning.opacity(0.85))
                     .padding(.horizontal, DS.sp6)
                     .padding(.vertical, DS.sp2)
-                    .background(toolBadgeFallbackBg)
-                    .liquidGlassCapsule()
-            }
-
-            if !model.interactive && !model.message.isEmpty {
-                Text(model.message)
-                    .font(DS.Font.bodyMedium)
-                    .foregroundColor(DS.text1)
-                    .lineLimit(1)
-                    .padding(.horizontal, DS.sp6)
-                    .padding(.vertical, DS.sp2)
-                    .background(compactMsgFallbackBg)
-                    .liquidGlassCapsule()
+                    .fadedCapsuleSurface()
             }
 
             Spacer(minLength: 4)
@@ -197,10 +275,12 @@ struct IslandView: View {
             if model.interactive && !model.conversation.isEmpty && !model.isPermission {
                 DSHeaderButton(
                     icon: model.isFullExpanded
-                        ? "arrowtriangle.right.and.line.vertical.and.arrowtriangle.left.fill"
-                        : "arrowtriangle.left.and.line.vertical.and.arrowtriangle.right.fill"
+                        ? "arrow.down.right.and.arrow.up.left"
+                        : "arrow.up.left.and.arrow.down.right"
                 ) {
-                    model.toggleExpand()
+                    withAnimation(DS.Anim.expand) {
+                        model.toggleExpand()
+                    }
                 }
             }
 
@@ -372,6 +452,17 @@ struct IslandView: View {
 
     // MARK: - Message Scroll
 
+    private var notificationMessageView: some View {
+        Text(model.message)
+            .font(DS.Font.bodyMedium)
+            .foregroundColor(DS.text1)
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, DS.sp10)
+            .padding(.vertical, DS.sp6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var messageScrollView: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: true) {
@@ -382,9 +473,9 @@ struct IslandView: View {
                         MarkdownText(model.message)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.bottom, DS.sp2)
                     }
                 }
+                .padding(.bottom, model.isFullExpanded ? DS.sp2 : DS.sp10)
                 .id("msg-\(model.isFullExpanded)")
                 .transition(.blurReplace)
                 .animation(DS.Anim.expand, value: model.isFullExpanded)
@@ -399,7 +490,7 @@ struct IslandView: View {
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: model.isFullExpanded ? 0 : 8)
+                    .frame(height: model.isFullExpanded ? 0 : 12)
                 }
             )
             .onAppear { proxy.scrollTo("msg-end", anchor: .bottom) }
@@ -442,40 +533,201 @@ struct IslandView: View {
         )
     }
 
-    @ViewBuilder
-    private var wantsToUseFallbackBg: some View {
-        if #unavailable(macOS 26.0) {
-            Capsule(style: .continuous).fill(DS.surface1)
-        }
-    }
-
-    @ViewBuilder
-    private var asksBadgeFallbackBg: some View {
-        if #unavailable(macOS 26.0) {
-            Capsule(style: .continuous).fill(DS.accent.opacity(0.08))
-        }
-    }
-
-    @ViewBuilder
-    private var compactMsgFallbackBg: some View {
-        if #unavailable(macOS 26.0) {
-            Capsule(style: .continuous).fill(DS.surface1)
-        }
-    }
-
-    @ViewBuilder
-    private var agentNameFallbackBg: some View {
-        if #unavailable(macOS 26.0) {
-            Capsule(style: .continuous).fill(DS.surface1)
-        }
-    }
-
-    @ViewBuilder
-    private var toolBadgeFallbackBg: some View {
-        if #unavailable(macOS 26.0) {
-            Capsule(style: .continuous).fill(DS.warning.opacity(0.08))
-        }
-    }
-
-
 }
+
+#if DEBUG
+private extension NotchGeometry {
+    static var previewNotch: NotchGeometry {
+        NotchGeometry(
+            screenFrame: CGRect(x: 0, y: 0, width: 1512, height: 982),
+            notchWidth: 185,
+            notchHeight: 32,
+            hasNotch: true
+        )
+    }
+}
+
+private enum PreviewIslandType: String {
+    case waiting = "Claude Waiting"
+    case permission = "Permission"
+    case elicitation = "Elicitation"
+    case notification = "Notification"
+}
+
+@MainActor
+private func makePreviewModel(for type: PreviewIslandType) -> IslandViewModel {
+    let model = IslandViewModel()
+
+    switch type {
+    case .waiting:
+        model.update(
+            message: "Ready when you are.",
+            agentName: "claude",
+            geometry: .previewNotch,
+            interactive: true,
+            conversation: """
+            **Claude:** I implemented the shape changes and rebuilt the daemon.
+
+            **Claude:** Tell me if you want sharper top reverse curves or a larger bottom radius.
+            """
+        )
+        model.inputText = "Looks good"
+
+    case .permission:
+        model.updatePermission(
+            tool: "Bash",
+            command: "rm -rf .build/cache",
+            agentName: "claude",
+            geometry: .previewNotch,
+            suggestions: [
+                PermissionSuggestion(raw: ["type": "toolAlwaysAllow", "tool": "Bash"]),
+                PermissionSuggestion(raw: [
+                    "type": "addDirectories",
+                    "directories": ["/Users/thibaud/Projects/Personal/agent-island"],
+                    "destination": "project"
+                ])
+            ]
+        )
+
+    case .elicitation:
+        model.updateElicitation(
+            question: Elicitation(
+                question: "Which notch style should I keep?",
+                options: [
+                    ElicitationOption(label: "Current (balanced)", description: "Keep current curves"),
+                    ElicitationOption(label: "More curvy", description: "Increase reverse-curve depth"),
+                    ElicitationOption(label: "Sharper", description: "Reduce corner radius")
+                ]
+            ),
+            agentName: "claude",
+            geometry: .previewNotch
+        )
+
+    case .notification:
+        model.update(
+            message: "Build succeeded. Waiting for next instruction.",
+            agentName: "claude",
+            geometry: .previewNotch,
+            interactive: false,
+            conversation: ""
+        )
+    }
+
+    model.expanded = true
+    model.contentVisible = true
+    return model
+}
+
+@MainActor
+private struct IslandTypePreview: View {
+    let type: PreviewIslandType
+    @StateObject private var model: IslandViewModel
+    @State private var isShown = true
+    @State private var animationTask: Task<Void, Never>?
+
+    init(type: PreviewIslandType) {
+        self.type = type
+        _model = StateObject(wrappedValue: makePreviewModel(for: type))
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            LinearGradient(
+                colors: [Color(red: 0.10, green: 0.11, blue: 0.14), Color(red: 0.05, green: 0.05, blue: 0.06)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(spacing: DS.sp12) {
+                Button(isShown ? "Hide Notch" : "Show Notch") {
+                    if isShown {
+                        hideNotch()
+                    } else {
+                        showNotch()
+                    }
+                }
+                .buttonStyle(DSButtonStyle())
+                .font(DS.Font.subheadline)
+                .foregroundColor(.white)
+                .padding(.horizontal, DS.sp14)
+                .padding(.vertical, DS.sp8)
+                .background(Capsule(style: .continuous).fill(DS.surface2))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .strokeBorder(DS.border2, lineWidth: 0.8)
+                )
+                .zIndex(2)
+
+                IslandView(model: model, onClose: { hideNotch() })
+                    .allowsHitTesting(isShown)
+                    .transition(.blurReplace)
+                    .zIndex(1)
+            }
+            .padding(.top, 24)
+        }
+        .frame(width: 980, height: 420)
+        .onDisappear { animationTask?.cancel() }
+    }
+
+    private func showNotch() {
+        animationTask?.cancel()
+        isShown = true
+        model.expanded = false
+        model.contentVisible = true
+
+        animationTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 30_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(DS.Anim.notchOpen) {
+                model.expanded = true
+            }
+        }
+    }
+
+    private func hideNotch() {
+        animationTask?.cancel()
+        isShown = false
+        withAnimation(DS.Anim.contentOut) {
+            model.contentVisible = false
+        }
+
+        animationTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(DS.Anim.notchClose) {
+                model.expanded = false
+            }
+        }
+    }
+}
+
+#Preview("Island Shell Shape") {
+    ZStack {
+        Color(red: 0.14, green: 0.14, blue: 0.16)
+        IslandShellShape(geometry: .previewNotch)
+            .fill(Color.black)
+            .overlay(
+                IslandShellShape(geometry: .previewNotch)
+                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+            )
+            .frame(width: 720, height: 170)
+    }
+    .frame(width: 860, height: 320)
+}
+
+#Preview("Type: Claude Waiting") {
+    IslandTypePreview(type: .waiting)
+}
+
+#Preview("Type: Permission") {
+    IslandTypePreview(type: .permission)
+}
+
+#Preview("Type: Elicitation") {
+    IslandTypePreview(type: .elicitation)
+}
+
+#Preview("Type: Notification") {
+    IslandTypePreview(type: .notification)
+}
+#endif

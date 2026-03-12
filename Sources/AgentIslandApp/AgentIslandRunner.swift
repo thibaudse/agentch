@@ -1,9 +1,8 @@
 import AppKit
 
-@main
-struct AgentIslandMain {
+public enum AgentIslandRunner {
     @MainActor
-    static func main() {
+    public static func run() {
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate

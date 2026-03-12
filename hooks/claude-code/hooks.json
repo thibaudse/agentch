@@ -1,15 +1,13 @@
 {
   "description": "agentch - Dynamic Island notifications for Claude Code",
   "hooks": {
-    "Notification": [
+    "Stop": [
       {
-        "matcher": "idle_prompt",
         "hooks": [
           {
             "type": "command",
             "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-show.sh",
-            "async": true,
-            "timeout": 5
+            "timeout": 600
           }
         ]
       }
@@ -21,18 +19,6 @@
             "type": "command",
             "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-permission.sh",
             "timeout": 120
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-show.sh",
-            "async": true,
-            "timeout": 5
           }
         ]
       }

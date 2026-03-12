@@ -28,6 +28,7 @@ final class IslandViewModel: ObservableObject {
     var onPermissionDecision: ((Bool) -> Void)?  // true = allow, false = deny
     var onPermissionSuggestion: ((PermissionSuggestion) -> Void)?
     var onElicitationAnswer: ((String) -> Void)?
+    var onContentHeightChange: ((CGFloat) -> Void)?
 
     func update(message: String, agentName: String, geometry: NotchGeometry, interactive: Bool, conversation: String = "") {
         self.message = message
@@ -86,6 +87,9 @@ final class IslandViewModel: ObservableObject {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         NSLog("agentch: submit() called, text=%@, hasCallback=%d", text, onSubmit != nil ? 1 : 0)
         guard !text.isEmpty else { return }
+
+        // Clear immediately to avoid selection flash during dismiss
+        inputText = ""
 
         // Append the user's input to the conversation so it shows in expanded view
         if conversation.isEmpty {

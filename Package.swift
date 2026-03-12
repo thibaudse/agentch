@@ -7,9 +7,15 @@ let package = Package(
         .macOS(.v15)
     ],
     products: [
-        .executable(name: "AgentIsland", targets: ["AgentIslandApp"])
+        .library(name: "AgentIslandUI", targets: ["AgentIslandApp"]),
+        .executable(name: "AgentIsland", targets: ["AgentIslandExecutable"])
     ],
     targets: [
-        .executableTarget(name: "AgentIslandApp")
+        .target(name: "AgentIslandApp"),
+        .executableTarget(
+            name: "AgentIslandExecutable",
+            dependencies: ["AgentIslandApp"],
+            path: "Sources/AgentIslandExecutable"
+        )
     ]
 )

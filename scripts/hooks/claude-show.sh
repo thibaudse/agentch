@@ -1,34 +1,25 @@
 #!/bin/bash
-# Claude Code Stop/Notification hook.
+# Claude Code Stop hook (synchronous/blocking).
 # 1. Reads the transcript to get the full conversation
 # 2. Uses last_assistant_message from hook input (always fresh)
-# 3. Detects the terminal app via TERM_PROGRAM
-# 4. Shows the interactive island prompt
+# 3. Shows the interactive island prompt
+# 4. Blocks on FIFO waiting for user response
+# 5. Returns decision:block with reason to send text back to Claude, or exits 0 to stop
 
 LOG="/tmp/agent-island-hook.log"
 ISLAND="${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh"
 INPUT=$(cat)
 
-echo "$(date '+%H:%M:%S') RAW INPUT: $(echo "$INPUT" | head -c 500)" >> "$LOG"
+echo "$(date '+%H:%M:%S') STOP HOOK INPUT: $(echo "$INPUT" | head -c 500)" >> "$LOG"
 
-# Get the TTY of the Claude Code process (our parent).
-# `tty` won't work here because Claude pipes stdin to hooks.
-TTY_DEV=$(ps -o tty= -p "$PPID" 2>/dev/null | tr -d ' ' || true)
-if [ -n "$TTY_DEV" ] && [ "$TTY_DEV" != "??" ]; then
-    TTY_PATH="/dev/$TTY_DEV"
-else
-    TTY_PATH=""
-fi
-
-# Generate a unique marker and tag this terminal tab so the island can find it.
-TAB_MARKER="ai-$$-$(date +%s)"
-if [ -n "$TTY_PATH" ] && [ -w "$TTY_PATH" ]; then
-    printf '\033]2;%s\007' "$TAB_MARKER" > "$TTY_PATH"
-fi
+# Note: we intentionally do NOT check stop_hook_active here.
+# The loop is user-driven — it only continues when the user types a response
+# in the island. The natural exit is the user dismissing (or closing) the island,
+# which makes the hook exit 0 and Claude stops normally.
 
 # Extract message + conversation from hook input and transcript.
 EXTRACT=$(printf '%s' "$INPUT" | python3 -c "
-import json, sys, time
+import json, sys, time, re
 
 input_data = json.loads(sys.stdin.read())
 transcript = input_data.get('transcript_path', '')
@@ -99,11 +90,20 @@ for entry in all_entries:
     if entry_type in ('human', 'user'):
         text = extract_text(msg)
         if text:
+            text = re.sub(r'^(\[?Stop hook feedback\]?[:\s]*)', '', text, flags=re.IGNORECASE).strip()
+        if text:
             conversation_parts.append('**You:** ' + text)
     elif entry_type == 'assistant':
         text = extract_text(msg)
         if text:
             conversation_parts.append('**Claude:** ' + text)
+
+# The Stop hook fires before the transcript is flushed, so the last assistant
+# message may not be in the transcript yet. Append it if missing.
+if last_msg:
+    last_claude_entry = '**Claude:** ' + last_msg.strip()
+    if not conversation_parts or conversation_parts[-1] != last_claude_entry:
+        conversation_parts.append(last_claude_entry)
 
 result = {
     'message': last_msg.strip(),
@@ -112,7 +112,7 @@ result = {
 print(json.dumps(result))
 " 2>>"$LOG") || true
 
-echo "$(date '+%H:%M:%S') EXTRACT: $(echo "$EXTRACT" | head -c 300)" >> "$LOG"
+echo "$(date '+%H:%M:%S') STOP EXTRACT: $(echo "$EXTRACT" | head -c 300)" >> "$LOG"
 
 # Parse the JSON result
 if [ -n "$EXTRACT" ]; then
@@ -124,28 +124,37 @@ if [ -z "$MSG" ]; then
     MSG="Done"
 fi
 
-# Map TERM_PROGRAM to macOS bundle identifier
-TERM_BUNDLE=""
-case "${TERM_PROGRAM:-}" in
-    Apple_Terminal) TERM_BUNDLE="com.apple.Terminal" ;;
-    iTerm.app)     TERM_BUNDLE="com.googlecode.iterm2" ;;
-    ghostty)       TERM_BUNDLE="com.mitchellh.ghostty" ;;
-    WezTerm)       TERM_BUNDLE="com.github.wez.wezterm" ;;
-    Alacritty)     TERM_BUNDLE="org.alacritty" ;;
-    kitty)         TERM_BUNDLE="net.kovidgoyal.kitty" ;;
-esac
-
 # Create FIFO for the island to write the user's response back
 RESPONSE_PIPE="/tmp/agent-island-response-$$"
 mkfifo "$RESPONSE_PIPE" 2>/dev/null || true
+trap 'rm -f "$RESPONSE_PIPE"' EXIT
 
-# Background worker: reads FIFO to unblock, then cleans up.
-# The island handles the actual paste with proper tab selection via AX API.
-(
-    RESPONSE=$(head -n1 "$RESPONSE_PIPE" 2>/dev/null | tr -d '\n')
-    rm -f "$RESPONSE_PIPE"
-    echo "$(date '+%H:%M:%S') RESPONSE WORKER: got '$RESPONSE'" >> "$LOG"
-) &
+# Show interactive island prompt (no terminal info needed — we use decision:block)
+"$ISLAND" prompt "$MSG" "Claude" "$PPID" "" "" "" "$CONVO" "$RESPONSE_PIPE"
 
-# Send to island with the response pipe — island writes to FIFO on submit
-exec "$ISLAND" prompt "$MSG" "Claude" "$PPID" "$TERM_BUNDLE" "$TAB_MARKER" "$TTY_PATH" "$CONVO" "$RESPONSE_PIPE"
+# Block reading from the FIFO — the island writes the user's text or "__dismiss__"
+RESPONSE=$(head -n1 "$RESPONSE_PIPE" 2>/dev/null | tr -d '\n' || echo "__dismiss__")
+rm -f "$RESPONSE_PIPE"
+
+echo "$(date '+%H:%M:%S') STOP RESPONSE: '$RESPONSE'" >> "$LOG"
+
+if [ -z "$RESPONSE" ] || [ "$RESPONSE" = "__dismiss__" ]; then
+    # User dismissed the island — let Claude stop normally
+    echo "$(date '+%H:%M:%S') STOP: dismissed, exiting 0 (no output)" >> "$LOG"
+    exit 0
+fi
+
+# User provided text — return decision:block to send it back to Claude as feedback
+OUTPUT=$(python3 -c "
+import json, sys
+text = sys.argv[1]
+output = {
+    'decision': 'block',
+    'reason': text
+}
+print(json.dumps(output))
+" "$RESPONSE" 2>>"$LOG") || true
+
+echo "$OUTPUT"
+echo "$(date '+%H:%M:%S') STOP: output decision:block, exiting 0" >> "$LOG"
+exit 0
