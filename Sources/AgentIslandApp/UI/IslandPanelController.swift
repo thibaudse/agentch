@@ -29,8 +29,6 @@ final class IslandPanelController: NSObject {
     private var hideTask: Task<Void, Never>?
     nonisolated(unsafe) private var trackingTask: Task<Void, Never>?
     private var lastContentHeight: CGFloat = 0
-    private var suppressPanelResize = false
-    private var resizeEnableTask: Task<Void, Never>?
 
     override init() {
         super.init()
@@ -101,7 +99,7 @@ final class IslandPanelController: NSObject {
             self.responsePipe = ""
         }
 
-        // Track content height so the panel matches the island exactly
+        // Track content height for click-through hit testing bounds.
         viewModel.onContentHeightChange = { [weak self] (h: CGFloat) -> Void in
             self?.contentHeightChanged(h)
         }
@@ -109,16 +107,16 @@ final class IslandPanelController: NSObject {
         ensurePanel()
         guard let panel else { return }
 
-        // Start with a generous frame; the content height callback will resize to fit
-        let frame = interactive
-            ? geometry.windowFrame(interactive: true, fullExpanded: true)
-            : geometry.windowFrame(interactive: false)
+        // Keep the hosting window fixed to the screen bounds to avoid
+        // panel-frame redraw artifacts during notch/content animations.
+        let frame = geometry.screenFrame
         isPresented = true
-        panel.ignoresMouseEvents = false
+        panel.ignoresMouseEvents = true
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
         topmostSpaceManager.attach(window: panel)
         startTrackingLoop()
+        updatePanelInteractivity()
 
         if interactive {
             // Only check accessibility if we'll need to paste into a terminal
@@ -134,9 +132,9 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
-                // 1. Expand the window instantly (no animation) so the notch spring has room
+                // Keep panel frame fixed; only animate SwiftUI notch/content.
                 self.expandPanelForAnimation()
-                // 2. Slight delay so the window is fully sized before the notch animates
+                // Slight delay so first layout pass settles before the notch animates.
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(nanoseconds: 16_000_000) // ~1 frame
                     guard let self else { return }
@@ -206,7 +204,7 @@ final class IslandPanelController: NSObject {
             }
 
             // Step 3: After collapse animation, remove the panel
-            try? await Task.sleep(nanoseconds: 320_000_000) // 320ms for notch close spring
+            try? await Task.sleep(nanoseconds: AppConfig.hideDelayNanos)
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -256,13 +254,14 @@ final class IslandPanelController: NSObject {
         ensurePanel()
         guard let panel else { return }
 
-        let frame = geometry.windowFrame(interactive: true, fullExpanded: true)
+        let frame = geometry.screenFrame
         isPresented = true
-        panel.ignoresMouseEvents = false
+        panel.ignoresMouseEvents = true
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
         topmostSpaceManager.attach(window: panel)
         startTrackingLoop()
+        updatePanelInteractivity()
 
         panel.acceptsKeyInput = true
 
@@ -330,13 +329,14 @@ final class IslandPanelController: NSObject {
         ensurePanel()
         guard let panel else { return }
 
-        let frame = geometry.windowFrame(interactive: true, fullExpanded: true)
+        let frame = geometry.screenFrame
         isPresented = true
-        panel.ignoresMouseEvents = false
+        panel.ignoresMouseEvents = true
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
         topmostSpaceManager.attach(window: panel)
         startTrackingLoop()
+        updatePanelInteractivity()
 
         panel.acceptsKeyInput = true
 
@@ -403,8 +403,7 @@ final class IslandPanelController: NSObject {
     // MARK: - Expand/Collapse
 
     private func handleExpandToggle() {
-        // Expand panel to max so SwiftUI has room to animate content change,
-        // then shrink to fit after animation settles
+        // Keep the panel frame fixed; only SwiftUI animates.
         expandPanelForAnimation()
         panel?.orderFrontRegardless()
     }
@@ -413,45 +412,41 @@ final class IslandPanelController: NSObject {
 
     private func contentHeightChanged(_ height: CGFloat) {
         lastContentHeight = height
-        if !suppressPanelResize {
-            updatePanelFrame()
-        }
+        updatePanelInteractivity()
     }
 
-    /// Temporarily expand the panel to max size and suppress content-driven resizing.
-    /// After the animation settles, re-enable and resize to fit.
+    /// Panel is fixed to the full screen bounds to avoid frame resize artifacts.
     private func expandPanelForAnimation() {
-        guard let panel, isPresented else { return }
-        suppressPanelResize = true
-        resizeEnableTask?.cancel()
-
-        let geo = viewModel.geometry
-        let frame = geo.windowFrame(interactive: true, fullExpanded: true)
-        panel.setFrame(frame, display: true)
-
-        resizeEnableTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 500_000_000) // 500ms — let spring settle
-            guard let self, !Task.isCancelled else { return }
-            await MainActor.run {
-                self.suppressPanelResize = false
-                self.updatePanelFrame()
-            }
-        }
+        updatePanelInteractivity()
     }
 
-    /// Resize the panel to exactly match the island's visible content.
-    private func updatePanelFrame() {
-        guard let panel, isPresented, viewModel.expanded else { return }
+    private func islandScreenFrame() -> CGRect {
         let geo = viewModel.geometry
         let needsWide = viewModel.isFullExpanded || viewModel.isElicitation || viewModel.isPermission
-        let width = geo.effectiveWidth(interactive: viewModel.interactive, fullExpanded: needsWide)
-        let height = max(geo.notchHeight, min(lastContentHeight, geo.maxPanelHeight))
+        let width = viewModel.expanded
+            ? geo.effectiveWidth(interactive: viewModel.interactive, fullExpanded: needsWide)
+            : geo.notchWidth
+
+        let measuredHeight = max(
+            geo.notchHeight,
+            min(lastContentHeight > 0 ? lastContentHeight : geo.effectiveHeight(interactive: viewModel.interactive), geo.maxPanelHeight)
+        )
+        let height = viewModel.expanded ? measuredHeight : geo.notchHeight
         let originX = geo.screenFrame.midX - width / 2
         let originY = geo.screenFrame.maxY - height
-        let frame = CGRect(x: originX, y: originY, width: width, height: height)
-        if panel.frame != frame {
-            panel.setFrame(frame, display: true)
+        return CGRect(x: originX, y: originY, width: width, height: height)
+    }
+
+    /// Keep the full-screen panel click-through except over the island bounds.
+    private func updatePanelInteractivity() {
+        guard let panel else { return }
+        guard isPresented, viewModel.contentVisible else {
+            panel.ignoresMouseEvents = true
+            return
         }
+
+        let hitFrame = islandScreenFrame().insetBy(dx: -2, dy: -2)
+        panel.ignoresMouseEvents = !hitFrame.contains(NSEvent.mouseLocation)
     }
 
     // MARK: - Input Handling
@@ -523,7 +518,7 @@ final class IslandPanelController: NSObject {
                 }
             }
 
-            try? await Task.sleep(nanoseconds: 320_000_000) // notch close
+            try? await Task.sleep(nanoseconds: AppConfig.hideDelayNanos)
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -547,13 +542,17 @@ final class IslandPanelController: NSObject {
     private func ensurePanel() {
         guard panel == nil else { return }
 
-        let view = IslandView(model: viewModel) { [weak self] in
-            self?.dismiss()
+        let view = ZStack(alignment: .top) {
+            IslandView(model: viewModel) { [weak self] in
+                self?.dismiss()
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color.clear)
 
         let hostingView = NSHostingView(rootView: view)
         let panel = OverlayPanel(
-            contentRect: viewModel.geometry.windowFrame(),
+            contentRect: viewModel.geometry.screenFrame,
             styleMask: [.borderless, .nonactivatingPanel, .utilityWindow, .hudWindow],
             backing: .buffered,
             defer: false
@@ -584,7 +583,7 @@ final class IslandPanelController: NSObject {
 
         if !isPresented {
             if force {
-                let targetFrame = latestGeometry.windowFrame(interactive: false)
+                let targetFrame = latestGeometry.screenFrame
                 if panel.frame != targetFrame {
                     panel.setFrame(targetFrame, display: false)
                 }
@@ -592,10 +591,11 @@ final class IslandPanelController: NSObject {
             return
         }
 
-        // Use content-based frame when we have a measured height
-        if lastContentHeight > 0, viewModel.expanded {
-            updatePanelFrame()
+        let targetFrame = latestGeometry.screenFrame
+        if panel.frame != targetFrame {
+            panel.setFrame(targetFrame, display: true)
         }
+        updatePanelInteractivity()
         panel.level = AppConfig.panelWindowLevel
         panel.orderFrontRegardless()
         topmostSpaceManager.attach(window: panel)
@@ -606,6 +606,7 @@ final class IslandPanelController: NSObject {
         trackingTask = Task { @MainActor [weak self] in
             while let self, !Task.isCancelled {
                 self.refreshGeometry(force: false)
+                self.updatePanelInteractivity()
                 try? await Task.sleep(nanoseconds: AppConfig.trackingIntervalNanos)
             }
         }
@@ -666,8 +667,5 @@ final class IslandPanelController: NSObject {
         autoDismissTask = nil
         hideTask?.cancel()
         hideTask = nil
-        resizeEnableTask?.cancel()
-        resizeEnableTask = nil
-        suppressPanelResize = false
     }
 }

@@ -8,54 +8,63 @@ private struct ContentHeightKey: PreferenceKey {
 }
 
 private struct IslandShellShape: InsettableShape {
-    let geometry: NotchGeometry
+    var topCornerRadius: CGFloat
+    var bottomCornerRadius: CGFloat
     var insetAmount: CGFloat = 0
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { .init(topCornerRadius, bottomCornerRadius) }
+        set {
+            topCornerRadius = newValue.first
+            bottomCornerRadius = newValue.second
+        }
+    }
 
     func path(in rect: CGRect) -> Path {
         let r = rect.insetBy(dx: insetAmount, dy: insetAmount)
         guard !r.isEmpty else { return Path() }
 
-        let w = r.width
-        let h = r.height
-        let notchBase = geometry.hasNotch ? geometry.notchHeight : min(h, 32)
-
-        let topInset = min(w, notchBase * 0.5)
-        let topDrop = min(h, notchBase * 0.5)
-        let sideXLeft = r.minX + topInset
-        let sideXRight = r.maxX - topInset
-
-        let cornerRadius = min(notchBase, h, sideXRight - sideXLeft)
-        let sideBottomY = max(topDrop, r.maxY - cornerRadius)
-
-        let leftTop = CGPoint(x: sideXLeft, y: r.minY + topDrop)
-        let rightTop = CGPoint(x: sideXRight, y: r.minY + topDrop)
+        let maxTop = max(0, min(r.width * 0.5, r.height * 0.5))
+        let top = min(max(0, topCornerRadius), maxTop)
+        let maxBottom = max(0, min((r.width - 2 * top) * 0.5, r.height - top))
+        let bottom = min(max(0, bottomCornerRadius), maxBottom)
 
         var path = Path()
-        path.move(to: leftTop)
-        path.addCurve(
-            to: CGPoint(x: r.minX, y: r.minY),
-            control1: CGPoint(x: leftTop.x, y: r.minY + topDrop * 0.5),
-            control2: CGPoint(x: r.minX + topInset * 0.5, y: r.minY)
+        path.move(to: CGPoint(x: r.minX, y: r.minY))
+
+        path.addQuadCurve(
+            to: CGPoint(x: r.minX + top, y: r.minY + top),
+            control: CGPoint(x: r.minX + top, y: r.minY)
         )
-        path.addLine(to: CGPoint(x: r.maxX, y: r.minY))
-        path.addCurve(
-            to: rightTop,
-            control1: CGPoint(x: r.maxX - topInset * 0.5, y: r.minY),
-            control2: CGPoint(x: rightTop.x, y: r.minY + topDrop * 0.5)
+
+        path.addLine(
+            to: CGPoint(x: r.minX + top, y: r.maxY - bottom)
         )
-        path.addLine(to: CGPoint(x: sideXRight, y: sideBottomY))
-        path.addArc(
-            tangent1End: CGPoint(x: sideXRight, y: r.maxY),
-            tangent2End: CGPoint(x: sideXRight - cornerRadius, y: r.maxY),
-            radius: cornerRadius
+
+        path.addQuadCurve(
+            to: CGPoint(x: r.minX + top + bottom, y: r.maxY),
+            control: CGPoint(x: r.minX + top, y: r.maxY)
         )
-        path.addLine(to: CGPoint(x: sideXLeft + cornerRadius, y: r.maxY))
-        path.addArc(
-            tangent1End: CGPoint(x: sideXLeft, y: r.maxY),
-            tangent2End: CGPoint(x: sideXLeft, y: sideBottomY),
-            radius: cornerRadius
+
+        path.addLine(
+            to: CGPoint(x: r.maxX - top - bottom, y: r.maxY)
         )
-        path.addLine(to: leftTop)
+
+        path.addQuadCurve(
+            to: CGPoint(x: r.maxX - top, y: r.maxY - bottom),
+            control: CGPoint(x: r.maxX - top, y: r.maxY)
+        )
+
+        path.addLine(
+            to: CGPoint(x: r.maxX - top, y: r.minY + top)
+        )
+
+        path.addQuadCurve(
+            to: CGPoint(x: r.maxX, y: r.minY),
+            control: CGPoint(x: r.maxX - top, y: r.minY)
+        )
+
+        path.addLine(to: CGPoint(x: r.minX, y: r.minY))
         path.closeSubpath()
         return path
     }
@@ -107,6 +116,12 @@ struct IslandView: View {
 
     var body: some View {
         let geometry = model.geometry
+        let radii = cornerRadii(for: geometry, expanded: model.expanded)
+        let shellShape = islandShape(geometry)
+        let topSeamInset = radii.top
+        // Keep internal layout padding relative to the visible black shell,
+        // not the transparent corner cutout area.
+        let shellHorizontalPadding = DS.sp24 + radii.top
 
         ZStack(alignment: .top) {
             Color.black
@@ -116,7 +131,7 @@ struct IslandView: View {
                 // These sit in the physical notch area; buttons at the
                 // edges are visible past the notch sides.
                 notchControls
-                    .padding(.horizontal, DS.sp24)
+                    .padding(.horizontal, shellHorizontalPadding)
                     .frame(height: geometry.notchHeight, alignment: .center)
                     .padding(.bottom, model.interactive ? 0 : DS.sp6)
                     .compositingGroup()
@@ -150,7 +165,7 @@ struct IslandView: View {
                         }
                     }
                 }
-                .padding(.horizontal, DS.sp24)
+                .padding(.horizontal, shellHorizontalPadding)
                 .padding(.top, DS.sp6)
                 .padding(.bottom, DS.sp14)
                 .opacity(contentAppeared && model.contentVisible ? 1 : 0)
@@ -174,11 +189,18 @@ struct IslandView: View {
             width: model.expanded ? islandWidth : geometry.notchWidth,
             height: model.expanded ? islandHeight : geometry.notchHeight
         )
-        .clipShape(islandShape(geometry))
+        .clipShape(shellShape)
         .overlay(
-            islandShape(geometry)
+            shellShape
                 .strokeBorder(DS.borderGradient(top: 0.12, bottom: 0.03), lineWidth: 0.5)
         )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(Color.black)
+                .frame(height: 1)
+                .padding(.horizontal, topSeamInset)
+                .allowsHitTesting(false)
+        }
         .frame(
             maxWidth: geometry.fullExpandedWidth,
             maxHeight: geometry.notchHeight + AppConfig.maxIslandExtraHeight,
@@ -228,8 +250,18 @@ struct IslandView: View {
         }
     }
 
+    private func cornerRadii(for geo: NotchGeometry, expanded: Bool) -> (top: CGFloat, bottom: CGFloat) {
+        let base = max(geo.notchHeight, 1)
+        let closedTop = max(2, base * 0.1875)      // 6 at 32pt notch
+        let closedBottom = max(4, base * 0.4375)   // 14 at 32pt notch
+        let openTop = max(closedTop, base * 0.59375)       // 19 at 32pt notch
+        let openBottom = max(closedBottom, base * 0.75)    // 24 at 32pt notch
+        return expanded ? (openTop, openBottom) : (closedTop, closedBottom)
+    }
+
     private func islandShape(_ geo: NotchGeometry) -> IslandShellShape {
-        IslandShellShape(geometry: geo)
+        let radii = cornerRadii(for: geo, expanded: model.expanded)
+        return IslandShellShape(topCornerRadius: radii.top, bottomCornerRadius: radii.bottom)
     }
 
     // MARK: - Notch Controls + Header Pills (single row aligned to the notch)
@@ -704,10 +736,10 @@ private struct IslandTypePreview: View {
 #Preview("Island Shell Shape") {
     ZStack {
         Color(red: 0.14, green: 0.14, blue: 0.16)
-        IslandShellShape(geometry: .previewNotch)
+        IslandShellShape(topCornerRadius: 19, bottomCornerRadius: 24)
             .fill(Color.black)
             .overlay(
-                IslandShellShape(geometry: .previewNotch)
+                IslandShellShape(topCornerRadius: 19, bottomCornerRadius: 24)
                     .stroke(Color.white.opacity(0.14), lineWidth: 1)
             )
             .frame(width: 720, height: 170)

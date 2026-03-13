@@ -97,10 +97,10 @@ enum DS {
     // MARK: - Animation Presets
 
     enum Anim {
-        /// Notch open — bouncy spring with slight overshoot (reverse curve feel)
-        static let notchOpen: Animation = .spring(response: 0.45, dampingFraction: 0.62, blendDuration: 0.1)
-        /// Notch close — snappy spring that pulls back into the notch
-        static let notchClose: Animation = .spring(response: 0.30, dampingFraction: 0.72)
+        /// Notch open — interactive spring inspired by boring.notch
+        static let notchOpen: Animation = .spring(response: 0.42, dampingFraction: 0.80, blendDuration: 0)
+        /// Notch close — more damped to avoid bounce-back jitter
+        static let notchClose: Animation = .spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
         /// Content fade in — smooth, no bounce
         static let contentIn: Animation = .easeOut(duration: 0.30).delay(0.06)
         /// Content fade out — quick fade before notch collapses

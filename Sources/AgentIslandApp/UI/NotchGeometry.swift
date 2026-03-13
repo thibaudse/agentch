@@ -5,11 +5,6 @@ private extension NSScreen {
     var displayID: CGDirectDisplayID? {
         deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     }
-
-    var isBuiltInDisplay: Bool {
-        guard let displayID else { return false }
-        return CGDisplayIsBuiltin(displayID) != 0
-    }
 }
 
 struct NotchGeometry: Equatable {
@@ -76,8 +71,9 @@ struct NotchGeometry: Equatable {
     }
 
     static func detect(on screen: NSScreen? = nil) -> NotchGeometry {
+        let mainDisplayID = CGMainDisplayID()
         let preferredScreen = screen
-            ?? NSScreen.screens.first(where: { $0.isBuiltInDisplay })
+            ?? NSScreen.screens.first(where: { $0.displayID == mainDisplayID })
             ?? NSScreen.main
             ?? NSScreen.screens.first
 

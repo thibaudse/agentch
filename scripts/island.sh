@@ -14,13 +14,45 @@ INSTALL_DIR="${AGENT_ISLAND_HOME:-$HOME/.agent-island}"
 BINARY_PATH="$INSTALL_DIR/$BINARY_NAME"
 PID_FILE="/tmp/agent-island.pid"
 
+socket_has_listener() {
+    [ -S "$SOCKET" ] || return 1
+    lsof -t "$SOCKET" >/dev/null 2>&1
+}
+
+ensure_daemon_running() {
+    if socket_has_listener; then
+        return 0
+    fi
+
+    # Stale socket with no listener
+    if [ -S "$SOCKET" ]; then
+        rm -f "$SOCKET"
+    fi
+
+    # Stale pid file (or process alive without socket)
+    if [ -f "$PID_FILE" ]; then
+        local pid
+        pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            kill "$pid" 2>/dev/null || true
+        fi
+        rm -f "$PID_FILE"
+    fi
+
+    start_daemon
+}
+
 send_message() {
     local json="$1"
-    if [ ! -S "$SOCKET" ]; then
+    ensure_daemon_running
+
+    if ! echo "$json" | nc -U "$SOCKET" -w 1 >/dev/null 2>&1; then
+        # One retry after cleaning stale socket/daemon state
+        rm -f "$SOCKET"
+        rm -f "$PID_FILE"
         start_daemon
-        wait_for_socket
+        echo "$json" | nc -U "$SOCKET" -w 1 >/dev/null 2>&1
     fi
-    echo "$json" | nc -U "$SOCKET" -w 1 >/dev/null 2>&1
 }
 
 json_escape() {
@@ -28,8 +60,12 @@ json_escape() {
 }
 
 start_daemon() {
-    if [ -S "$SOCKET" ]; then
+    if socket_has_listener; then
         return 0
+    fi
+
+    if [ -S "$SOCKET" ]; then
+        rm -f "$SOCKET"
     fi
 
     if [ ! -f "$BINARY_PATH" ]; then
@@ -47,7 +83,7 @@ start_daemon() {
 wait_for_socket() {
     local retries=30
     while [ "$retries" -gt 0 ]; do
-        if [ -S "$SOCKET" ]; then
+        if socket_has_listener; then
             return 0
         fi
         sleep 0.1
