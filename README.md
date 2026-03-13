@@ -5,7 +5,7 @@
 It includes:
 - a native SwiftUI app (`AgentIsland`) that renders and animates the notch extension,
 - a local Unix socket server for commands (`/tmp/agent-island.sock`),
-- shell + hook integrations for Claude Code, Codex, and OpenCode.
+- shell + hook integrations for Claude Code.
 
 ## Project Structure
 
@@ -28,9 +28,7 @@ It includes:
 │           ├── IslandViewModel.swift
 │           └── NotchGeometry.swift
 ├── hooks/
-│   ├── claude-code/hooks.json
-│   ├── codex/notify.py
-│   └── opencode/agent-island-plugin.js
+│   └── claude-code/hooks.json
 └── scripts/
     ├── build.sh
     ├── install.sh
@@ -71,8 +69,6 @@ The app listens on a Unix domain socket and accepts one JSON message per line:
 ## Agent Integrations
 
 - Claude Code hooks: `hooks/claude-code/hooks.json`
-- Codex notify handler: `hooks/codex/notify.py`
-- OpenCode plugin: `hooks/opencode/agent-island-plugin.js`
 
 Use `./scripts/install.sh` for setup instructions on your machine.
 

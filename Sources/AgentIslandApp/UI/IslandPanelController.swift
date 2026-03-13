@@ -747,7 +747,7 @@ final class IslandPanelController: NSObject {
             }
         }
 
-        // Only paste into terminal if terminal info is present (Codex/OpenCode flow).
+        // Only paste into terminal if terminal info is present.
         // For Claude Code's synchronous Stop hook, the FIFO response is all we need —
         // the hook returns decision:block with the user's text, no paste required.
         if hasTerminalInfo {

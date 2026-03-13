@@ -66,31 +66,8 @@ with open('$CLAUDE_HOOKS', 'w') as f:
     installed_any=true
 fi
 
-# --- Codex ---
-if command -v codex &>/dev/null; then
-    CODEX_CONFIG="$HOME/.codex/config.toml"
-    if [ -f "$CODEX_CONFIG" ] && grep -q "notify" "$CODEX_CONFIG" 2>/dev/null; then
-        echo "  Codex: notify already configured in $CODEX_CONFIG"
-    else
-        mkdir -p "$HOME/.codex"
-        echo "" >> "$CODEX_CONFIG"
-        echo "notify = [\"python3\", \"$PROJECT_DIR/hooks/codex/notify.py\"]" >> "$CODEX_CONFIG"
-        echo "  Codex: notify hook added to $CODEX_CONFIG"
-    fi
-    installed_any=true
-fi
-
-# --- OpenCode ---
-if command -v opencode &>/dev/null; then
-    OPENCODE_DIR="$HOME/.opencode/plugins"
-    mkdir -p "$OPENCODE_DIR"
-    ln -sf "$PROJECT_DIR/hooks/opencode/agent-island-plugin.js" "$OPENCODE_DIR/agent-island-plugin.js"
-    echo "  OpenCode: plugin linked to $OPENCODE_DIR/"
-    installed_any=true
-fi
-
 if [ "$installed_any" = false ]; then
-    echo "  No supported agents detected (claude, codex, opencode)."
+    echo "  No supported agents detected (claude)."
     echo "  Install one first, then re-run this script."
 fi
 
