@@ -50,7 +50,8 @@ final class TopmostSpaceManager {
         guard isEnabled, let spaceID else { return }
         let windowNumber = window.windowNumber
         guard windowNumber > 0 else { return }
-        attachedWindowNumbers.insert(windowNumber)
+        let inserted = attachedWindowNumbers.insert(windowNumber).inserted
+        guard inserted else { return }
 
         let connection = _CGSDefaultConnection()
         CGSShowSpaces(connection, [spaceID] as NSArray)

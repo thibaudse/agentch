@@ -874,9 +874,14 @@ final class IslandPanelController: NSObject {
             panel.setFrame(targetFrame, display: true)
         }
         updatePanelInteractivity()
-        panel.level = AppConfig.panelWindowLevel
-        panel.orderFrontRegardless()
-        topmostSpaceManager.attach(window: panel)
+        if panel.level != AppConfig.panelWindowLevel {
+            panel.level = AppConfig.panelWindowLevel
+        }
+
+        if force {
+            panel.orderFrontRegardless()
+            topmostSpaceManager.attach(window: panel)
+        }
     }
 
     private func startTrackingLoop() {
@@ -884,7 +889,6 @@ final class IslandPanelController: NSObject {
         trackingTask = Task { @MainActor [weak self] in
             while let self, !Task.isCancelled {
                 self.refreshGeometry(force: false)
-                self.updatePanelInteractivity()
                 try? await Task.sleep(nanoseconds: AppConfig.trackingIntervalNanos)
             }
         }
