@@ -1,81 +1,111 @@
 # agentch
 
-`agentch` displays an animated notch-style status chip on macOS when coding agents are waiting for user input.
+`agentch` is a notch-style macOS surface for Claude sessions.
 
-It includes:
-- a native SwiftUI app (`AgentIsland`) that renders and animates the notch extension,
-- a local Unix socket server for commands (`/tmp/agent-island.sock`),
-- shell + hook integrations for Claude Code.
+- It currently supports **Claude only**.
+- It integrates through **Claude hooks** (`Stop`, `PermissionRequest`, `UserPromptSubmit`).
+- It runs as a local app (`AgentIsland`) listening on `/tmp/agent-island.sock`.
+
+## How It Works
+
+1. Claude triggers a hook event.
+2. Hook scripts call `scripts/island.sh`.
+3. `island.sh` sends a JSON command to the local socket.
+4. `AgentIsland` renders the notch UI and returns responses through FIFO pipes.
+
+## Requirements
+
+- macOS
+- Xcode Command Line Tools (`xcode-select --install`)
+- Claude CLI configured on your machine
+
+## Install (Recommended)
+
+From repo root:
+
+```bash
+bash scripts/build.sh
+```
+
+This installs to:
+
+- `${AGENT_ISLAND_HOME:-$HOME/.agent-island}/AgentIsland`
+- `${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh`
+- `${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-*.sh`
+
+### Configure Claude Hooks
+
+`agentch` requires hooks in `~/.claude/settings.json`.
+
+Quick merge helper (run from repo root):
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+repo = Path.cwd()
+incoming = json.loads((repo / "hooks/claude-code/hooks.json").read_text())
+settings_path = Path.home() / ".claude/settings.json"
+settings = json.loads(settings_path.read_text()) if settings_path.exists() else {}
+hooks = settings.get("hooks", {})
+
+for event, entries in incoming.get("hooks", {}).items():
+    existing = hooks.get(event, [])
+    existing = [
+        e for e in existing
+        if not any("agent-island" in h.get("command", "") for h in e.get("hooks", []))
+    ]
+    hooks[event] = existing + entries
+
+settings["hooks"] = hooks
+settings_path.parent.mkdir(parents=True, exist_ok=True)
+settings_path.write_text(json.dumps(settings, indent=2) + "\n")
+print(f"Updated {settings_path}")
+PY
+```
+
+Restart Claude after changing hooks.
+
+## Keep It Running
+
+You usually do not need manual daemon management.
+
+- `scripts/island.sh` auto-starts the daemon on demand.
+- It also recovers stale socket state automatically.
+
+Manual control:
+
+```bash
+~/.agent-island/scripts/island.sh start
+~/.agent-island/scripts/island.sh stop
+```
+
+## Quick Test
+
+```bash
+~/.agent-island/scripts/island.sh prompt "Test" "Claude" 0 "" "" "" "**Claude:** Hello" "" "test-session"
+```
+
+## Logs
+
+- Daemon: `/tmp/agent-island.log`
+- Hooks: `/tmp/agent-island-hook.log`
 
 ## Project Structure
 
 ```text
 .
-├── Package.swift
-├── Sources/
-│   └── AgentIslandApp/
-│       ├── Main.swift
-│       ├── AppDelegate.swift
-│       ├── Config/
-│       │   └── AppConfig.swift
-│       ├── Domain/
-│       │   └── IslandCommand.swift
-│       ├── Infrastructure/
-│       │   └── UnixSocketServer.swift
-│       └── UI/
-│           ├── IslandPanelController.swift
-│           ├── IslandView.swift
-│           ├── IslandViewModel.swift
-│           └── NotchGeometry.swift
-├── hooks/
-│   └── claude-code/hooks.json
-└── scripts/
-    ├── build.sh
-    ├── install.sh
-    └── island.sh
+├── hooks/claude-code/hooks.json
+├── scripts/
+│   ├── build.sh
+│   ├── island.sh
+│   └── hooks/
+│       ├── claude-show.sh
+│       ├── claude-permission.sh
+│       └── claude-dismiss.sh
+└── Sources/AgentIslandApp/
+    ├── Domain/IslandCommand.swift
+    ├── Infrastructure/UnixSocketServer.swift
+    └── UI/
 ```
-
-## Build
-
-```bash
-./scripts/build.sh
-```
-
-This builds with SwiftPM in release mode and installs the executable to:
-
-```text
-${AGENT_ISLAND_HOME:-$HOME/.agent-island}/AgentIsland
-```
-
-## Run and Test
-
-```bash
-./scripts/island.sh start
-./scripts/island.sh show "Hello World" "Claude"
-./scripts/island.sh dismiss
-./scripts/island.sh stop
-```
-
-## Command Protocol
-
-The app listens on a Unix domain socket and accepts one JSON message per line:
-
-```json
-{"action":"show","message":"Waiting for input","agent":"Claude","duration":0}
-{"action":"dismiss"}
-{"action":"quit"}
-```
-
-## Agent Integrations
-
-- Claude Code hooks: `hooks/claude-code/hooks.json`
-
-Use `./scripts/install.sh` for setup instructions on your machine.
-
-## Extending Features
-
-Most new features should be added in one focused area:
-- UI/animation tweaks: `Sources/AgentIslandApp/UI/IslandView.swift`
-- behavior/state: `Sources/AgentIslandApp/UI/IslandPanelController.swift` and `Sources/AgentIslandApp/UI/IslandViewModel.swift`
-- protocol changes: `Sources/AgentIslandApp/Domain/IslandCommand.swift`
-- transport/server changes: `Sources/AgentIslandApp/Infrastructure/UnixSocketServer.swift`
