@@ -285,6 +285,19 @@ struct IslandView: View {
                     .fadedCapsuleSurface()
             }
 
+            if !model.sessionLabel.isEmpty {
+                HStack(spacing: DS.sp4) {
+                    Image(systemName: "arrow.triangle.branch")
+                        .font(.system(size: 9.5, weight: .semibold))
+                    Text(model.sessionLabel)
+                        .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                }
+                .foregroundColor(secondaryColor.opacity(0.88))
+                .padding(.horizontal, DS.sp6)
+                .padding(.vertical, DS.sp2)
+                .fadedCapsuleSurface()
+            }
+
             if model.isElicitation {
                 Text("asks")
                     .font(.system(size: 11.5, design: .rounded))

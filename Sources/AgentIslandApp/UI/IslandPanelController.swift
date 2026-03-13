@@ -26,7 +26,8 @@ final class IslandPanelController: NSObject {
             ttyPath: String,
             conversation: String,
             responsePipe: String,
-            sessionID: String
+            sessionID: String,
+            sessionLabel: String
         )
         case permission(
             tool: String,
@@ -35,34 +36,36 @@ final class IslandPanelController: NSObject {
             pid: pid_t,
             responsePipe: String,
             suggestions: [PermissionSuggestion],
-            sessionID: String
+            sessionID: String,
+            sessionLabel: String
         )
         case elicitation(
             question: Elicitation,
             agent: String,
             pid: pid_t,
             responsePipe: String,
-            sessionID: String
+            sessionID: String,
+            sessionLabel: String
         )
 
         var sessionID: String {
             switch self {
-            case let .show(_, _, _, _, _, _, _, _, _, _, sessionID):
+            case let .show(_, _, _, _, _, _, _, _, _, _, sessionID, _):
                 return sessionID
-            case let .permission(_, _, _, _, _, _, sessionID):
+            case let .permission(_, _, _, _, _, _, sessionID, _):
                 return sessionID
-            case let .elicitation(_, _, _, _, sessionID):
+            case let .elicitation(_, _, _, _, sessionID, _):
                 return sessionID
             }
         }
 
         var cancelPipe: String {
             switch self {
-            case let .show(_, _, _, _, _, _, _, _, _, responsePipe, _):
+            case let .show(_, _, _, _, _, _, _, _, _, responsePipe, _, _):
                 return responsePipe
-            case let .permission(_, _, _, _, responsePipe, _, _):
+            case let .permission(_, _, _, _, responsePipe, _, _, _):
                 return responsePipe
-            case let .elicitation(_, _, _, responsePipe, _):
+            case let .elicitation(_, _, _, responsePipe, _, _):
                 return responsePipe
             }
         }
@@ -219,7 +222,7 @@ final class IslandPanelController: NSObject {
         NSLog("agentch: presenting queued command (remaining=%d)", pendingCommands.count)
 
         switch next {
-        case let .show(message, agent, duration, pid, interactive, terminalBundle, tabMarker, ttyPath, conversation, responsePipe, sessionID):
+        case let .show(message, agent, duration, pid, interactive, terminalBundle, tabMarker, ttyPath, conversation, responsePipe, sessionID, sessionLabel):
             show(
                 message: message,
                 agent: agent,
@@ -231,9 +234,10 @@ final class IslandPanelController: NSObject {
                 ttyPath: ttyPath,
                 conversation: conversation,
                 responsePipe: responsePipe,
-                sessionID: sessionID
+                sessionID: sessionID,
+                sessionLabel: sessionLabel
             )
-        case let .permission(tool, command, agent, pid, responsePipe, suggestions, sessionID):
+        case let .permission(tool, command, agent, pid, responsePipe, suggestions, sessionID, sessionLabel):
             showPermission(
                 tool: tool,
                 command: command,
@@ -241,15 +245,17 @@ final class IslandPanelController: NSObject {
                 pid: pid,
                 responsePipe: responsePipe,
                 suggestions: suggestions,
-                sessionID: sessionID
+                sessionID: sessionID,
+                sessionLabel: sessionLabel
             )
-        case let .elicitation(question, agent, pid, responsePipe, sessionID):
+        case let .elicitation(question, agent, pid, responsePipe, sessionID, sessionLabel):
             showElicitation(
                 question: question,
                 agent: agent,
                 pid: pid,
                 responsePipe: responsePipe,
-                sessionID: sessionID
+                sessionID: sessionID,
+                sessionLabel: sessionLabel
             )
         }
     }
@@ -265,7 +271,8 @@ final class IslandPanelController: NSObject {
         ttyPath: String = "",
         conversation: String = "",
         responsePipe: String = "",
-        sessionID: String = ""
+        sessionID: String = "",
+        sessionLabel: String = ""
     ) {
         let sid = normalizedSessionID(sessionID)
 
@@ -282,7 +289,8 @@ final class IslandPanelController: NSObject {
                     ttyPath: ttyPath,
                     conversation: conversation,
                     responsePipe: responsePipe,
-                    sessionID: sid
+                    sessionID: sid,
+                    sessionLabel: sessionLabel
                 )
             )
             return
@@ -298,7 +306,7 @@ final class IslandPanelController: NSObject {
 
         let geometry = NotchGeometry.detect()
         NSLog("agentch: show() message=%@", message)
-        viewModel.update(message: message, agentName: agent, geometry: geometry, interactive: interactive, conversation: conversation)
+        viewModel.update(message: message, agentName: agent, geometry: geometry, interactive: interactive, conversation: conversation, sessionLabel: sessionLabel)
         viewModel.expanded = false
 
         if interactive {
@@ -490,7 +498,8 @@ final class IslandPanelController: NSObject {
         pid: pid_t,
         responsePipe: String,
         suggestions: [PermissionSuggestion] = [],
-        sessionID: String = ""
+        sessionID: String = "",
+        sessionLabel: String = ""
     ) {
         let sid = normalizedSessionID(sessionID)
 
@@ -503,7 +512,8 @@ final class IslandPanelController: NSObject {
                     pid: pid,
                     responsePipe: responsePipe,
                     suggestions: suggestions,
-                    sessionID: sid
+                    sessionID: sid,
+                    sessionLabel: sessionLabel
                 )
             )
             return
@@ -518,7 +528,7 @@ final class IslandPanelController: NSObject {
 
         let geometry = NotchGeometry.detect()
         NSLog("agentch: showPermission() tool=%@, command=%@, pipe=%@, suggestions=%d", tool, command, responsePipe, suggestions.count)
-        viewModel.updatePermission(tool: tool, command: command, agentName: agent, geometry: geometry, suggestions: suggestions)
+        viewModel.updatePermission(tool: tool, command: command, agentName: agent, geometry: geometry, suggestions: suggestions, sessionLabel: sessionLabel)
         viewModel.expanded = false
         permissionResponsePipe = responsePipe
         activeSessionID = sid
@@ -593,7 +603,8 @@ final class IslandPanelController: NSObject {
         agent: String,
         pid: pid_t,
         responsePipe: String,
-        sessionID: String = ""
+        sessionID: String = "",
+        sessionLabel: String = ""
     ) {
         let sid = normalizedSessionID(sessionID)
 
@@ -604,7 +615,8 @@ final class IslandPanelController: NSObject {
                     agent: agent,
                     pid: pid,
                     responsePipe: responsePipe,
-                    sessionID: sid
+                    sessionID: sid,
+                    sessionLabel: sessionLabel
                 )
             )
             return
@@ -620,7 +632,7 @@ final class IslandPanelController: NSObject {
         let geometry = NotchGeometry.detect()
         NSLog("agentch: showElicitation() question=%@, options=%d, pipe=%@",
               question.question, question.options.count, responsePipe)
-        viewModel.updateElicitation(question: question, agentName: agent, geometry: geometry)
+        viewModel.updateElicitation(question: question, agentName: agent, geometry: geometry, sessionLabel: sessionLabel)
         viewModel.expanded = false
         permissionResponsePipe = responsePipe
         activeSessionID = sid

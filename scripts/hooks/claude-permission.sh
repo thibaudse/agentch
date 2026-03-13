@@ -7,6 +7,24 @@
 LOG="/tmp/agent-island-hook.log"
 ISLAND="${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh"
 INPUT=$(cat)
+CWD=$(printf '%s' "$INPUT" | python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('cwd',''))" 2>/dev/null || true)
+
+resolve_branch_label() {
+    local cwd="$1"
+    [ -n "$cwd" ] || return 0
+
+    local label
+    label="$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    if [ -z "$label" ] || [ "$label" = "HEAD" ]; then
+        label="$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null || true)"
+    fi
+
+    if [ -n "$label" ]; then
+        printf '%s' "$label"
+    fi
+}
+
+BRANCH_LABEL="$(resolve_branch_label "$CWD")"
 
 echo "$(date '+%H:%M:%S') PERMISSION INPUT(${#INPUT}b): $(echo "$INPUT" | head -c 1000)" >> "$LOG"
 
@@ -275,7 +293,7 @@ if [ "$IS_ELICITATION" = "1" ]; then
     ELICITATION_JSON=$(printf '%s' "$EXTRACTED" | python3 -c "import json,sys; print(json.dumps(json.loads(sys.stdin.read()).get('elicitation',{})))" 2>/dev/null) || true
     echo "$(date '+%H:%M:%S') ELICITATION: question=$(printf '%s' "$ELICITATION_JSON" | head -c 200) pipe=$PIPE" >> "$LOG"
 
-    "$ISLAND" elicitation "$ELICITATION_JSON" "Claude" "$PPID" "$PIPE" "$SESSION_ID"
+    "$ISLAND" elicitation "$ELICITATION_JSON" "Claude" "$PPID" "$PIPE" "$SESSION_ID" "$BRANCH_LABEL"
 
     # Block reading from the FIFO — the island writes "answer:<selection>" or "deny"
     if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION < "$PIPE"; then
@@ -327,7 +345,7 @@ else
 
     echo "$(date '+%H:%M:%S') PERMISSION: tool=$TOOL command=$(echo "$COMMAND" | head -c 100) suggestions=$SUGGESTIONS pipe=$PIPE" >> "$LOG"
 
-    "$ISLAND" permission "$TOOL" "$COMMAND" "Claude" "$PPID" "$PIPE" "$SUGGESTIONS" "$SESSION_ID"
+    "$ISLAND" permission "$TOOL" "$COMMAND" "Claude" "$PPID" "$PIPE" "$SUGGESTIONS" "$SESSION_ID" "$BRANCH_LABEL"
 
     # Block reading from the FIFO — the island writes "allow", "deny", or "allow_always:<json>"
     if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION < "$PIPE"; then

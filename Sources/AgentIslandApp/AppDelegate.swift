@@ -37,12 +37,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handle(_ command: IslandCommand) {
         switch command {
-        case let .show(message, agent, duration, pid, interactive, terminalBundle, tabMarker, ttyPath, conversation, responsePipe, sessionID):
-            panelController.show(message: message, agent: agent, duration: duration, pid: pid, interactive: interactive, terminalBundle: terminalBundle, tabMarker: tabMarker, ttyPath: ttyPath, conversation: conversation, responsePipe: responsePipe, sessionID: sessionID)
-        case let .permission(tool, command, agent, pid, responsePipe, suggestions, sessionID):
-            panelController.showPermission(tool: tool, command: command, agent: agent, pid: pid, responsePipe: responsePipe, suggestions: suggestions, sessionID: sessionID)
-        case let .elicitation(question, agent, pid, responsePipe, sessionID):
-            panelController.showElicitation(question: question, agent: agent, pid: pid, responsePipe: responsePipe, sessionID: sessionID)
+        case let .show(message, agent, duration, pid, interactive, terminalBundle, tabMarker, ttyPath, conversation, responsePipe, sessionID, sessionLabel):
+            panelController.show(message: message, agent: agent, duration: duration, pid: pid, interactive: interactive, terminalBundle: terminalBundle, tabMarker: tabMarker, ttyPath: ttyPath, conversation: conversation, responsePipe: responsePipe, sessionID: sessionID, sessionLabel: sessionLabel)
+        case let .permission(tool, command, agent, pid, responsePipe, suggestions, sessionID, sessionLabel):
+            panelController.showPermission(tool: tool, command: command, agent: agent, pid: pid, responsePipe: responsePipe, suggestions: suggestions, sessionID: sessionID, sessionLabel: sessionLabel)
+        case let .elicitation(question, agent, pid, responsePipe, sessionID, sessionLabel):
+            panelController.showElicitation(question: question, agent: agent, pid: pid, responsePipe: responsePipe, sessionID: sessionID, sessionLabel: sessionLabel)
         case let .dismiss(sessionID):
             panelController.dismiss(sessionID: sessionID)
         case .quit:

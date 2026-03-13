@@ -10,6 +10,24 @@ LOG="/tmp/agent-island-hook.log"
 ISLAND="${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh"
 INPUT=$(cat)
 SESSION_ID=$(printf '%s' "$INPUT" | python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('session_id',''))" 2>/dev/null || true)
+CWD=$(printf '%s' "$INPUT" | python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('cwd',''))" 2>/dev/null || true)
+
+resolve_branch_label() {
+    local cwd="$1"
+    [ -n "$cwd" ] || return 0
+
+    local label
+    label="$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    if [ -z "$label" ] || [ "$label" = "HEAD" ]; then
+        label="$(git -C "$cwd" rev-parse --short HEAD 2>/dev/null || true)"
+    fi
+
+    if [ -n "$label" ]; then
+        printf '%s' "$label"
+    fi
+}
+
+BRANCH_LABEL="$(resolve_branch_label "$CWD")"
 
 echo "$(date '+%H:%M:%S') STOP HOOK INPUT: $(echo "$INPUT" | head -c 500)" >> "$LOG"
 
@@ -144,7 +162,7 @@ dismiss_notch_on_signal() {
 trap dismiss_notch_on_signal TERM INT HUP
 
 # Show interactive island prompt (no terminal info needed — we use decision:block)
-"$ISLAND" prompt "$MSG" "Claude" "$PPID" "" "" "" "$CONVO" "$RESPONSE_PIPE" "$SESSION_ID"
+"$ISLAND" prompt "$MSG" "Claude" "$PPID" "" "" "" "$CONVO" "$RESPONSE_PIPE" "$SESSION_ID" "$BRANCH_LABEL"
 
 # Block reading from the FIFO — the island writes the user's text or "__dismiss__"
 if IFS= read -r -t "$STOP_TIMEOUT_SECS" RESPONSE < "$RESPONSE_PIPE"; then
