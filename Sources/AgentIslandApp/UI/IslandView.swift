@@ -271,7 +271,23 @@ struct IslandView: View {
 
     // MARK: - Notch Controls + Header Pills (single row aligned to the notch)
 
+    private var notchCenterGapWidth: CGFloat {
+        model.geometry.hasNotch ? model.geometry.notchWidth + DS.sp12 : DS.sp12
+    }
+
     private var notchControls: some View {
+        HStack(spacing: DS.sp8) {
+            notchLeftControls
+                .layoutPriority(2)
+
+            Spacer(minLength: notchCenterGapWidth)
+
+            notchRightControls
+                .layoutPriority(1)
+        }
+    }
+
+    private var notchLeftControls: some View {
         HStack(spacing: DS.sp8) {
             PulsingDot(color: statusColor)
 
@@ -291,13 +307,20 @@ struct IslandView: View {
                         .font(.system(size: 9.5, weight: .semibold))
                     Text(model.sessionLabel)
                         .font(.system(size: 11.5, weight: .medium, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
                 .foregroundColor(secondaryColor.opacity(0.88))
                 .padding(.horizontal, DS.sp6)
                 .padding(.vertical, DS.sp2)
+                .frame(maxWidth: 200, alignment: .leading)
                 .fadedCapsuleSurface()
             }
+        }
+    }
 
+    private var notchRightControls: some View {
+        HStack(spacing: DS.sp8) {
             if model.isElicitation {
                 Text("asks")
                     .font(.system(size: 11.5, design: .rounded))
@@ -314,13 +337,14 @@ struct IslandView: View {
                     .fadedCapsuleSurface()
                 Text(model.permissionTool)
                     .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
                     .foregroundColor(accentColor.opacity(0.90))
                     .padding(.horizontal, DS.sp6)
                     .padding(.vertical, DS.sp2)
+                    .frame(maxWidth: 240, alignment: .trailing)
                     .fadedCapsuleSurface()
             }
-
-            Spacer(minLength: 4)
 
             if model.interactive && !model.conversation.isEmpty && !model.isPermission {
                 DSHeaderButton(
