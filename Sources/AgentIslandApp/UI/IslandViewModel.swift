@@ -11,6 +11,7 @@ final class IslandViewModel: ObservableObject {
     @Published var geometry: NotchGeometry = .detect()
     @Published var interactive: Bool = false
     @Published var inputText: String = ""
+    @Published var sessionLabel: String = ""
 
     // Permission mode
     @Published var isPermission: Bool = false
@@ -30,12 +31,20 @@ final class IslandViewModel: ObservableObject {
     var onElicitationAnswer: ((String) -> Void)?
     var onContentHeightChange: ((CGFloat) -> Void)?
 
-    func update(message: String, agentName: String, geometry: NotchGeometry, interactive: Bool, conversation: String = "") {
+    func update(
+        message: String,
+        agentName: String,
+        geometry: NotchGeometry,
+        interactive: Bool,
+        conversation: String = "",
+        sessionLabel: String = ""
+    ) {
         self.message = message
         self.conversation = conversation
         self.agentName = agentName
         self.geometry = geometry
         self.interactive = interactive
+        self.sessionLabel = sessionLabel
         self.isPermission = false
         self.permissionTool = ""
         self.permissionCommand = ""
@@ -47,12 +56,20 @@ final class IslandViewModel: ObservableObject {
         self.contentVisible = true
     }
 
-    func updatePermission(tool: String, command: String, agentName: String, geometry: NotchGeometry, suggestions: [PermissionSuggestion] = []) {
+    func updatePermission(
+        tool: String,
+        command: String,
+        agentName: String,
+        geometry: NotchGeometry,
+        suggestions: [PermissionSuggestion] = [],
+        sessionLabel: String = ""
+    ) {
         self.permissionTool = tool
         self.permissionCommand = command
         self.message = command
         self.agentName = agentName
         self.geometry = geometry
+        self.sessionLabel = sessionLabel
         self.isPermission = true
         self.isElicitation = false
         self.interactive = true
@@ -63,11 +80,17 @@ final class IslandViewModel: ObservableObject {
         self.contentVisible = true
     }
 
-    func updateElicitation(question: Elicitation, agentName: String, geometry: NotchGeometry) {
+    func updateElicitation(
+        question: Elicitation,
+        agentName: String,
+        geometry: NotchGeometry,
+        sessionLabel: String = ""
+    ) {
         self.elicitationQuestion = question.question
         self.elicitationOptions = question.options
         self.agentName = agentName
         self.geometry = geometry
+        self.sessionLabel = sessionLabel
         self.isElicitation = true
         self.isPermission = false
         self.interactive = true

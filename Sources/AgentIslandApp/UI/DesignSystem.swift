@@ -320,24 +320,24 @@ struct DSHeaderButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 9.5, weight: .bold))
-                .foregroundColor(variant == .primary ? .white : secondary.opacity(isHovering ? 0.95 : 0.72))
-                .frame(width: 22, height: 22)
-                .animation(nil, value: icon)
-                .background(
-                    Circle()
-                        .fill(variant == .primary ? accent : .clear)
-                )
-                .overlay(
-                    Circle()
-                        .strokeBorder(
-                            variant == .primary ? accent.opacity(0.92) : secondary.opacity(0.58),
-                            lineWidth: 0.9
-                        )
-                )
-                .scaleEffect(isHovering ? 1.08 : 1.0)
+            ZStack {
+                Circle()
+                    .fill(variant == .primary ? accent : Color.white.opacity(0.001))
+                Circle()
+                    .strokeBorder(
+                        variant == .primary ? accent.opacity(0.92) : secondary.opacity(0.58),
+                        lineWidth: 0.9
+                    )
+                Image(systemName: icon)
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundColor(variant == .primary ? .white : secondary.opacity(isHovering ? 0.95 : 0.72))
+                    .animation(nil, value: icon)
+            }
+            .frame(width: 22, height: 22)
+            .contentShape(Rectangle())
+            .scaleEffect(isHovering ? 1.08 : 1.0)
         }
+        .contentShape(Rectangle())
         .buttonStyle(DSButtonStyle())
         .onHover { h in withAnimation(DS.Anim.hover) { isHovering = h } }
     }
