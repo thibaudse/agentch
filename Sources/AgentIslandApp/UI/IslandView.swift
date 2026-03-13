@@ -272,7 +272,31 @@ struct IslandView: View {
     // MARK: - Notch Controls + Header Pills (single row aligned to the notch)
 
     private var notchCenterGapWidth: CGFloat {
-        model.geometry.hasNotch ? model.geometry.notchWidth + DS.sp12 : DS.sp12
+        model.geometry.hasNotch ? model.geometry.notchWidth + DS.sp8 : DS.sp12
+    }
+
+    private var displayedSessionLabel: String {
+        let raw = model.sessionLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else { return raw }
+
+        var label = raw
+        if let lastComponent = raw.split(separator: "/").last,
+           raw.contains("/"),
+           !lastComponent.isEmpty {
+            label = String(lastComponent)
+        }
+
+        let maxCharacters = (model.isPermission || model.isElicitation) ? 24 : 30
+        return abbreviatedSessionLabel(label, maxCharacters: maxCharacters)
+    }
+
+    private func abbreviatedSessionLabel(_ text: String, maxCharacters: Int) -> String {
+        guard maxCharacters > 6, text.count > maxCharacters else { return text }
+        return String(text.prefix(maxCharacters - 3)) + "..."
+    }
+
+    private var displayedPermissionTool: String {
+        abbreviatedSessionLabel(model.permissionTool.trimmingCharacters(in: .whitespacesAndNewlines), maxCharacters: 28)
     }
 
     private var notchControls: some View {
@@ -305,15 +329,16 @@ struct IslandView: View {
                 HStack(spacing: DS.sp4) {
                     Image(systemName: "arrow.triangle.branch")
                         .font(.system(size: 9.5, weight: .semibold))
-                    Text(model.sessionLabel)
+                    Text(displayedSessionLabel)
                         .font(.system(size: 11.5, weight: .medium, design: .monospaced))
                         .lineLimit(1)
-                        .truncationMode(.middle)
+                        .truncationMode(.tail)
                 }
                 .foregroundColor(secondaryColor.opacity(0.88))
                 .padding(.horizontal, DS.sp6)
                 .padding(.vertical, DS.sp2)
-                .frame(maxWidth: 200, alignment: .leading)
+                .fixedSize(horizontal: true, vertical: false)
+                .help(model.sessionLabel)
                 .fadedCapsuleSurface()
             }
         }
@@ -335,14 +360,15 @@ struct IslandView: View {
                     .padding(.horizontal, DS.sp6)
                     .padding(.vertical, DS.sp2)
                     .fadedCapsuleSurface()
-                Text(model.permissionTool)
+                Text(displayedPermissionTool)
                     .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
                     .foregroundColor(accentColor.opacity(0.90))
                     .padding(.horizontal, DS.sp6)
                     .padding(.vertical, DS.sp2)
-                    .frame(maxWidth: 240, alignment: .trailing)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .help(model.permissionTool)
                     .fadedCapsuleSurface()
             }
 

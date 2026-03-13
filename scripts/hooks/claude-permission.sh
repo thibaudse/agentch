@@ -273,6 +273,12 @@ SESSION_ID=$(printf '%s' "$EXTRACTED" | python3 -c "import json,sys; print(json.
 # Create a FIFO for the island to write the decision back
 PIPE="/tmp/agent-island-perm-$$"
 mkfifo "$PIPE" 2>/dev/null || true
+if ! exec 3<>"$PIPE"; then
+    echo "$(date '+%H:%M:%S') PERMISSION: failed to open response pipe '$PIPE'" >> "$LOG"
+    rm -f "$PIPE"
+    echo '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny"}}}'
+    exit 0
+fi
 
 PERMISSION_TIMEOUT_SECS="${AGENTCH_PERMISSION_TIMEOUT_SECS:-110}"
 if ! [[ "$PERMISSION_TIMEOUT_SECS" =~ ^[0-9]+$ ]]; then
@@ -285,7 +291,7 @@ dismiss_notch_on_signal() {
     exit 0
 }
 
-trap 'rm -f "$PIPE"' EXIT
+trap 'exec 3>&- 3<&- 2>/dev/null || true; rm -f "$PIPE"' EXIT
 trap dismiss_notch_on_signal TERM INT HUP
 
 if [ "$IS_ELICITATION" = "1" ]; then
@@ -296,7 +302,7 @@ if [ "$IS_ELICITATION" = "1" ]; then
     "$ISLAND" elicitation "$ELICITATION_JSON" "Claude" "$PPID" "$PIPE" "$SESSION_ID" "$BRANCH_LABEL"
 
     # Block reading from the FIFO — the island writes "answer:<selection>" or "deny"
-    if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION < "$PIPE"; then
+    if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION <&3; then
         DECISION=$(printf '%s' "$DECISION" | tr -d '\n')
     else
         DECISION="deny"
@@ -348,7 +354,7 @@ else
     "$ISLAND" permission "$TOOL" "$COMMAND" "Claude" "$PPID" "$PIPE" "$SUGGESTIONS" "$SESSION_ID" "$BRANCH_LABEL"
 
     # Block reading from the FIFO — the island writes "allow", "deny", or "allow_always:<json>"
-    if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION < "$PIPE"; then
+    if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION <&3; then
         DECISION=$(printf '%s' "$DECISION" | tr -d '\n')
     else
         DECISION="deny"
