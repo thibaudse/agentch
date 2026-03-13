@@ -23,7 +23,7 @@ enum AppConfig {
     static let disappearDuration: TimeInterval = 0.3
     static let appearDelayNanos: UInt64 = 30_000_000
     static let hideDelayNanos: UInt64 = 450_000_000
-    static let trackingIntervalNanos: UInt64 = 80_000_000
+    static let trackingIntervalNanos: UInt64 = 120_000_000
 
     static let processMonitorIntervalNanos: UInt64 = 2_000_000_000
 

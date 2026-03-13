@@ -210,7 +210,7 @@ struct IslandView: View {
             alignment: .top
         )
         .animation(model.expanded ? DS.Anim.notchOpen : DS.Anim.notchClose, value: model.expanded)
-        .animation(DS.Anim.content, value: contentHeight)
+        .animation((model.isPermission || model.isElicitation) ? nil : DS.Anim.content, value: contentHeight)
         .animation(DS.Anim.expand, value: model.isPermission)
         .animation(DS.Anim.expand, value: model.isElicitation)
         .onAppear {
@@ -528,6 +528,8 @@ struct IslandView: View {
 
         var oldLine: Int?
         var newLine: Int?
+        var plainLine = 1
+        var hasDiffNumbering = false
 
         for (index, line) in lines.enumerated() {
             let style = permissionLineStyle(for: line)
@@ -536,6 +538,7 @@ struct IslandView: View {
             if let hunk = parseDiffHunkLineNumbers(from: trimmed) {
                 oldLine = hunk.oldStart
                 newLine = hunk.newStart
+                hasDiffNumbering = true
             }
 
             var number = ""
@@ -554,6 +557,11 @@ struct IslandView: View {
                 // Write-style preview without unified diff hunk headers.
                 oldLine = 1
                 newLine = 1
+                hasDiffNumbering = true
+            } else if !hasDiffNumbering && !trimmed.isEmpty {
+                // Plain command/file preview fallback (ex: Bash command block).
+                number = "\(plainLine)"
+                plainLine += 1
             }
 
             rows.append(

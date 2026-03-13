@@ -96,6 +96,7 @@ final class IslandPanelController: NSObject {
     private var pendingCommands: [PendingCommand] = []
     private var isTransitioningOut = false
     private var activeSessionID: String = ""
+    private var geometryRefreshSuspendedUntil: Date = .distantPast
 
     override init() {
         super.init()
@@ -119,6 +120,39 @@ final class IslandPanelController: NSObject {
 
     private func normalizedSessionID(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isGeometryRefreshSuspended: Bool {
+        Date() < geometryRefreshSuspendedUntil
+    }
+
+    private func suspendGeometryRefresh(for seconds: TimeInterval) {
+        let candidate = Date().addingTimeInterval(max(0, seconds))
+        if candidate > geometryRefreshSuspendedUntil {
+            geometryRefreshSuspendedUntil = candidate
+        }
+    }
+
+    private func hasMeaningfulGeometryChange(from old: NotchGeometry, to new: NotchGeometry) -> Bool {
+        if old.hasNotch != new.hasNotch { return true }
+        if abs(old.notchWidth - new.notchWidth) > 0.5 { return true }
+        if abs(old.notchHeight - new.notchHeight) > 0.5 { return true }
+
+        let oa = old.screenFrame
+        let na = new.screenFrame
+        if abs(oa.origin.x - na.origin.x) > 0.5 { return true }
+        if abs(oa.origin.y - na.origin.y) > 0.5 { return true }
+        if abs(oa.width - na.width) > 0.5 { return true }
+        if abs(oa.height - na.height) > 0.5 { return true }
+        return false
+    }
+
+    private func shouldUpdatePanelFrame(current: CGRect, target: CGRect) -> Bool {
+        if abs(current.origin.x - target.origin.x) > 0.5 { return true }
+        if abs(current.origin.y - target.origin.y) > 0.5 { return true }
+        if abs(current.width - target.width) > 0.5 { return true }
+        if abs(current.height - target.height) > 0.5 { return true }
+        return false
     }
 
     private func shouldQueueBlockingCommand() -> Bool {
@@ -335,6 +369,7 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
+                self.suspendGeometryRefresh(for: 0.9)
                 // Keep panel frame fixed; only animate SwiftUI notch/content.
                 self.expandPanelForAnimation()
                 // Slight delay so first layout pass settles before the notch animates.
@@ -392,6 +427,7 @@ final class IslandPanelController: NSObject {
         autoDismissTask = nil
         hideTask?.cancel()
         isTransitioningOut = true
+        suspendGeometryRefresh(for: 0.9)
         panel?.ignoresMouseEvents = true
         panel?.acceptsKeyInput = false
 
@@ -515,6 +551,7 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
+                self.suspendGeometryRefresh(for: 0.9)
                 self.expandPanelForAnimation()
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(nanoseconds: 16_000_000)
@@ -613,6 +650,7 @@ final class IslandPanelController: NSObject {
             try? await Task.sleep(nanoseconds: AppConfig.appearDelayNanos)
             guard let self, !Task.isCancelled else { return }
             await MainActor.run {
+                self.suspendGeometryRefresh(for: 0.9)
                 self.expandPanelForAnimation()
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(nanoseconds: 16_000_000)
@@ -766,6 +804,7 @@ final class IslandPanelController: NSObject {
         autoDismissTask = nil
         hideTask?.cancel()
         isTransitioningOut = true
+        suspendGeometryRefresh(for: 0.9)
         panel?.ignoresMouseEvents = true
         panel?.acceptsKeyInput = false
         previousApp = nil
@@ -854,15 +893,20 @@ final class IslandPanelController: NSObject {
     private func refreshGeometry(force: Bool) {
         guard let panel else { return }
 
+        if !force, isGeometryRefreshSuspended {
+            updatePanelInteractivity()
+            return
+        }
+
         let latestGeometry = NotchGeometry.detect()
-        if latestGeometry != viewModel.geometry {
+        if hasMeaningfulGeometryChange(from: viewModel.geometry, to: latestGeometry) {
             viewModel.geometry = latestGeometry
         }
 
         if !isPresented {
             if force {
                 let targetFrame = latestGeometry.screenFrame
-                if panel.frame != targetFrame {
+                if shouldUpdatePanelFrame(current: panel.frame, target: targetFrame) {
                     panel.setFrame(targetFrame, display: false)
                 }
             }
@@ -870,7 +914,7 @@ final class IslandPanelController: NSObject {
         }
 
         let targetFrame = latestGeometry.screenFrame
-        if panel.frame != targetFrame {
+        if shouldUpdatePanelFrame(current: panel.frame, target: targetFrame) {
             panel.setFrame(targetFrame, display: true)
         }
         updatePanelInteractivity()
