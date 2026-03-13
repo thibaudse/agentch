@@ -415,6 +415,7 @@ struct DSPillButton<Label: View>: View {
     private var labelBody: some View {
         label()
             .frame(maxWidth: .infinity)
+            .padding(.horizontal, DS.sp12)
             .padding(.vertical, DS.sp8 + 1)
             .foregroundColor(variant == .primary ? .white : secondary)
     }

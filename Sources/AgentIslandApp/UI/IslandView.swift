@@ -377,7 +377,6 @@ struct IslandView: View {
                     .font(.system(size: 9, weight: .bold))
                     .foregroundColor(secondaryColor.opacity(0.65))
             }
-            .padding(.horizontal, DS.sp14)
         }
     }
 
@@ -424,74 +423,106 @@ struct IslandView: View {
 
     private var permissionView: some View {
         VStack(spacing: DS.sp10) {
-            if permissionFilePath != nil || permissionReplaceAllValue != nil {
-                VStack(alignment: .leading, spacing: DS.sp6) {
-                    if let filePath = permissionFilePath {
-                        Button(action: { openPermissionFile(filePath) }) {
-                            HStack(spacing: DS.sp8) {
-                                Image(systemName: "doc.text")
-                                    .font(.system(size: 10, weight: .semibold))
-                                Text(filePath)
-                                    .font(DS.Font.mono)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                    .underline(isPermissionFileHovering, color: accentColor.opacity(0.55))
-                                Spacer(minLength: 0)
-                                Image(systemName: "arrow.up.right.square")
-                                    .font(.system(size: 10, weight: .semibold))
-                            }
-                            .foregroundColor(accentColor)
-                            .padding(.horizontal, DS.sp8)
-                            .padding(.vertical, DS.sp4)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .onHover { hovering in
-                            isPermissionFileHovering = hovering
-                            if hovering {
-                                NSCursor.pointingHand.push()
-                            } else {
-                                NSCursor.pop()
-                            }
-                        }
-                    }
-
-                    if let replaceAll = permissionReplaceAllValue {
-                        Text("replace_all: \(replaceAll)")
-                            .font(DS.Font.caption)
-                            .foregroundColor(DS.text2)
-                            .padding(.horizontal, DS.sp8)
-                    }
-                }
-            }
-
-            // Command display
-            if !permissionBodyLines.isEmpty {
+            if hasPermissionPreview {
                 ScrollView(.vertical, showsIndicators: true) {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(permissionPreviewRows) { row in
-                            HStack(alignment: .firstTextBaseline, spacing: DS.sp10) {
-                                Text(row.number.isEmpty ? " " : row.number)
-                                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                                    .foregroundColor(DS.text3)
-                                    .frame(width: 28, alignment: .trailing)
+                    VStack(alignment: .leading, spacing: DS.sp8) {
+                        if permissionFilePath != nil || permissionReplaceAllValue != nil {
+                            VStack(alignment: .leading, spacing: DS.sp6) {
+                                if let filePath = permissionFilePath {
+                                    Button(action: { openPermissionFile(filePath) }) {
+                                        HStack(spacing: DS.sp8) {
+                                            Image(systemName: "doc.text")
+                                                .font(.system(size: 10, weight: .semibold))
+                                            Text(filePath)
+                                                .font(DS.Font.mono)
+                                                .lineLimit(1)
+                                                .truncationMode(.middle)
+                                                .underline(isPermissionFileHovering, color: accentColor.opacity(0.55))
+                                            Spacer(minLength: 0)
+                                            Image(systemName: "arrow.up.right.square")
+                                                .font(.system(size: 10, weight: .semibold))
+                                        }
+                                        .foregroundColor(accentColor)
+                                        .padding(.horizontal, DS.sp8)
+                                        .padding(.vertical, DS.sp4)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .onHover { hovering in
+                                        isPermissionFileHovering = hovering
+                                        if hovering {
+                                            NSCursor.pointingHand.push()
+                                        } else {
+                                            NSCursor.pop()
+                                        }
+                                    }
+                                }
 
-                                Text(verbatim: row.text.isEmpty ? " " : row.text)
-                                    .font(DS.Font.mono)
-                                    .foregroundColor(permissionLineForeground(row.style))
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                if let replaceAll = permissionReplaceAllValue {
+                                    Text("replace_all: \(replaceAll)")
+                                        .font(DS.Font.caption)
+                                        .foregroundColor(DS.text2)
+                                        .padding(.horizontal, DS.sp8)
+                                }
                             }
-                            .padding(.horizontal, DS.sp10)
-                            .padding(.vertical, 3)
+                        }
+
+                        if isBashPermission {
+                            if let description = permissionCommandDescription, !description.isEmpty {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Description")
+                                        .font(DS.Font.caption)
+                                        .foregroundColor(DS.text3)
+                                    Text(description)
+                                        .font(DS.Font.bodyMedium)
+                                        .foregroundColor(DS.text2)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, DS.sp8)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                ForEach(Array(permissionCommandLines.enumerated()), id: \.offset) { _, line in
+                                    Text(verbatim: line)
+                                        .font(DS.Font.mono)
+                                        .foregroundColor(DS.text1.opacity(0.94))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(permissionLineBackground(row.style))
+                            .padding(.horizontal, DS.sp10)
+                            .padding(.vertical, DS.sp8)
+                        } else {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(permissionPreviewRows) { row in
+                                    HStack(alignment: .firstTextBaseline, spacing: DS.sp10) {
+                                        Text(row.number.isEmpty ? " " : row.number)
+                                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                            .foregroundColor(DS.text3)
+                                            .frame(width: 28, alignment: .trailing)
+
+                                        Text(verbatim: row.text.isEmpty ? " " : row.text)
+                                            .font(DS.Font.mono)
+                                            .foregroundColor(permissionLineForeground(row.style))
+                                            .fixedSize(horizontal: false, vertical: true)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .padding(.horizontal, DS.sp10)
+                                    .padding(.vertical, 3)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(permissionLineBackground(row.style))
+                                }
+                            }
+                            .padding(.horizontal, DS.sp2)
                         }
                     }
-                    .padding(.horizontal, DS.sp2)
                     .padding(.vertical, DS.sp6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxHeight: 160)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxHeight: isBashPermission ? 180 : 160)
                 .background(
                     RoundedRectangle(cornerRadius: DS.radiusS + 2, style: .continuous)
                         .fill(Color.black.opacity(0.28))
@@ -567,6 +598,55 @@ struct IslandView: View {
 
     private var permissionRawLines: [String] {
         model.permissionCommand.components(separatedBy: .newlines)
+    }
+
+    private var isBashPermission: Bool {
+        model.permissionTool.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "bash"
+    }
+
+    private var permissionCommandDescription: String? {
+        guard isBashPermission else { return nil }
+        for line in permissionBodyLines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("description:") else { continue }
+            let value = String(trimmed.dropFirst("description:".count)).trimmingCharacters(in: .whitespaces)
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
+    private var permissionCommandLines: [String] {
+        guard isBashPermission else { return [] }
+
+        var lines: [String] = []
+        for line in permissionBodyLines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+            if trimmed == "Command" { continue }
+            if trimmed.hasPrefix("description:") { continue }
+
+            if line.hasPrefix("$ ") {
+                lines.append(String(line.dropFirst(2)))
+            } else if line.hasPrefix("  ") {
+                lines.append(String(line.dropFirst(2)))
+            } else {
+                lines.append(line)
+            }
+        }
+        return lines
+    }
+
+    private var hasPermissionPreview: Bool {
+        if permissionFilePath != nil || permissionReplaceAllValue != nil {
+            return true
+        }
+        if isBashPermission {
+            if let description = permissionCommandDescription, !description.isEmpty {
+                return true
+            }
+            return !permissionCommandLines.isEmpty
+        }
+        return !permissionPreviewRows.isEmpty
     }
 
     private var permissionFilePath: String? {
