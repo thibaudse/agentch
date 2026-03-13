@@ -9,7 +9,7 @@
 ## How It Works
 
 1. Claude triggers a hook event.
-2. Hook scripts call `scripts/island.sh`.
+2. Hook scripts call `agentch-island` (or `scripts/island.sh` in source installs).
 3. `island.sh` sends a JSON command to the local socket.
 4. `AgentIsland` renders the notch UI and returns responses through FIFO pipes.
 
@@ -19,12 +19,32 @@
 - Xcode Command Line Tools (`xcode-select --install`)
 - Claude CLI configured on your machine
 
-## Install (Recommended)
+## Install (Homebrew)
+
+No repo clone needed:
+
+```bash
+brew tap thibaudse/agentch
+brew install agentch
+agentch-install-hooks
+brew services start agentch
+```
+
+What this does:
+
+- installs the app + scripts
+- writes Claude hook commands into `~/.claude/settings.json`
+- starts `agentch` at login/restart via `brew services`
+
+After hook changes, restart Claude.
+
+## Install (From Source)
 
 From repo root:
 
 ```bash
 bash scripts/build.sh
+bash scripts/install-claude-hooks.sh
 ```
 
 This installs to:
@@ -33,58 +53,36 @@ This installs to:
 - `${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh`
 - `${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-*.sh`
 
-### Configure Claude Hooks
-
-`agentch` requires hooks in `~/.claude/settings.json`.
-
-Quick merge helper (run from repo root):
-
-```bash
-python3 - <<'PY'
-import json
-from pathlib import Path
-
-repo = Path.cwd()
-incoming = json.loads((repo / "hooks/claude-code/hooks.json").read_text())
-settings_path = Path.home() / ".claude/settings.json"
-settings = json.loads(settings_path.read_text()) if settings_path.exists() else {}
-hooks = settings.get("hooks", {})
-
-for event, entries in incoming.get("hooks", {}).items():
-    existing = hooks.get(event, [])
-    existing = [
-        e for e in existing
-        if not any("agent-island" in h.get("command", "") for h in e.get("hooks", []))
-    ]
-    hooks[event] = existing + entries
-
-settings["hooks"] = hooks
-settings_path.parent.mkdir(parents=True, exist_ok=True)
-settings_path.write_text(json.dumps(settings, indent=2) + "\n")
-print(f"Updated {settings_path}")
-PY
-```
-
-Restart Claude after changing hooks.
+Then restart Claude after changing hooks.
 
 ## Keep It Running
 
-You usually do not need manual daemon management.
+`agentch` should stay available automatically.
 
-- `scripts/island.sh` auto-starts the daemon on demand.
-- It also recovers stale socket state automatically.
+- `brew services start agentch` keeps it running across login/reboot.
+- Hook calls still auto-start the daemon if it is not running.
+- `island.sh` also recovers stale socket state automatically.
+
+If you want startup check before every Claude launch, add this to `~/.zshrc`:
+
+```bash
+claude() {
+  agentch-island start >/dev/null 2>&1 || true
+  command claude "$@"
+}
+```
 
 Manual control:
 
 ```bash
-~/.agent-island/scripts/island.sh start
-~/.agent-island/scripts/island.sh stop
+agentch-island start
+agentch-island stop
 ```
 
 ## Quick Test
 
 ```bash
-~/.agent-island/scripts/island.sh prompt "Test" "Claude" 0 "" "" "" "**Claude:** Hello" "" "test-session"
+agentch-island prompt "Test" "Claude" 0 "" "" "" "**Claude:** Hello" "" "test-session"
 ```
 
 ## Logs
@@ -96,9 +94,11 @@ Manual control:
 
 ```text
 .
+├── Formula/agentch.rb
 ├── hooks/claude-code/hooks.json
 ├── scripts/
 │   ├── build.sh
+│   ├── install-claude-hooks.sh
 │   ├── island.sh
 │   └── hooks/
 │       ├── claude-show.sh

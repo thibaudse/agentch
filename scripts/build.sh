@@ -18,6 +18,8 @@ chmod +x "$INSTALL_DIR/$BINARY_NAME"
 # Copy scripts
 cp "$SCRIPT_DIR/island.sh" "$INSTALL_DIR/scripts/island.sh"
 chmod +x "$INSTALL_DIR/scripts/island.sh"
+cp "$SCRIPT_DIR/install-claude-hooks.sh" "$INSTALL_DIR/scripts/install-claude-hooks.sh"
+chmod +x "$INSTALL_DIR/scripts/install-claude-hooks.sh"
 cp "$SCRIPT_DIR/hooks/claude-show.sh" "$INSTALL_DIR/scripts/hooks/claude-show.sh"
 chmod +x "$INSTALL_DIR/scripts/hooks/claude-show.sh"
 cp "$SCRIPT_DIR/hooks/claude-permission.sh" "$INSTALL_DIR/scripts/hooks/claude-permission.sh"
