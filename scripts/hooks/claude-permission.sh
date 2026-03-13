@@ -12,7 +12,7 @@ echo "$(date '+%H:%M:%S') PERMISSION INPUT(${#INPUT}b): $(echo "$INPUT" | head -
 
 # Extract tool name, command, suggestions, and elicitation data
 EXTRACTED=$(printf '%s' "$INPUT" | python3 -c "
-import json, sys
+import json, sys, difflib
 
 d = json.loads(sys.stdin.read())
 tool = d.get('tool_name', 'Unknown')
@@ -36,8 +36,116 @@ if is_elicitation:
     command = ''
 else:
     elicitation = None
+
+    def truncate(value, limit=1200):
+        if isinstance(value, str):
+            text = value
+        else:
+            try:
+                text = json.dumps(value, indent=2)
+            except Exception:
+                text = str(value)
+
+        if len(text) <= limit:
+            return text
+        return text[:limit] + '\n... [truncated]'
+
+    def truncate_line(text, limit=280):
+        if len(text) <= limit:
+            return text
+        return text[:limit] + ' ...'
+
+    def inline_diff_block(old_text, new_text, context=3, max_lines=220):
+        old_lines = old_text.splitlines()
+        new_lines = new_text.splitlines()
+
+        diff_lines = list(difflib.unified_diff(
+            old_lines,
+            new_lines,
+            fromfile='current',
+            tofile='proposed',
+            lineterm='',
+            n=context,
+        ))
+
+        formatted = []
+        for line in diff_lines:
+            if line.startswith('--- ') or line.startswith('+++ '):
+                continue
+            if line.startswith('@@'):
+                formatted.append('... {}'.format(truncate_line(line, 120)))
+                continue
+            if line.startswith('+'):
+                formatted.append('+ {}'.format(truncate_line(line[1:])))
+                continue
+            if line.startswith('-'):
+                formatted.append('- {}'.format(truncate_line(line[1:])))
+                continue
+            if line.startswith(' '):
+                formatted.append('  {}'.format(truncate_line(line[1:])))
+                continue
+            formatted.append(truncate_line(line))
+
+        if not formatted:
+            formatted = ['  (no textual diff)']
+
+        if len(formatted) > max_lines:
+            hidden = len(formatted) - max_lines
+            formatted = formatted[:max_lines] + ['... [truncated {} lines]'.format(hidden)]
+
+        return '\n'.join(formatted)
+
+    def shell_block(command_text):
+        lines = command_text.splitlines()
+        if not lines:
+            return '$ (empty)'
+        first = '$ {}'.format(lines[0])
+        rest = ['  {}'.format(line) for line in lines[1:]]
+        return '\n'.join([first] + rest)
+
     if isinstance(inp, dict):
-        if 'command' in inp:
+        file_path = inp.get('file_path', '(unknown file)')
+
+        if tool == 'Edit':
+            old_text = inp.get('old_string', '')
+            new_text = inp.get('new_string', '')
+            replace_all = inp.get('replace_all')
+            replace_info = ('\nreplace_all: {}'.format(replace_all)) if replace_all is not None else ''
+            diff_block = inline_diff_block(old_text, new_text, context=3, max_lines=220)
+            command = (
+                'File: {}{}\n\n'.format(file_path, replace_info)
+                + diff_block
+            )
+        elif tool == 'Write':
+            content = truncate(inp.get('content', inp.get('text', '')), 1600)
+            content_lines = content.splitlines() if content else []
+            if not content_lines:
+                content_lines = ['(empty)']
+            content_block = '\n'.join(['+ {}'.format(truncate_line(line)) for line in content_lines])
+            command = (
+                'File: {}\n\n'.format(file_path)
+                + '+++ proposed\n{}'.format(content_block)
+            )
+        elif tool == 'MultiEdit':
+            edits = inp.get('edits', [])
+            parts = ['File: {}'.format(file_path)]
+            for idx, edit in enumerate(edits[:4], start=1):
+                old_text = edit.get('old_string', '')
+                new_text = edit.get('new_string', '')
+                diff_block = inline_diff_block(old_text, new_text, context=2, max_lines=80)
+                parts.append(
+                    '\nEdit {}\n{}'.format(idx, diff_block)
+                )
+            extra = len(edits) - 4
+            if extra > 0:
+                parts.append('\n... {} more edits'.format(extra))
+            command = '\n'.join(parts)
+        elif tool == 'Bash':
+            cmd = truncate(inp.get('command', ''), 2400)
+            desc = truncate(inp.get('description', ''), 600)
+            desc_block = ('\ndescription: {}'.format(desc)) if desc else ''
+            command = 'Command{}\n{}'.format(desc_block, shell_block(cmd))
+        elif 'command' in inp:
             command = inp['command']
         elif 'file_path' in inp:
             command = inp['file_path']
@@ -45,6 +153,8 @@ else:
             command = json.dumps(inp, indent=2)
     else:
         command = str(inp)
+
+    command = truncate(command, 3200)
 
 suggestions = d.get('permission_suggestions', [])
 

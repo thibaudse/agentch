@@ -425,18 +425,34 @@ struct IslandView: View {
             // Command display
             if !model.permissionCommand.isEmpty {
                 ScrollView(.vertical, showsIndicators: true) {
-                    Text(model.permissionCommand)
-                        .font(DS.Font.mono)
-                        .foregroundColor(DS.text1.opacity(0.92))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, DS.sp12)
-                        .padding(.vertical, DS.sp10)
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(permissionPreviewLines.enumerated()), id: \.offset) { index, line in
+                            let style = permissionLineStyle(for: line)
+                            HStack(alignment: .firstTextBaseline, spacing: DS.sp10) {
+                                Text("\(index + 1)")
+                                    .font(.system(size: 10, weight: .regular, design: .monospaced))
+                                    .foregroundColor(DS.text3)
+                                    .frame(width: 28, alignment: .trailing)
+
+                                Text(verbatim: line.isEmpty ? " " : line)
+                                    .font(DS.Font.mono)
+                                    .foregroundColor(permissionLineForeground(style))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .padding(.horizontal, DS.sp10)
+                            .padding(.vertical, 3)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(permissionLineBackground(style))
+                        }
+                    }
+                    .padding(.horizontal, DS.sp2)
+                    .padding(.vertical, DS.sp6)
                 }
-                .frame(maxHeight: 60)
+                .frame(maxHeight: 160)
                 .background(
                     RoundedRectangle(cornerRadius: DS.radiusS + 2, style: .continuous)
-                        .fill(DS.surface1)
+                        .fill(Color.black.opacity(0.28))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.radiusS + 2, style: .continuous)
@@ -492,6 +508,58 @@ struct IslandView: View {
         }
     }
 
+    private enum PermissionLineStyle {
+        case file
+        case added
+        case removed
+        case meta
+        case normal
+    }
+
+    private var permissionPreviewLines: [String] {
+        model.permissionCommand.components(separatedBy: .newlines)
+    }
+
+    private func permissionLineStyle(for line: String) -> PermissionLineStyle {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("File:") || trimmed.hasPrefix("Command") || trimmed.hasPrefix("Edit ") {
+            return .file
+        }
+        if trimmed.hasPrefix("replace_all:") || trimmed.hasPrefix("description:") || trimmed.hasPrefix("...") {
+            return .meta
+        }
+        if line.hasPrefix("+ ") || line == "+" { return .added }
+        if line.hasPrefix("- ") || line == "-" { return .removed }
+        return .normal
+    }
+
+    private func permissionLineForeground(_ style: PermissionLineStyle) -> Color {
+        switch style {
+        case .file:
+            return DS.text1
+        case .added:
+            return accentColor.opacity(0.95)
+        case .removed:
+            return secondaryColor.opacity(0.95)
+        case .meta:
+            return DS.text2
+        case .normal:
+            return DS.text1.opacity(0.92)
+        }
+    }
+
+    @ViewBuilder
+    private func permissionLineBackground(_ style: PermissionLineStyle) -> some View {
+        switch style {
+        case .added:
+            accentColor.opacity(0.16)
+        case .removed:
+            secondaryColor.opacity(0.15)
+        default:
+            Color.clear
+        }
+    }
+
     // MARK: - Message Scroll
 
     private var notificationMessageView: some View {
@@ -540,6 +608,20 @@ struct IslandView: View {
                 }
             )
             .onAppear { proxy.scrollTo("msg-end", anchor: .bottom) }
+            .onChange(of: model.isFullExpanded) { _, expanded in
+                guard expanded else { return }
+
+                withAnimation(DS.Anim.expand) {
+                    proxy.scrollTo("msg-end", anchor: .bottom)
+                }
+
+                // Run once more after the blurReplace/layout pass settles.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                    withAnimation(DS.Anim.expand) {
+                        proxy.scrollTo("msg-end", anchor: .bottom)
+                    }
+                }
+            }
         }
     }
 
