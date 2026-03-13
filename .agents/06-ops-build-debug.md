@@ -51,6 +51,22 @@ Check:
 - session-scoped dismiss route is configured
 - hook script under `~/.agent-island/scripts/hooks/` matches repo copy
 
+Timeout controls:
+
+- `AGENTCH_STOP_TIMEOUT_SECS` (default `590`)
+- `AGENTCH_PERMISSION_TIMEOUT_SECS` (default `110`)
+
+Hooks dismiss the matching session notch on timeout or termination signal.
+
+### Multiple daemons running
+
+Symptom: inconsistent behavior after switching source/brew installs.
+
+Fix:
+
+- ensure a single `AgentIsland` process owns `/tmp/agent-island.sock`
+- stop one runtime before starting the other
+
 ## Validation Commands
 
 ```bash

@@ -35,3 +35,10 @@ All buttons in `IslandView` must use `DSSendButton`, `DSHeaderButton`, or `DSPil
 
 - TextField focus ring and tint use session primary/secondary pair.
 - Keep shell and surfaces dark; do not reintroduce glass effects.
+
+## Permission Preview Header
+
+- `File:` and `replace_all:` are metadata, shown above the numbered diff block.
+- Metadata rows are not line-numbered.
+- File path control is plain (no pill) with accent tint and hand cursor on hover.
+- Clicking the file path should open the target file in IDE/default editor.

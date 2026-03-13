@@ -40,6 +40,12 @@ Permission/Elicitation:
 - allow/deny/suggestion -> JSON/decision payload as expected by hook script
 - dismiss -> deny-equivalent output
 
+## Timeout Safety
+
+- Stop hook waits on FIFO with timeout (`AGENTCH_STOP_TIMEOUT_SECS`, default `590`).
+- Permission/Elicitation waits with timeout (`AGENTCH_PERMISSION_TIMEOUT_SECS`, default `110`).
+- On timeout or termination signal, hooks dismiss the same `session_id` notch and return safe fallback.
+
 ## UserPromptSubmit Safety
 
 User terminal submit must call session-scoped dismiss hook (`claude-dismiss.sh`) to avoid cross-session UI dismissal.

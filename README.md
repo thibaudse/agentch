@@ -100,6 +100,21 @@ agentch-island prompt "Test" "Claude" 0 "" "" "" "**Claude:** Hello" "" "test-se
 - Daemon: `/tmp/agent-island.log`
 - Hooks: `/tmp/agent-island-hook.log`
 
+## Hook Timeout Behavior
+
+To prevent stale notch prompts when a hook times out, hooks dismiss the session-scoped notch on timeout/signal.
+
+Optional env vars:
+
+- `AGENTCH_STOP_TIMEOUT_SECS` (default `590`)
+- `AGENTCH_PERMISSION_TIMEOUT_SECS` (default `110`)
+
+Example:
+
+```bash
+AGENTCH_STOP_TIMEOUT_SECS=300 AGENTCH_PERMISSION_TIMEOUT_SECS=90 claude
+```
+
 ## Project Structure
 
 ```text

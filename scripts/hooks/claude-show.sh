@@ -130,11 +130,30 @@ RESPONSE_PIPE="/tmp/agent-island-response-$$"
 mkfifo "$RESPONSE_PIPE" 2>/dev/null || true
 trap 'rm -f "$RESPONSE_PIPE"' EXIT
 
+STOP_TIMEOUT_SECS="${AGENTCH_STOP_TIMEOUT_SECS:-590}"
+if ! [[ "$STOP_TIMEOUT_SECS" =~ ^[0-9]+$ ]]; then
+    STOP_TIMEOUT_SECS=590
+fi
+
+dismiss_notch_on_signal() {
+    echo "$(date '+%H:%M:%S') STOP: received termination signal, dismissing session '$SESSION_ID'" >> "$LOG"
+    "$ISLAND" dismiss "$SESSION_ID" >/dev/null 2>&1 || true
+    exit 0
+}
+
+trap dismiss_notch_on_signal TERM INT HUP
+
 # Show interactive island prompt (no terminal info needed — we use decision:block)
 "$ISLAND" prompt "$MSG" "Claude" "$PPID" "" "" "" "$CONVO" "$RESPONSE_PIPE" "$SESSION_ID"
 
 # Block reading from the FIFO — the island writes the user's text or "__dismiss__"
-RESPONSE=$(head -n1 "$RESPONSE_PIPE" 2>/dev/null | tr -d '\n' || echo "__dismiss__")
+if IFS= read -r -t "$STOP_TIMEOUT_SECS" RESPONSE < "$RESPONSE_PIPE"; then
+    RESPONSE=$(printf '%s' "$RESPONSE" | tr -d '\n')
+else
+    RESPONSE="__dismiss__"
+    echo "$(date '+%H:%M:%S') STOP: timed out after ${STOP_TIMEOUT_SECS}s, dismissing session '$SESSION_ID'" >> "$LOG"
+    "$ISLAND" dismiss "$SESSION_ID" >/dev/null 2>&1 || true
+fi
 rm -f "$RESPONSE_PIPE"
 
 echo "$(date '+%H:%M:%S') STOP RESPONSE: '$RESPONSE'" >> "$LOG"

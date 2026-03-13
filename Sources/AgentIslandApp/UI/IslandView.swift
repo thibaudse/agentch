@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 private struct ContentHeightKey: PreferenceKey {
     nonisolated(unsafe) static var defaultValue: CGFloat = 0
@@ -84,6 +85,7 @@ struct IslandView: View {
     @State private var contentHeight: CGFloat = 0
     @State private var contentAppeared = false
     @State private var contentAppearTask: Task<Void, Never>?
+    @State private var isPermissionFileHovering = false
 
     private var displayText: String {
         model.isFullExpanded && !model.conversation.isEmpty
@@ -422,8 +424,49 @@ struct IslandView: View {
 
     private var permissionView: some View {
         VStack(spacing: DS.sp10) {
+            if permissionFilePath != nil || permissionReplaceAllValue != nil {
+                VStack(alignment: .leading, spacing: DS.sp6) {
+                    if let filePath = permissionFilePath {
+                        Button(action: { openPermissionFile(filePath) }) {
+                            HStack(spacing: DS.sp8) {
+                                Image(systemName: "doc.text")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text(filePath)
+                                    .font(DS.Font.mono)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                    .underline(isPermissionFileHovering, color: accentColor.opacity(0.55))
+                                Spacer(minLength: 0)
+                                Image(systemName: "arrow.up.right.square")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .foregroundColor(accentColor)
+                            .padding(.horizontal, DS.sp8)
+                            .padding(.vertical, DS.sp4)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { hovering in
+                            isPermissionFileHovering = hovering
+                            if hovering {
+                                NSCursor.pointingHand.push()
+                            } else {
+                                NSCursor.pop()
+                            }
+                        }
+                    }
+
+                    if let replaceAll = permissionReplaceAllValue {
+                        Text("replace_all: \(replaceAll)")
+                            .font(DS.Font.caption)
+                            .foregroundColor(DS.text2)
+                            .padding(.horizontal, DS.sp8)
+                    }
+                }
+            }
+
             // Command display
-            if !model.permissionCommand.isEmpty {
+            if !permissionBodyLines.isEmpty {
                 ScrollView(.vertical, showsIndicators: true) {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(permissionPreviewRows) { row in
@@ -522,8 +565,49 @@ struct IslandView: View {
         let style: PermissionLineStyle
     }
 
+    private var permissionRawLines: [String] {
+        model.permissionCommand.components(separatedBy: .newlines)
+    }
+
+    private var permissionFilePath: String? {
+        for line in permissionRawLines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("File:") else { continue }
+            let value = String(trimmed.dropFirst("File:".count)).trimmingCharacters(in: .whitespaces)
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
+    private var permissionReplaceAllValue: String? {
+        for line in permissionRawLines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard trimmed.hasPrefix("replace_all:") else { continue }
+            let value = String(trimmed.dropFirst("replace_all:".count)).trimmingCharacters(in: .whitespaces)
+            return value.isEmpty ? nil : value
+        }
+        return nil
+    }
+
+    private var permissionBodyLines: [String] {
+        let filtered = permissionRawLines.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("File:") { return false }
+            if trimmed.hasPrefix("replace_all:") { return false }
+            return true
+        }
+
+        var start = 0
+        while start < filtered.count && filtered[start].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            start += 1
+        }
+
+        guard start < filtered.count else { return [] }
+        return Array(filtered[start...])
+    }
+
     private var permissionPreviewRows: [PermissionPreviewRow] {
-        let lines = model.permissionCommand.components(separatedBy: .newlines)
+        let lines = permissionBodyLines
         var rows: [PermissionPreviewRow] = []
 
         var oldLine: Int?
@@ -575,6 +659,22 @@ struct IslandView: View {
         }
 
         return rows
+    }
+
+    private func openPermissionFile(_ path: String) {
+        let expanded = (path as NSString).expandingTildeInPath
+        guard FileManager.default.fileExists(atPath: expanded) else { return }
+
+        let xedPath = "/usr/bin/xed"
+        if FileManager.default.isExecutableFile(atPath: xedPath) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: xedPath)
+            process.arguments = [expanded]
+            try? process.run()
+            return
+        }
+
+        NSWorkspace.shared.open(URL(fileURLWithPath: expanded))
     }
 
     private func parseDiffHunkLineNumbers(from line: String) -> (oldStart: Int, newStart: Int)? {

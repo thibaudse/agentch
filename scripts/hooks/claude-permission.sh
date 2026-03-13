@@ -12,7 +12,7 @@ echo "$(date '+%H:%M:%S') PERMISSION INPUT(${#INPUT}b): $(echo "$INPUT" | head -
 
 # Extract tool name, command, suggestions, and elicitation data
 EXTRACTED=$(printf '%s' "$INPUT" | python3 -c "
-import json, sys, difflib
+import json, sys, difflib, re
 
 d = json.loads(sys.stdin.read())
 tool = d.get('tool_name', 'Unknown')
@@ -55,7 +55,51 @@ else:
             return text
         return text[:limit] + ' ...'
 
-    def inline_diff_block(old_text, new_text, context=3, max_lines=220):
+    def read_file_text(path):
+        if not path:
+            return None
+        try:
+            with open(path, 'r', errors='ignore') as fh:
+                return fh.read()
+        except Exception:
+            return None
+
+    def locate_old_start_line(file_text, old_text, search_from=0):
+        if file_text is None or not old_text:
+            return None, search_from
+
+        idx = file_text.find(old_text, search_from)
+        if idx == -1:
+            return None, search_from
+
+        line = file_text.count('\n', 0, idx) + 1
+        return line, idx + max(len(old_text), 1)
+
+    def shift_hunk_header(line, base_old_line=None, base_new_line=None):
+        if base_old_line is None and base_new_line is None:
+            return line
+
+        m = re.search(r'@@\s*-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s*@@', line)
+        if not m:
+            return line
+
+        old_start = int(m.group(1))
+        old_count = m.group(2)
+        new_start = int(m.group(3))
+        new_count = m.group(4)
+
+        if base_old_line is not None:
+            old_start = old_start + base_old_line - 1
+        if base_new_line is None:
+            base_new_line = base_old_line
+        if base_new_line is not None:
+            new_start = new_start + base_new_line - 1
+
+        old_suffix = (',' + old_count) if old_count else ''
+        new_suffix = (',' + new_count) if new_count else ''
+        return '@@ -{}{} +{}{} @@'.format(old_start, old_suffix, new_start, new_suffix)
+
+    def inline_diff_block(old_text, new_text, context=3, max_lines=220, base_old_line=None, base_new_line=None):
         old_lines = old_text.splitlines()
         new_lines = new_text.splitlines()
 
@@ -73,7 +117,8 @@ else:
             if line.startswith('--- ') or line.startswith('+++ '):
                 continue
             if line.startswith('@@'):
-                formatted.append('... {}'.format(truncate_line(line, 120)))
+                shifted = shift_hunk_header(line, base_old_line=base_old_line, base_new_line=base_new_line)
+                formatted.append('... {}'.format(truncate_line(shifted, 120)))
                 continue
             if line.startswith('+'):
                 formatted.append('+ {}'.format(truncate_line(line[1:])))
@@ -105,23 +150,46 @@ else:
 
     if isinstance(inp, dict):
         file_path = inp.get('file_path', '(unknown file)')
+        file_text = read_file_text(file_path)
 
         if tool == 'Edit':
             old_text = inp.get('old_string', '')
             new_text = inp.get('new_string', '')
             replace_all = inp.get('replace_all')
             replace_info = ('\nreplace_all: {}'.format(replace_all)) if replace_all is not None else ''
-            diff_block = inline_diff_block(old_text, new_text, context=3, max_lines=220)
+            base_line = inp.get('line_start')
+            if not isinstance(base_line, int):
+                base_line, _ = locate_old_start_line(file_text, old_text, search_from=0)
+
+            diff_block = inline_diff_block(
+                old_text,
+                new_text,
+                context=3,
+                max_lines=220,
+                base_old_line=base_line,
+                base_new_line=base_line,
+            )
             command = (
                 'File: {}{}\n\n'.format(file_path, replace_info)
                 + diff_block
             )
         elif tool == 'Write':
-            content = truncate(inp.get('content', inp.get('text', '')), 1600)
-            content_lines = content.splitlines() if content else []
-            if not content_lines:
-                content_lines = ['(empty)']
-            content_block = '\n'.join(['+ {}'.format(truncate_line(line)) for line in content_lines])
+            content = inp.get('content', inp.get('text', ''))
+            if file_text is not None:
+                content_block = inline_diff_block(
+                    file_text,
+                    content,
+                    context=2,
+                    max_lines=240,
+                    base_old_line=1,
+                    base_new_line=1,
+                )
+            else:
+                preview = truncate(content, 1600)
+                content_lines = preview.splitlines() if preview else []
+                if not content_lines:
+                    content_lines = ['(empty)']
+                content_block = '\n'.join(['+ {}'.format(truncate_line(line)) for line in content_lines])
             command = (
                 'File: {}\n\n'.format(file_path)
                 + '+++ proposed\n{}'.format(content_block)
@@ -129,10 +197,22 @@ else:
         elif tool == 'MultiEdit':
             edits = inp.get('edits', [])
             parts = ['File: {}'.format(file_path)]
+            search_from = 0
             for idx, edit in enumerate(edits[:4], start=1):
                 old_text = edit.get('old_string', '')
                 new_text = edit.get('new_string', '')
-                diff_block = inline_diff_block(old_text, new_text, context=2, max_lines=80)
+                base_line = edit.get('line_start')
+                if not isinstance(base_line, int):
+                    base_line, search_from = locate_old_start_line(file_text, old_text, search_from=search_from)
+
+                diff_block = inline_diff_block(
+                    old_text,
+                    new_text,
+                    context=2,
+                    max_lines=80,
+                    base_old_line=base_line,
+                    base_new_line=base_line,
+                )
                 parts.append(
                     '\nEdit {}\n{}'.format(idx, diff_block)
                 )
@@ -175,7 +255,20 @@ SESSION_ID=$(printf '%s' "$EXTRACTED" | python3 -c "import json,sys; print(json.
 # Create a FIFO for the island to write the decision back
 PIPE="/tmp/agent-island-perm-$$"
 mkfifo "$PIPE" 2>/dev/null || true
+
+PERMISSION_TIMEOUT_SECS="${AGENTCH_PERMISSION_TIMEOUT_SECS:-110}"
+if ! [[ "$PERMISSION_TIMEOUT_SECS" =~ ^[0-9]+$ ]]; then
+    PERMISSION_TIMEOUT_SECS=110
+fi
+
+dismiss_notch_on_signal() {
+    echo "$(date '+%H:%M:%S') PERMISSION: received termination signal, dismissing session '$SESSION_ID'" >> "$LOG"
+    "$ISLAND" dismiss "$SESSION_ID" >/dev/null 2>&1 || true
+    exit 0
+}
+
 trap 'rm -f "$PIPE"' EXIT
+trap dismiss_notch_on_signal TERM INT HUP
 
 if [ "$IS_ELICITATION" = "1" ]; then
     # Elicitation: show the question and options
@@ -185,7 +278,13 @@ if [ "$IS_ELICITATION" = "1" ]; then
     "$ISLAND" elicitation "$ELICITATION_JSON" "Claude" "$PPID" "$PIPE" "$SESSION_ID"
 
     # Block reading from the FIFO — the island writes "answer:<selection>" or "deny"
-    DECISION=$(head -n1 "$PIPE" 2>/dev/null | tr -d '\n' || echo "deny")
+    if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION < "$PIPE"; then
+        DECISION=$(printf '%s' "$DECISION" | tr -d '\n')
+    else
+        DECISION="deny"
+        echo "$(date '+%H:%M:%S') ELICITATION: timed out after ${PERMISSION_TIMEOUT_SECS}s, dismissing session '$SESSION_ID'" >> "$LOG"
+        "$ISLAND" dismiss "$SESSION_ID" >/dev/null 2>&1 || true
+    fi
     rm -f "$PIPE"
 
     echo "$(date '+%H:%M:%S') ELICITATION DECISION: $DECISION" >> "$LOG"
@@ -231,7 +330,13 @@ else
     "$ISLAND" permission "$TOOL" "$COMMAND" "Claude" "$PPID" "$PIPE" "$SUGGESTIONS" "$SESSION_ID"
 
     # Block reading from the FIFO — the island writes "allow", "deny", or "allow_always:<json>"
-    DECISION=$(head -n1 "$PIPE" 2>/dev/null | tr -d '\n' || echo "deny")
+    if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION < "$PIPE"; then
+        DECISION=$(printf '%s' "$DECISION" | tr -d '\n')
+    else
+        DECISION="deny"
+        echo "$(date '+%H:%M:%S') PERMISSION: timed out after ${PERMISSION_TIMEOUT_SECS}s, dismissing session '$SESSION_ID'" >> "$LOG"
+        "$ISLAND" dismiss "$SESSION_ID" >/dev/null 2>&1 || true
+    fi
     rm -f "$PIPE"
 
     echo "$(date '+%H:%M:%S') PERMISSION DECISION: $DECISION" >> "$LOG"
