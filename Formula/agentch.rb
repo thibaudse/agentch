@@ -3,14 +3,16 @@ class Agentch < Formula
   homepage "https://github.com/thibaudse/agentch"
   url "https://github.com/thibaudse/agentch/archive/refs/heads/main.tar.gz"
   version "main"
-  sha256 :no_check
+  sha256 "97317dd3b354a8cac1a1fa38bdc5518226bd64b348707e249bf72d2ba9cc6d78"
 
   depends_on :macos
 
   def install
-    system "swift", "build", "--configuration", "release", "--product", "AgentIsland"
+    ENV["SWIFTPM_DISABLE_SANDBOX"] = "1"
+
+    system "swift", "build", "--disable-sandbox", "--configuration", "release", "--product", "AgentIsland"
     bin_path = Utils.safe_popen_read(
-      "swift", "build", "--configuration", "release", "--product", "AgentIsland", "--show-bin-path"
+      "swift", "build", "--disable-sandbox", "--configuration", "release", "--product", "AgentIsland", "--show-bin-path"
     ).strip
 
     libexec.install "#{bin_path}/AgentIsland"

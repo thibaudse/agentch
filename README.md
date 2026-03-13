@@ -23,11 +23,13 @@
 
 No repo clone needed:
 
+> Requires public tap repo: `thibaudse/homebrew-agentch`
+
 ```bash
 brew tap thibaudse/agentch
-brew install agentch
+brew install thibaudse/agentch/agentch
 agentch-install-hooks
-brew services start agentch
+brew services start thibaudse/agentch/agentch
 ```
 
 What this does:
@@ -37,6 +39,14 @@ What this does:
 - starts `agentch` at login/restart via `brew services`
 
 After hook changes, restart Claude.
+
+Update command:
+
+```bash
+brew update
+brew reinstall thibaudse/agentch/agentch
+agentch-install-hooks
+```
 
 ## Install (From Source)
 
@@ -59,7 +69,7 @@ Then restart Claude after changing hooks.
 
 `agentch` should stay available automatically.
 
-- `brew services start agentch` keeps it running across login/reboot.
+- `brew services start thibaudse/agentch/agentch` keeps it running across login/reboot.
 - Hook calls still auto-start the daemon if it is not running.
 - `island.sh` also recovers stale socket state automatically.
 
@@ -108,4 +118,14 @@ agentch-island prompt "Test" "Claude" 0 "" "" "" "**Claude:** Hello" "" "test-se
     ├── Domain/IslandCommand.swift
     ├── Infrastructure/UnixSocketServer.swift
     └── UI/
+```
+
+## Maintainer Notes (Tap)
+
+- Formula source is `Formula/agentch.rb`.
+- Formula currently tracks `main.tar.gz` and requires `sha256` refresh when source changes.
+- Refresh checksum with:
+
+```bash
+curl -Ls https://github.com/thibaudse/agentch/archive/refs/heads/main.tar.gz | shasum -a 256
 ```
