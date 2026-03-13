@@ -3,8 +3,8 @@ set -euo pipefail
 # island.sh - Bridge script to communicate with the AgentIsland helper app
 # Usage:
 #   island.sh show "message" [agent_name] [duration_secs] [pid]
-#   island.sh prompt [message] [agent_name] [pid]   # interactive text input
-#   island.sh dismiss
+#   island.sh prompt [message] [agent_name] [pid] [terminal_bundle] [tab_marker] [tty_path] [conversation] [response_pipe] [session_id]
+#   island.sh dismiss [session_id]
 #   island.sh start   # launch the helper daemon
 #   island.sh stop    # stop the helper daemon
 
@@ -113,9 +113,11 @@ case "${1:-show}" in
         agent="${3:-}"
         duration="${4:-0}"
         pid="${5:-0}"
+        session_id="${6:-}"
         message_json="$(json_escape "$message")"
         agent_json="$(json_escape "$agent")"
-        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":$duration,\"pid\":$pid}"
+        session_json="$(json_escape "$session_id")"
+        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":$duration,\"pid\":$pid,\"session_id\":$session_json}"
         ;;
     prompt)
         message="${2:-}"
@@ -126,6 +128,7 @@ case "${1:-show}" in
         tty_path="${7:-}"
         conversation="${8:-}"
         response_pipe="${9:-}"
+        session_id="${10:-}"
         message_json="$(json_escape "$message")"
         agent_json="$(json_escape "$agent")"
         terminal_json="$(json_escape "$terminal_bundle")"
@@ -133,7 +136,8 @@ case "${1:-show}" in
         tty_json="$(json_escape "$tty_path")"
         convo_json="$(json_escape "$conversation")"
         pipe_json="$(json_escape "$response_pipe")"
-        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":0,\"pid\":$pid,\"interactive\":true,\"terminal_bundle\":$terminal_json,\"tab_marker\":$marker_json,\"tty_path\":$tty_json,\"conversation\":$convo_json,\"response_pipe\":$pipe_json}"
+        session_json="$(json_escape "$session_id")"
+        send_message "{\"action\":\"show\",\"message\":$message_json,\"agent\":$agent_json,\"duration\":0,\"pid\":$pid,\"interactive\":true,\"terminal_bundle\":$terminal_json,\"tab_marker\":$marker_json,\"tty_path\":$tty_json,\"conversation\":$convo_json,\"response_pipe\":$pipe_json,\"session_id\":$session_json}"
         ;;
     permission)
         tool="${2:-}"
@@ -142,12 +146,14 @@ case "${1:-show}" in
         pid="${5:-0}"
         response_pipe="${6:-}"
         suggestions="${7:-[]}"
+        session_id="${8:-}"
         tool_json="$(json_escape "$tool")"
         command_json="$(json_escape "$command")"
         agent_json="$(json_escape "$agent")"
         pipe_json="$(json_escape "$response_pipe")"
+        session_json="$(json_escape "$session_id")"
         # suggestions is already JSON, inject it directly
-        send_message "{\"action\":\"permission\",\"tool\":$tool_json,\"message\":$command_json,\"agent\":$agent_json,\"pid\":$pid,\"response_pipe\":$pipe_json,\"permission_suggestions\":$suggestions}"
+        send_message "{\"action\":\"permission\",\"tool\":$tool_json,\"message\":$command_json,\"agent\":$agent_json,\"pid\":$pid,\"response_pipe\":$pipe_json,\"permission_suggestions\":$suggestions,\"session_id\":$session_json}"
         ;;
     elicitation)
         # elicitation_json is already a JSON object: {"question":"...","options":[...]}
@@ -155,13 +161,17 @@ case "${1:-show}" in
         agent="${3:-}"
         pid="${4:-0}"
         response_pipe="${5:-}"
+        session_id="${6:-}"
         agent_json="$(json_escape "$agent")"
         pipe_json="$(json_escape "$response_pipe")"
+        session_json="$(json_escape "$session_id")"
         # elicitation_json is raw JSON, inject directly
-        send_message "{\"action\":\"elicitation\",\"elicitation\":$elicitation_json,\"agent\":$agent_json,\"pid\":$pid,\"response_pipe\":$pipe_json}"
+        send_message "{\"action\":\"elicitation\",\"elicitation\":$elicitation_json,\"agent\":$agent_json,\"pid\":$pid,\"response_pipe\":$pipe_json,\"session_id\":$session_json}"
         ;;
     dismiss)
-        send_message '{"action":"dismiss"}'
+        session_id="${2:-}"
+        session_json="$(json_escape "$session_id")"
+        send_message "{\"action\":\"dismiss\",\"session_id\":$session_json}"
         ;;
     start)
         start_daemon

@@ -108,11 +108,14 @@ struct IslandView: View {
         return max(minH, min(contentHeight, maxH))
     }
 
-    private var statusColor: Color {
-        if model.isElicitation { return DS.accent }
-        if model.isPermission { return DS.warning }
-        return DS.success
+    private var agentPalette: DS.AgentPalette {
+        DS.palette(for: model.agentName)
     }
+
+    private var accentColor: Color { agentPalette.accent }
+    private var secondaryColor: Color { agentPalette.secondary }
+
+    private var statusColor: Color { accentColor }
 
     var body: some View {
         let geometry = model.geometry
@@ -296,7 +299,7 @@ struct IslandView: View {
                     .fadedCapsuleSurface()
                 Text(model.permissionTool)
                     .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
-                    .foregroundColor(DS.warning.opacity(0.85))
+                    .foregroundColor(accentColor.opacity(0.90))
                     .padding(.horizontal, DS.sp6)
                     .padding(.vertical, DS.sp2)
                     .fadedCapsuleSurface()
@@ -308,7 +311,10 @@ struct IslandView: View {
                 DSHeaderButton(
                     icon: model.isFullExpanded
                         ? "arrow.down.right.and.arrow.up.left"
-                        : "arrow.up.left.and.arrow.down.right"
+                        : "arrow.up.left.and.arrow.down.right",
+                    variant: .secondary,
+                    accent: accentColor,
+                    secondary: secondaryColor
                 ) {
                     withAnimation(DS.Anim.expand) {
                         model.toggleExpand()
@@ -316,7 +322,14 @@ struct IslandView: View {
                 }
             }
 
-            DSHeaderButton(icon: "xmark") { onClose() }
+            DSHeaderButton(
+                icon: "xmark",
+                variant: .secondary,
+                accent: accentColor,
+                secondary: secondaryColor
+            ) {
+                onClose()
+            }
         }
     }
 
@@ -340,11 +353,17 @@ struct IslandView: View {
     }
 
     private func elicitationOptionButton(_ option: ElicitationOption, index: Int) -> some View {
-        Button(action: { model.answerElicitation(option.label) }) {
+        DSPillButton(
+            action: { model.answerElicitation(option.label) },
+            variant: .secondary,
+            accent: accentColor,
+            secondary: secondaryColor,
+            cornerRadius: DS.radiusM
+        ) {
             HStack(spacing: DS.sp8) {
                 Text(option.label)
                     .font(DS.Font.subheadline)
-                    .foregroundColor(.white.opacity(0.95))
+                    .foregroundColor(secondaryColor)
                 if let desc = option.description, !desc.isEmpty {
                     Text(desc)
                         .font(DS.Font.caption)
@@ -354,21 +373,10 @@ struct IslandView: View {
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(.white.opacity(0.18))
+                    .foregroundColor(secondaryColor.opacity(0.65))
             }
-            .frame(maxWidth: .infinity)
             .padding(.horizontal, DS.sp14)
-            .padding(.vertical, DS.sp8 + 1)
-            .background(
-                RoundedRectangle(cornerRadius: DS.radiusM, style: .continuous)
-                    .fill(DS.surface1)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.radiusM, style: .continuous)
-                    .strokeBorder(DS.tintedBorder(DS.accent, top: 0.30, bottom: 0.10), lineWidth: 0.8)
-            )
         }
-        .buttonStyle(DSButtonStyle())
     }
 
     private var elicitationInputField: some View {
@@ -383,14 +391,16 @@ struct IslandView: View {
                     .textFieldStyle(.plain)
                     .font(.system(size: 12, design: .rounded))
                     .foregroundColor(.white)
-                    .tint(DS.accent)
+                    .tint(accentColor)
                     .focused($isInputFocused)
                     .onSubmit { model.answerElicitation(model.inputText) }
             }
 
             DSSendButton(
                 small: true,
-                isEmpty: model.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                isEmpty: model.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                accent: accentColor,
+                secondary: secondaryColor
             ) {
                 let text = model.inputText.trimmingCharacters(in: .whitespacesAndNewlines)
                 if !text.isEmpty { model.answerElicitation(text) }
@@ -430,7 +440,7 @@ struct IslandView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: DS.radiusS + 2, style: .continuous)
-                        .strokeBorder(DS.tintedBorder(DS.warning, top: 0.28, bottom: 0.08), lineWidth: 0.8)
+                        .strokeBorder(DS.tintedBorder(secondaryColor, top: 0.28, bottom: 0.08), lineWidth: 0.8)
                 )
             }
 
@@ -439,24 +449,23 @@ struct IslandView: View {
                 // No (deny)
                 DSPillButton(
                     action: { model.denyPermission() },
-                    fill: DS.surface2,
-                    border: DS.border2
+                    variant: .secondary,
+                    accent: accentColor,
+                    secondary: secondaryColor
                 ) {
                     Text("No")
                         .font(DS.Font.bodyMedium)
-                        .foregroundColor(DS.text2)
                 }
 
-                // Yes (allow) — accent blue/purple
+                // Yes (allow)
                 DSPillButton(
                     action: { model.approvePermission() },
-                    fill: DS.accentFill,
-                    border: DS.accentBorder,
-                    glowColor: DS.accent
+                    variant: .primary,
+                    accent: accentColor,
+                    secondary: secondaryColor
                 ) {
                     Text("Yes")
                         .font(DS.Font.subheadline)
-                        .foregroundColor(.white)
                 }
             }
 
@@ -465,8 +474,9 @@ struct IslandView: View {
                 ForEach(Array(model.permissionSuggestions.enumerated()), id: \.element.id) { index, suggestion in
                     DSPillButton(
                         action: { model.selectSuggestion(suggestion) },
-                        fill: DS.accent.opacity(0.06),
-                        border: DS.accent.opacity(0.16)
+                        variant: .secondary,
+                        accent: accentColor,
+                        secondary: secondaryColor
                     ) {
                         HStack(spacing: 5) {
                             Image(systemName: "checkmark.shield.fill")
@@ -475,7 +485,7 @@ struct IslandView: View {
                                 .font(DS.Font.caption)
                                 .lineLimit(1)
                         }
-                        .foregroundColor(DS.accent.opacity(0.75))
+                        .foregroundColor(secondaryColor)
                     }
                 }
             }
@@ -500,7 +510,11 @@ struct IslandView: View {
             ScrollView(.vertical, showsIndicators: true) {
                 Group {
                     if model.isFullExpanded && !model.conversation.isEmpty {
-                        ConversationView(text: model.conversation)
+                        ConversationView(
+                            text: model.conversation,
+                            primaryColor: accentColor,
+                            secondaryColor: secondaryColor
+                        )
                     } else {
                         MarkdownText(model.message)
                             .fixedSize(horizontal: false, vertical: true)
@@ -543,14 +557,16 @@ struct IslandView: View {
                     .textFieldStyle(.plain)
                     .font(DS.Font.body)
                     .foregroundColor(.white)
-                    .tint(DS.accent)
+                    .tint(accentColor)
                     .focused($isInputFocused)
                     .onSubmit { model.submit() }
             }
 
             DSSendButton(
                 small: false,
-                isEmpty: model.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                isEmpty: model.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                accent: accentColor,
+                secondary: secondaryColor
             ) {
                 model.submit()
             }
@@ -561,7 +577,7 @@ struct IslandView: View {
             Capsule(style: .continuous).fill(DS.surface1)
         )
         .overlay(
-            AnimatedGlowBorder(focused: isInputFocused)
+            AnimatedGlowBorder(focused: isInputFocused, accent: accentColor, secondary: secondaryColor)
         )
     }
 
@@ -671,23 +687,22 @@ private struct IslandTypePreview: View {
             )
 
             VStack(spacing: DS.sp12) {
-                Button(isShown ? "Hide Notch" : "Show Notch") {
-                    if isShown {
-                        hideNotch()
-                    } else {
-                        showNotch()
-                    }
+                DSPillButton(
+                    action: {
+                        if isShown {
+                            hideNotch()
+                        } else {
+                            showNotch()
+                        }
+                    },
+                    variant: .secondary,
+                    accent: DS.accent(for: model.agentName),
+                    secondary: DS.secondary(for: model.agentName)
+                ) {
+                    Text(isShown ? "Hide Notch" : "Show Notch")
+                        .font(DS.Font.subheadline)
                 }
-                .buttonStyle(DSButtonStyle())
-                .font(DS.Font.subheadline)
-                .foregroundColor(.white)
-                .padding(.horizontal, DS.sp14)
-                .padding(.vertical, DS.sp8)
-                .background(Capsule(style: .continuous).fill(DS.surface2))
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(DS.border2, lineWidth: 0.8)
-                )
+                .frame(width: 180)
                 .zIndex(2)
 
                 IslandView(model: model, onClose: { hideNotch() })

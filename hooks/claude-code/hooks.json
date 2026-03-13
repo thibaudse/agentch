@@ -28,7 +28,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh dismiss",
+            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-dismiss.sh",
             "async": true,
             "timeout": 5
           }

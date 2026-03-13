@@ -16,6 +16,7 @@ import json, sys
 
 d = json.loads(sys.stdin.read())
 tool = d.get('tool_name', 'Unknown')
+session_id = d.get('session_id', '')
 
 inp = d.get('tool_input', {})
 
@@ -52,12 +53,14 @@ print(json.dumps({
     'command': command,
     'suggestions': suggestions,
     'is_elicitation': is_elicitation,
-    'elicitation': elicitation
+    'elicitation': elicitation,
+    'session_id': session_id
 }))
 " 2>>"$LOG") || true
 
 TOOL=$(printf '%s' "$EXTRACTED" | python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('tool','Unknown'))" 2>/dev/null) || true
 IS_ELICITATION=$(printf '%s' "$EXTRACTED" | python3 -c "import json,sys; print('1' if json.loads(sys.stdin.read()).get('is_elicitation') else '0')" 2>/dev/null) || true
+SESSION_ID=$(printf '%s' "$EXTRACTED" | python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('session_id',''))" 2>/dev/null) || true
 
 # Create a FIFO for the island to write the decision back
 PIPE="/tmp/agent-island-perm-$$"
@@ -69,7 +72,7 @@ if [ "$IS_ELICITATION" = "1" ]; then
     ELICITATION_JSON=$(printf '%s' "$EXTRACTED" | python3 -c "import json,sys; print(json.dumps(json.loads(sys.stdin.read()).get('elicitation',{})))" 2>/dev/null) || true
     echo "$(date '+%H:%M:%S') ELICITATION: question=$(printf '%s' "$ELICITATION_JSON" | head -c 200) pipe=$PIPE" >> "$LOG"
 
-    "$ISLAND" elicitation "$ELICITATION_JSON" "Claude" "$PPID" "$PIPE"
+    "$ISLAND" elicitation "$ELICITATION_JSON" "Claude" "$PPID" "$PIPE" "$SESSION_ID"
 
     # Block reading from the FIFO — the island writes "answer:<selection>" or "deny"
     DECISION=$(head -n1 "$PIPE" 2>/dev/null | tr -d '\n' || echo "deny")
@@ -115,7 +118,7 @@ else
 
     echo "$(date '+%H:%M:%S') PERMISSION: tool=$TOOL command=$(echo "$COMMAND" | head -c 100) suggestions=$SUGGESTIONS pipe=$PIPE" >> "$LOG"
 
-    "$ISLAND" permission "$TOOL" "$COMMAND" "Claude" "$PPID" "$PIPE" "$SUGGESTIONS"
+    "$ISLAND" permission "$TOOL" "$COMMAND" "Claude" "$PPID" "$PIPE" "$SUGGESTIONS" "$SESSION_ID"
 
     # Block reading from the FIFO — the island writes "allow", "deny", or "allow_always:<json>"
     DECISION=$(head -n1 "$PIPE" 2>/dev/null | tr -d '\n' || echo "deny")

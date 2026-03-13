@@ -9,6 +9,7 @@
 LOG="/tmp/agent-island-hook.log"
 ISLAND="${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh"
 INPUT=$(cat)
+SESSION_ID=$(printf '%s' "$INPUT" | python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('session_id',''))" 2>/dev/null || true)
 
 echo "$(date '+%H:%M:%S') STOP HOOK INPUT: $(echo "$INPUT" | head -c 500)" >> "$LOG"
 
@@ -130,7 +131,7 @@ mkfifo "$RESPONSE_PIPE" 2>/dev/null || true
 trap 'rm -f "$RESPONSE_PIPE"' EXIT
 
 # Show interactive island prompt (no terminal info needed — we use decision:block)
-"$ISLAND" prompt "$MSG" "Claude" "$PPID" "" "" "" "$CONVO" "$RESPONSE_PIPE"
+"$ISLAND" prompt "$MSG" "Claude" "$PPID" "" "" "" "$CONVO" "$RESPONSE_PIPE" "$SESSION_ID"
 
 # Block reading from the FIFO — the island writes the user's text or "__dismiss__"
 RESPONSE=$(head -n1 "$RESPONSE_PIPE" 2>/dev/null | tr -d '\n' || echo "__dismiss__")

@@ -101,10 +101,10 @@ struct Elicitation: Decodable, Sendable {
 }
 
 enum IslandCommand: Sendable {
-    case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool, terminalBundle: String, tabMarker: String, ttyPath: String, conversation: String, responsePipe: String)
-    case permission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion])
-    case elicitation(question: Elicitation, agent: String, pid: pid_t, responsePipe: String)
-    case dismiss
+    case show(message: String, agent: String, duration: TimeInterval, pid: pid_t, interactive: Bool, terminalBundle: String, tabMarker: String, ttyPath: String, conversation: String, responsePipe: String, sessionID: String)
+    case permission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion], sessionID: String)
+    case elicitation(question: Elicitation, agent: String, pid: pid_t, responsePipe: String, sessionID: String)
+    case dismiss(sessionID: String)
     case quit
 
     init?(jsonLine data: Data) {
@@ -124,7 +124,8 @@ enum IslandCommand: Sendable {
             let tp = payload.tty_path ?? ""
             let conv = payload.conversation ?? ""
             let rp = payload.response_pipe ?? ""
-            self = .show(message: msg, agent: agt, duration: dur, pid: p, interactive: inter, terminalBundle: tb, tabMarker: tm, ttyPath: tp, conversation: conv, responsePipe: rp)
+            let sid = payload.session_id ?? ""
+            self = .show(message: msg, agent: agt, duration: dur, pid: p, interactive: inter, terminalBundle: tb, tabMarker: tm, ttyPath: tp, conversation: conv, responsePipe: rp, sessionID: sid)
         case "permission":
             self = .permission(
                 tool: payload.tool ?? "Unknown",
@@ -132,7 +133,8 @@ enum IslandCommand: Sendable {
                 agent: payload.agent ?? "",
                 pid: pid_t(payload.pid ?? 0),
                 responsePipe: payload.response_pipe ?? "",
-                suggestions: payload.permission_suggestions ?? []
+                suggestions: payload.permission_suggestions ?? [],
+                sessionID: payload.session_id ?? ""
             )
         case "elicitation":
             guard let elicitation = payload.elicitation else { return nil }
@@ -140,10 +142,11 @@ enum IslandCommand: Sendable {
                 question: elicitation,
                 agent: payload.agent ?? "",
                 pid: pid_t(payload.pid ?? 0),
-                responsePipe: payload.response_pipe ?? ""
+                responsePipe: payload.response_pipe ?? "",
+                sessionID: payload.session_id ?? ""
             )
         case "dismiss":
-            self = .dismiss
+            self = .dismiss(sessionID: payload.session_id ?? "")
         case "quit":
             self = .quit
         default:
@@ -165,6 +168,7 @@ private struct Payload: Decodable {
     let conversation: String?
     let tool: String?
     let response_pipe: String?
+    let session_id: String?
     let permission_suggestions: [PermissionSuggestion]?
     let elicitation: Elicitation?
 }

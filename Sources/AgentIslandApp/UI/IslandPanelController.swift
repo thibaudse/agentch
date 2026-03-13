@@ -14,6 +14,69 @@ private final class OverlayPanel: NSPanel {
 
 @MainActor
 final class IslandPanelController: NSObject {
+    private enum PendingCommand {
+        case show(
+            message: String,
+            agent: String,
+            duration: TimeInterval,
+            pid: pid_t,
+            interactive: Bool,
+            terminalBundle: String,
+            tabMarker: String,
+            ttyPath: String,
+            conversation: String,
+            responsePipe: String,
+            sessionID: String
+        )
+        case permission(
+            tool: String,
+            command: String,
+            agent: String,
+            pid: pid_t,
+            responsePipe: String,
+            suggestions: [PermissionSuggestion],
+            sessionID: String
+        )
+        case elicitation(
+            question: Elicitation,
+            agent: String,
+            pid: pid_t,
+            responsePipe: String,
+            sessionID: String
+        )
+
+        var sessionID: String {
+            switch self {
+            case let .show(_, _, _, _, _, _, _, _, _, _, sessionID):
+                return sessionID
+            case let .permission(_, _, _, _, _, _, sessionID):
+                return sessionID
+            case let .elicitation(_, _, _, _, sessionID):
+                return sessionID
+            }
+        }
+
+        var cancelPipe: String {
+            switch self {
+            case let .show(_, _, _, _, _, _, _, _, _, responsePipe, _):
+                return responsePipe
+            case let .permission(_, _, _, _, responsePipe, _, _):
+                return responsePipe
+            case let .elicitation(_, _, _, responsePipe, _):
+                return responsePipe
+            }
+        }
+
+        var cancelMessage: String {
+            switch self {
+            case .show:
+                return "__dismiss__"
+            case .permission, .elicitation:
+                return "deny"
+            }
+        }
+    }
+
     private let viewModel = IslandViewModel()
     private let topmostSpaceManager = TopmostSpaceManager()
     private let processMonitor = ProcessMonitor()
@@ -29,6 +92,10 @@ final class IslandPanelController: NSObject {
     private var hideTask: Task<Void, Never>?
     nonisolated(unsafe) private var trackingTask: Task<Void, Never>?
     private var lastContentHeight: CGFloat = 0
+    private var permissionResponsePipe: String = ""
+    private var pendingCommands: [PendingCommand] = []
+    private var isTransitioningOut = false
+    private var activeSessionID: String = ""
 
     override init() {
         super.init()
@@ -42,6 +109,117 @@ final class IslandPanelController: NSObject {
         trackingTask?.cancel()
     }
 
+    private var hasBlockingPromptInFlight: Bool {
+        !responsePipe.isEmpty || !permissionResponsePipe.isEmpty
+    }
+
+    private var isBlockingPromptPresented: Bool {
+        isPresented && (viewModel.interactive || viewModel.isPermission || viewModel.isElicitation)
+    }
+
+    private func normalizedSessionID(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func shouldQueueBlockingCommand() -> Bool {
+        isBlockingPromptPresented || hasBlockingPromptInFlight || isTransitioningOut
+    }
+
+    private func enqueue(_ command: PendingCommand) {
+        let sid = normalizedSessionID(command.sessionID)
+        if !sid.isEmpty,
+           let index = pendingCommands.firstIndex(where: { normalizedSessionID($0.sessionID) == sid }) {
+            let old = pendingCommands[index]
+            writePipeMessage(old.cancelMessage, to: old.cancelPipe)
+            pendingCommands[index] = command
+            NSLog("agentch: replaced queued blocking command for session=%@ (pending=%d)", sid, pendingCommands.count)
+            return
+        }
+
+        pendingCommands.append(command)
+        NSLog("agentch: queued blocking command session=%@ (pending=%d)", sid, pendingCommands.count)
+    }
+
+    private func writePipeMessage(_ message: String, to pipe: String) {
+        guard !pipe.isEmpty else { return }
+        Task.detached {
+            guard let fh = FileHandle(forWritingAtPath: pipe) else {
+                NSLog("agentch: Failed to open queued response pipe %@", pipe)
+                return
+            }
+            fh.write("\(message)\n".data(using: .utf8)!)
+            fh.closeFile()
+            NSLog("agentch: Wrote queued response '%@' to pipe %@", message, pipe)
+        }
+    }
+
+    private func removeQueuedCommands(forSessionID sessionID: String) -> Int {
+        let sid = normalizedSessionID(sessionID)
+        guard !sid.isEmpty else { return 0 }
+
+        let (kept, removed) = pendingCommands.reduce(into: ([PendingCommand](), [PendingCommand]())) { acc, command in
+            if normalizedSessionID(command.sessionID) == sid {
+                acc.1.append(command)
+            } else {
+                acc.0.append(command)
+            }
+        }
+
+        pendingCommands = kept
+        for command in removed {
+            writePipeMessage(command.cancelMessage, to: command.cancelPipe)
+        }
+
+        if !removed.isEmpty {
+            NSLog("agentch: removed queued commands for session=%@ count=%d", sid, removed.count)
+        }
+
+        return removed.count
+    }
+
+    private func presentNextQueuedCommandIfNeeded() {
+        guard !shouldQueueBlockingCommand() else { return }
+        guard !pendingCommands.isEmpty else { return }
+
+        let next = pendingCommands.removeFirst()
+        NSLog("agentch: presenting queued command (remaining=%d)", pendingCommands.count)
+
+        switch next {
+        case let .show(message, agent, duration, pid, interactive, terminalBundle, tabMarker, ttyPath, conversation, responsePipe, sessionID):
+            show(
+                message: message,
+                agent: agent,
+                duration: duration,
+                pid: pid,
+                interactive: interactive,
+                terminalBundle: terminalBundle,
+                tabMarker: tabMarker,
+                ttyPath: ttyPath,
+                conversation: conversation,
+                responsePipe: responsePipe,
+                sessionID: sessionID
+            )
+        case let .permission(tool, command, agent, pid, responsePipe, suggestions, sessionID):
+            showPermission(
+                tool: tool,
+                command: command,
+                agent: agent,
+                pid: pid,
+                responsePipe: responsePipe,
+                suggestions: suggestions,
+                sessionID: sessionID
+            )
+        case let .elicitation(question, agent, pid, responsePipe, sessionID):
+            showElicitation(
+                question: question,
+                agent: agent,
+                pid: pid,
+                responsePipe: responsePipe,
+                sessionID: sessionID
+            )
+        }
+    }
+
     func show(
         message: String,
         agent: String,
@@ -52,9 +230,32 @@ final class IslandPanelController: NSObject {
         tabMarker: String = "",
         ttyPath: String = "",
         conversation: String = "",
-        responsePipe: String = ""
+        responsePipe: String = "",
+        sessionID: String = ""
     ) {
+        let sid = normalizedSessionID(sessionID)
+
+        if interactive, shouldQueueBlockingCommand() {
+            enqueue(
+                PendingCommand.show(
+                    message: message,
+                    agent: agent,
+                    duration: duration,
+                    pid: pid,
+                    interactive: interactive,
+                    terminalBundle: terminalBundle,
+                    tabMarker: tabMarker,
+                    ttyPath: ttyPath,
+                    conversation: conversation,
+                    responsePipe: responsePipe,
+                    sessionID: sid
+                )
+            )
+            return
+        }
+
         cancelPendingTasks()
+        isTransitioningOut = false
 
         // Monitor the agent process — auto-dismiss if it exits
         processMonitor.monitor(pid: pid) { [weak self] in
@@ -84,6 +285,7 @@ final class IslandPanelController: NSObject {
             self.tabMarker = tabMarker
             self.ttyPath = ttyPath
             self.responsePipe = responsePipe
+            self.activeSessionID = sid
             // Also capture the window ID as fallback
             if let app = previousApp {
                 previousWindowID = TerminalPaster.frontmostWindowID(of: app)
@@ -97,6 +299,7 @@ final class IslandPanelController: NSObject {
             self.tabMarker = ""
             self.ttyPath = ""
             self.responsePipe = ""
+            self.activeSessionID = ""
         }
 
         // Track content height for click-through hit testing bounds.
@@ -155,7 +358,17 @@ final class IslandPanelController: NSObject {
         }
     }
 
-    func dismiss() {
+    func dismiss(sessionID: String = "") {
+        let targetSessionID = normalizedSessionID(sessionID)
+        let currentSessionID = normalizedSessionID(activeSessionID)
+
+        // Session-scoped dismiss for multi-session Claude queues.
+        // If the target is queued (not currently visible), cancel just that queued item.
+        if !targetSessionID.isEmpty, targetSessionID != currentSessionID {
+            _ = removeQueuedCommands(forSessionID: targetSessionID)
+            return
+        }
+
         // If a permission prompt is active and user dismisses, deny it
         if !permissionResponsePipe.isEmpty {
             handlePermissionDecision(allow: false)
@@ -178,6 +391,7 @@ final class IslandPanelController: NSObject {
         autoDismissTask?.cancel()
         autoDismissTask = nil
         hideTask?.cancel()
+        isTransitioningOut = true
         panel?.ignoresMouseEvents = true
         panel?.acceptsKeyInput = false
 
@@ -208,28 +422,59 @@ final class IslandPanelController: NSObject {
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                guard !self.viewModel.expanded else { return }
-                guard let panel = self.panel else { return }
-                self.isPresented = false
-                self.topmostSpaceManager.detach(window: panel)
-                panel.orderOut(nil)
-                self.stopTrackingLoop()
-                // Reset contentVisible for next show
-                self.viewModel.contentVisible = true
+                self.hideTask = nil
+                self.isTransitioningOut = false
+
+                if !self.viewModel.expanded, let panel = self.panel {
+                    self.isPresented = false
+                    self.topmostSpaceManager.detach(window: panel)
+                    panel.orderOut(nil)
+                    self.stopTrackingLoop()
+                    // Reset contentVisible for next show
+                    self.viewModel.contentVisible = true
+                }
+
+                self.activeSessionID = ""
 
                 if wasInteractive, let app = appToRestore {
                     app.activate()
                 }
+
+                self.presentNextQueuedCommandIfNeeded()
             }
         }
     }
 
     // MARK: - Permission Request
 
-    private var permissionResponsePipe: String = ""
+    func showPermission(
+        tool: String,
+        command: String,
+        agent: String,
+        pid: pid_t,
+        responsePipe: String,
+        suggestions: [PermissionSuggestion] = [],
+        sessionID: String = ""
+    ) {
+        let sid = normalizedSessionID(sessionID)
 
-    func showPermission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion] = []) {
+        if shouldQueueBlockingCommand() {
+            enqueue(
+                PendingCommand.permission(
+                    tool: tool,
+                    command: command,
+                    agent: agent,
+                    pid: pid,
+                    responsePipe: responsePipe,
+                    suggestions: suggestions,
+                    sessionID: sid
+                )
+            )
+            return
+        }
+
         cancelPendingTasks()
+        isTransitioningOut = false
 
         processMonitor.monitor(pid: pid) { [weak self] in
             self?.handlePermissionDecision(allow: false)
@@ -240,6 +485,7 @@ final class IslandPanelController: NSObject {
         viewModel.updatePermission(tool: tool, command: command, agentName: agent, geometry: geometry, suggestions: suggestions)
         viewModel.expanded = false
         permissionResponsePipe = responsePipe
+        activeSessionID = sid
 
         viewModel.onPermissionDecision = { [weak self] allow in
             self?.handlePermissionDecision(allow: allow)
@@ -305,8 +551,30 @@ final class IslandPanelController: NSObject {
 
     // MARK: - Elicitation (AskUserQuestion)
 
-    func showElicitation(question: Elicitation, agent: String, pid: pid_t, responsePipe: String) {
+    func showElicitation(
+        question: Elicitation,
+        agent: String,
+        pid: pid_t,
+        responsePipe: String,
+        sessionID: String = ""
+    ) {
+        let sid = normalizedSessionID(sessionID)
+
+        if shouldQueueBlockingCommand() {
+            enqueue(
+                PendingCommand.elicitation(
+                    question: question,
+                    agent: agent,
+                    pid: pid,
+                    responsePipe: responsePipe,
+                    sessionID: sid
+                )
+            )
+            return
+        }
+
         cancelPendingTasks()
+        isTransitioningOut = false
 
         processMonitor.monitor(pid: pid) { [weak self] in
             self?.handlePermissionDecision(allow: false)
@@ -318,6 +586,7 @@ final class IslandPanelController: NSObject {
         viewModel.updateElicitation(question: question, agentName: agent, geometry: geometry)
         viewModel.expanded = false
         permissionResponsePipe = responsePipe
+        activeSessionID = sid
 
         viewModel.onElicitationAnswer = { [weak self] answer in
             self?.handleElicitationAnswer(answer)
@@ -496,6 +765,7 @@ final class IslandPanelController: NSObject {
         autoDismissTask?.cancel()
         autoDismissTask = nil
         hideTask?.cancel()
+        isTransitioningOut = true
         panel?.ignoresMouseEvents = true
         panel?.acceptsKeyInput = false
         previousApp = nil
@@ -503,6 +773,7 @@ final class IslandPanelController: NSObject {
         tabMarker = ""
         ttyPath = ""
         responsePipe = ""
+        activeSessionID = ""
 
         // Same 2-step animation as dismiss(): content fade → notch collapse → remove
         withAnimation(DS.Anim.contentOut) {
@@ -522,13 +793,20 @@ final class IslandPanelController: NSObject {
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
                 guard let self else { return }
-                guard !self.viewModel.expanded else { return }
-                guard let panel = self.panel else { return }
-                self.isPresented = false
-                self.topmostSpaceManager.detach(window: panel)
-                panel.orderOut(nil)
-                self.stopTrackingLoop()
-                self.viewModel.contentVisible = true
+                self.hideTask = nil
+                self.isTransitioningOut = false
+
+                if !self.viewModel.expanded, let panel = self.panel {
+                    self.isPresented = false
+                    self.topmostSpaceManager.detach(window: panel)
+                    panel.orderOut(nil)
+                    self.stopTrackingLoop()
+                    self.viewModel.contentVisible = true
+                }
+
+                self.activeSessionID = ""
+
+                self.presentNextQueuedCommandIfNeeded()
             }
         }
     }
@@ -667,5 +945,7 @@ final class IslandPanelController: NSObject {
         autoDismissTask = nil
         hideTask?.cancel()
         hideTask = nil
+        isTransitioningOut = false
+        activeSessionID = ""
     }
 }

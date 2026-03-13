@@ -22,6 +22,8 @@ cp "$SCRIPT_DIR/hooks/claude-show.sh" "$INSTALL_DIR/scripts/hooks/claude-show.sh
 chmod +x "$INSTALL_DIR/scripts/hooks/claude-show.sh"
 cp "$SCRIPT_DIR/hooks/claude-permission.sh" "$INSTALL_DIR/scripts/hooks/claude-permission.sh"
 chmod +x "$INSTALL_DIR/scripts/hooks/claude-permission.sh"
+cp "$SCRIPT_DIR/hooks/claude-dismiss.sh" "$INSTALL_DIR/scripts/hooks/claude-dismiss.sh"
+chmod +x "$INSTALL_DIR/scripts/hooks/claude-dismiss.sh"
 
 echo "Built successfully: $INSTALL_DIR/$BINARY_NAME"
 echo ""

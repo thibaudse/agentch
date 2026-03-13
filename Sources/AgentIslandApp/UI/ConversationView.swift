@@ -5,6 +5,18 @@ import SwiftUI
 /// Expects the format: `**You:** text\n\n**Claude:** text\n\n...`
 struct ConversationView: View {
     let text: String
+    let primaryColor: Color
+    let secondaryColor: Color
+
+    init(
+        text: String,
+        primaryColor: Color = DS.accent,
+        secondaryColor: Color = DS.secondary(for: "claude")
+    ) {
+        self.text = text
+        self.primaryColor = primaryColor
+        self.secondaryColor = secondaryColor
+    }
 
     private var messages: [ChatMessage] {
         parseChatMessages(text)
@@ -24,11 +36,11 @@ struct ConversationView: View {
                     // Sender tag
                     HStack(spacing: DS.sp4) {
                         Circle()
-                            .fill(msg.isUser ? DS.accent : DS.accentPurple)
+                            .fill(msg.isUser ? secondaryColor : primaryColor)
                             .frame(width: 5, height: 5)
                         Text(msg.sender)
                             .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                            .foregroundColor(msg.isUser ? DS.accent : DS.accentPurple)
+                            .foregroundColor(msg.isUser ? secondaryColor : primaryColor)
                             .tracking(0.5)
                             .textCase(.uppercase)
                     }

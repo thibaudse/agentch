@@ -5,17 +5,36 @@ enum DS {
 
     // MARK: - Color Palette
 
-    /// Primary accent — electric blue
-    static let accent = Color(red: 0.30, green: 0.58, blue: 1.0)
-    /// Secondary accent — cyan highlight (outer glows, gradient endpoint)
-    static let accentCyan = Color(red: 0.0, green: 0.82, blue: 1.0)
-    /// Tertiary accent — purple depth (gradient endpoint)
-    static let accentPurple = Color(red: 0.50, green: 0.30, blue: 1.0)
+    struct AgentPalette {
+        let accent: Color
+        let secondary: Color
+    }
 
-    /// Success — vivid green (status only)
-    static let success = Color(red: 0.25, green: 0.90, blue: 0.50)
-    /// Warning — rich amber
-    static let warning = Color(red: 1.0, green: 0.62, blue: 0.15)
+    // Claude brand colors from Mobbin
+    static let claudeAccent = Color(red: 0.7569, green: 0.3725, blue: 0.2353)     // #C15F3C
+    static let claudeSecondary = Color(red: 0.6941, green: 0.6784, blue: 0.6314)  // #B1ADA1
+    static let claudePampas = Color(red: 0.9569, green: 0.9529, blue: 0.9333)     // #F4F3EE
+    static let claudeWhite = Color.white                                              // #FFFFFF
+
+    static let defaultAccent = claudeAccent
+    static let defaultSecondary = claudeSecondary
+
+    static func palette(for agentName: String) -> AgentPalette {
+        _ = agentName
+        return AgentPalette(accent: defaultAccent, secondary: defaultSecondary)
+    }
+
+    static func accent(for agentName: String) -> Color { palette(for: agentName).accent }
+    static func secondary(for agentName: String) -> Color { palette(for: agentName).secondary }
+
+    // Backward-compatible defaults for non-agent-specific UI elements.
+    static let accent = defaultAccent
+    static let accentCyan = defaultSecondary
+    static let accentPurple = claudePampas
+
+    /// Backward aliases that stay in Claude palette bounds.
+    static let success = claudeAccent
+    static let warning = claudeSecondary
 
     // MARK: Surfaces (on black background)
 
@@ -36,25 +55,11 @@ enum DS {
 
     // MARK: - Gradients
 
-    /// Accent gradient — blue → cyan
+    /// Accent gradient — default accent pair
     static let accentGradient = LinearGradient(
-        colors: [accent, accentCyan],
+        colors: [claudeAccent, claudeSecondary],
         startPoint: .leading,
         endPoint: .trailing
-    )
-
-    /// Accent fill for primary buttons — blue → purple (vertical)
-    static let accentFill = LinearGradient(
-        colors: [accent.opacity(0.45), accentPurple.opacity(0.30)],
-        startPoint: .top,
-        endPoint: .bottom
-    )
-
-    /// Accent border for primary buttons
-    static let accentBorder = LinearGradient(
-        colors: [accent.opacity(0.65), accentPurple.opacity(0.30)],
-        startPoint: .top,
-        endPoint: .bottom
     )
 
     static func borderGradient(top: Double = 0.10, bottom: Double = 0.04) -> LinearGradient {
@@ -170,6 +175,13 @@ extension View {
 
 // MARK: - Button Styles
 
+extension DS {
+    enum ButtonVariant {
+        case primary
+        case secondary
+    }
+}
+
 /// Standard press feedback — springy scale + dim + brief glow flash.
 struct DSButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -210,6 +222,8 @@ struct PulsingDot: View {
 
 struct AnimatedGlowBorder: View {
     let focused: Bool
+    let accent: Color
+    let secondary: Color
     @State private var rotation: Double = 0
     @State private var glowPhase = false
 
@@ -218,10 +232,10 @@ struct AnimatedGlowBorder: View {
             .strokeBorder(
                 AngularGradient(
                     gradient: Gradient(colors: [
-                        DS.accent,
-                        DS.accentCyan,
-                        DS.accentPurple.opacity(0.5),
-                        DS.accent,
+                        accent,
+                        secondary,
+                        accent.opacity(0.55),
+                        accent,
                     ]),
                     center: .center,
                     angle: .degrees(rotation)
@@ -229,12 +243,11 @@ struct AnimatedGlowBorder: View {
                 lineWidth: focused ? 1.5 : 1.0
             )
             .opacity(focused ? 0.85 : 0.35)
-            // Layered glow — blue core, cyan mid, purple fringe
-            .shadow(color: DS.accent.opacity(focused ? 0.55 : (glowPhase ? 0.14 : 0.08)),
+            .shadow(color: accent.opacity(focused ? 0.55 : (glowPhase ? 0.14 : 0.08)),
                     radius: focused ? 8 : (glowPhase ? 5 : 3))
-            .shadow(color: DS.accentCyan.opacity(focused ? 0.30 : (glowPhase ? 0.07 : 0.03)),
+            .shadow(color: secondary.opacity(focused ? 0.30 : (glowPhase ? 0.07 : 0.03)),
                     radius: focused ? 20 : (glowPhase ? 10 : 6))
-            .shadow(color: DS.accentPurple.opacity(focused ? 0.14 : 0.02),
+            .shadow(color: accent.opacity(focused ? 0.14 : 0.02),
                     radius: focused ? 35 : 12)
             .animation(DS.Anim.focus, value: focused)
             .onAppear {
@@ -249,20 +262,31 @@ struct AnimatedGlowBorder: View {
 struct DSSendButton: View {
     let small: Bool
     let isEmpty: Bool
+    let accent: Color
+    let secondary: Color
     let action: () -> Void
 
     var body: some View {
         let size: CGFloat = small ? 20 : 24
+        let variant: DS.ButtonVariant = isEmpty ? .secondary : .primary
+
         Button(action: action) {
             Image(systemName: "arrow.up")
                 .font(.system(size: small ? 10 : 11, weight: .bold))
-                .foregroundColor(isEmpty ? .white.opacity(0.12) : .white)
+                .foregroundColor(variant == .primary ? .white : secondary.opacity(0.7))
                 .frame(width: size, height: size)
                 .background(
                     Circle()
-                        .fill(isEmpty ? DS.surface2 : DS.accent)
+                        .fill(variant == .primary ? accent : .clear)
                 )
-                .glow(isEmpty ? .clear : DS.accent, radius: 6)
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            variant == .primary ? accent.opacity(0.92) : secondary.opacity(0.60),
+                            lineWidth: 0.9
+                        )
+                )
+                .glow(variant == .primary ? accent : .clear, radius: 6)
         }
         .buttonStyle(DSButtonStyle())
         .disabled(isEmpty)
@@ -274,20 +298,47 @@ struct DSSendButton: View {
 
 struct DSHeaderButton: View {
     let icon: String
+    let variant: DS.ButtonVariant
+    let accent: Color
+    let secondary: Color
     let action: () -> Void
     @State private var isHovering = false
+
+    init(
+        icon: String,
+        variant: DS.ButtonVariant = .secondary,
+        accent: Color,
+        secondary: Color,
+        action: @escaping () -> Void
+    ) {
+        self.icon = icon
+        self.variant = variant
+        self.accent = accent
+        self.secondary = secondary
+        self.action = action
+    }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 9.5, weight: .bold))
-                .foregroundColor(.white.opacity(isHovering ? 0.85 : 0.40))
+                .foregroundColor(variant == .primary ? .white : secondary.opacity(isHovering ? 0.95 : 0.72))
                 .frame(width: 22, height: 22)
                 .animation(nil, value: icon)
-                .fadedCircleSurface(interactive: true)
+                .background(
+                    Circle()
+                        .fill(variant == .primary ? accent : .clear)
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            variant == .primary ? accent.opacity(0.92) : secondary.opacity(0.58),
+                            lineWidth: 0.9
+                        )
+                )
                 .scaleEffect(isHovering ? 1.08 : 1.0)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DSButtonStyle())
         .onHover { h in withAnimation(DS.Anim.hover) { isHovering = h } }
     }
 }
@@ -296,45 +347,76 @@ struct DSHeaderButton: View {
 
 struct DSPillButton<Label: View>: View {
     let action: () -> Void
-    let fill: AnyShapeStyle
-    let border: AnyShapeStyle
-    let glowColor: Color?
+    let variant: DS.ButtonVariant
+    let accent: Color
+    let secondary: Color
+    let cornerRadius: CGFloat?
     @ViewBuilder let label: () -> Label
     @State private var isHovering = false
 
     init(
         action: @escaping () -> Void,
-        fill: some ShapeStyle = DS.surface1,
-        border: some ShapeStyle = DS.border1,
-        glowColor: Color? = nil,
+        variant: DS.ButtonVariant,
+        accent: Color,
+        secondary: Color,
+        cornerRadius: CGFloat? = nil,
         @ViewBuilder label: @escaping () -> Label
     ) {
         self.action = action
-        self.fill = AnyShapeStyle(fill)
-        self.border = AnyShapeStyle(border)
-        self.glowColor = glowColor
+        self.variant = variant
+        self.accent = accent
+        self.secondary = secondary
+        self.cornerRadius = cornerRadius
         self.label = label
     }
 
     var body: some View {
         Button(action: action) {
-            label()
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, DS.sp8 + 1)
-                .background(Capsule(style: .continuous).fill(fill))
-                .overlay(
-                    Capsule(style: .continuous)
-                        .strokeBorder(border, lineWidth: 0.8)
-                )
-                .overlay(
-                    // Hover highlight
-                    Capsule(style: .continuous)
-                        .fill(Color.white.opacity(isHovering ? 0.04 : 0))
-                )
-                .if(glowColor != nil) { $0.glow(glowColor!, radius: isHovering ? 14 : 10) }
+            if let cornerRadius {
+                labelBody
+                    .background(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(variant == .primary ? accent : .clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .strokeBorder(
+                                variant == .primary ? accent.opacity(0.92) : secondary.opacity(0.58),
+                                lineWidth: 0.9
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                            .fill(Color.white.opacity(isHovering ? 0.04 : 0))
+                    )
+            } else {
+                labelBody
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(variant == .primary ? accent : .clear)
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .strokeBorder(
+                                variant == .primary ? accent.opacity(0.92) : secondary.opacity(0.58),
+                                lineWidth: 0.9
+                            )
+                    )
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(isHovering ? 0.04 : 0))
+                    )
+            }
         }
         .buttonStyle(DSButtonStyle())
         .onHover { h in withAnimation(DS.Anim.hover) { isHovering = h } }
+    }
+
+    private var labelBody: some View {
+        label()
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, DS.sp8 + 1)
+            .foregroundColor(variant == .primary ? .white : secondary)
     }
 }
 
