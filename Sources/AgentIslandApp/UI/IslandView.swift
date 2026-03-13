@@ -426,24 +426,23 @@ struct IslandView: View {
             if !model.permissionCommand.isEmpty {
                 ScrollView(.vertical, showsIndicators: true) {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(permissionPreviewLines.enumerated()), id: \.offset) { index, line in
-                            let style = permissionLineStyle(for: line)
+                        ForEach(permissionPreviewRows) { row in
                             HStack(alignment: .firstTextBaseline, spacing: DS.sp10) {
-                                Text("\(index + 1)")
+                                Text(row.number.isEmpty ? " " : row.number)
                                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                                     .foregroundColor(DS.text3)
                                     .frame(width: 28, alignment: .trailing)
 
-                                Text(verbatim: line.isEmpty ? " " : line)
+                                Text(verbatim: row.text.isEmpty ? " " : row.text)
                                     .font(DS.Font.mono)
-                                    .foregroundColor(permissionLineForeground(style))
+                                    .foregroundColor(permissionLineForeground(row.style))
                                     .fixedSize(horizontal: false, vertical: true)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .padding(.horizontal, DS.sp10)
                             .padding(.vertical, 3)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(permissionLineBackground(style))
+                            .background(permissionLineBackground(row.style))
                         }
                     }
                     .padding(.horizontal, DS.sp2)
@@ -516,8 +515,78 @@ struct IslandView: View {
         case normal
     }
 
-    private var permissionPreviewLines: [String] {
-        model.permissionCommand.components(separatedBy: .newlines)
+    private struct PermissionPreviewRow: Identifiable {
+        let id: Int
+        let number: String
+        let text: String
+        let style: PermissionLineStyle
+    }
+
+    private var permissionPreviewRows: [PermissionPreviewRow] {
+        let lines = model.permissionCommand.components(separatedBy: .newlines)
+        var rows: [PermissionPreviewRow] = []
+
+        var oldLine: Int?
+        var newLine: Int?
+
+        for (index, line) in lines.enumerated() {
+            let style = permissionLineStyle(for: line)
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if let hunk = parseDiffHunkLineNumbers(from: trimmed) {
+                oldLine = hunk.oldStart
+                newLine = hunk.newStart
+            }
+
+            var number = ""
+
+            if line.hasPrefix("  ") {
+                if let n = newLine { number = "\(n)" }
+                oldLine = oldLine.map { $0 + 1 }
+                newLine = newLine.map { $0 + 1 }
+            } else if line.hasPrefix("+ ") {
+                if let n = newLine { number = "\(n)" }
+                newLine = newLine.map { $0 + 1 }
+            } else if line.hasPrefix("- ") {
+                if let n = oldLine { number = "\(n)" }
+                oldLine = oldLine.map { $0 + 1 }
+            } else if trimmed.hasPrefix("+++ proposed") && oldLine == nil && newLine == nil {
+                // Write-style preview without unified diff hunk headers.
+                oldLine = 1
+                newLine = 1
+            }
+
+            rows.append(
+                PermissionPreviewRow(
+                    id: index,
+                    number: number,
+                    text: line,
+                    style: style
+                )
+            )
+        }
+
+        return rows
+    }
+
+    private func parseDiffHunkLineNumbers(from line: String) -> (oldStart: Int, newStart: Int)? {
+        let pattern = #"@@\s*-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s*@@"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = regex.firstMatch(in: line, options: [], range: range), match.numberOfRanges >= 3 else {
+            return nil
+        }
+
+        guard
+            let oldRange = Range(match.range(at: 1), in: line),
+            let newRange = Range(match.range(at: 2), in: line),
+            let oldStart = Int(line[oldRange]),
+            let newStart = Int(line[newRange])
+        else {
+            return nil
+        }
+
+        return (oldStart, newStart)
     }
 
     private func permissionLineStyle(for line: String) -> PermissionLineStyle {
