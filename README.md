@@ -40,13 +40,22 @@ What this does:
 
 After hook changes, restart Claude.
 
-Update command:
+## Update (Homebrew)
+
+Use this flow whenever you want the latest `agentch` from the tap:
 
 ```bash
 brew update
 brew reinstall thibaudse/agentch/agentch
 agentch-install-hooks
+brew services restart thibaudse/agentch/agentch
 ```
+
+Notes:
+
+- `agentch-install-hooks` re-applies hook commands in `~/.claude/settings.json`.
+- Restart Claude after updating hooks.
+- If service status is not `started`, run `brew services start thibaudse/agentch/agentch`.
 
 ## Install (From Source)
 
@@ -93,6 +102,25 @@ agentch-island stop
 
 ```bash
 agentch-island prompt "Test" "Claude" 0 "" "" "" "**Claude:** Hello" "" "test-session"
+```
+
+## Bash Permission Preview
+
+For `Bash` permission prompts, `description` is rendered as metadata above the preview and only command lines are shown in the code block.
+
+Expected payload shape from hooks:
+
+```text
+Command
+description: <short explanation>
+$ <actual command>
+  && <continued command>
+```
+
+Manual smoke test:
+
+```bash
+agentch-island permission "Bash" $'description: Test description outside code block\nCommand\n$ echo "hello"\n  && pwd' "Claude" 0 "" "[]" "bash-preview-test" "agent-island"
 ```
 
 ## Logs
