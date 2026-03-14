@@ -26,6 +26,49 @@ resolve_branch_label() {
 
 BRANCH_LABEL="$(resolve_branch_label "$CWD")"
 
+read_fifo_line_with_timeout() {
+    local fifo_path="$1"
+    local timeout_secs="$2"
+
+    python3 - "$fifo_path" "$timeout_secs" <<'PY'
+import os
+import select
+import sys
+import time
+
+path = sys.argv[1]
+try:
+    timeout = float(sys.argv[2])
+except Exception:
+    timeout = 0.0
+
+deadline = time.monotonic() + max(timeout, 0.0)
+fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+
+try:
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            sys.exit(1)
+
+        ready, _, _ = select.select([fd], [], [], remaining)
+        if not ready:
+            sys.exit(1)
+
+        chunk = os.read(fd, 8192)
+        if not chunk:
+            time.sleep(0.01)
+            continue
+
+        line = chunk.decode("utf-8", "ignore").splitlines()
+        if line:
+            print(line[0])
+            sys.exit(0)
+finally:
+    os.close(fd)
+PY
+}
+
 echo "$(date '+%H:%M:%S') PERMISSION INPUT(${#INPUT}b): $(echo "$INPUT" | head -c 1000)" >> "$LOG"
 
 # Extract tool name, command, suggestions, and elicitation data
@@ -241,6 +284,7 @@ else:
         elif tool == 'Bash':
             cmd = truncate(inp.get('command', ''), 2400)
             desc = truncate(inp.get('description', ''), 600)
+            desc = ' '.join(desc.splitlines()).strip()
             desc_block = ('\ndescription: {}'.format(desc)) if desc else ''
             command = 'Command{}\n{}'.format(desc_block, shell_block(cmd))
         elif 'command' in inp:
@@ -273,12 +317,6 @@ SESSION_ID=$(printf '%s' "$EXTRACTED" | python3 -c "import json,sys; print(json.
 # Create a FIFO for the island to write the decision back
 PIPE="/tmp/agent-island-perm-$$"
 mkfifo "$PIPE" 2>/dev/null || true
-if ! exec 3<>"$PIPE"; then
-    echo "$(date '+%H:%M:%S') PERMISSION: failed to open response pipe '$PIPE'" >> "$LOG"
-    rm -f "$PIPE"
-    echo '{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"deny"}}}'
-    exit 0
-fi
 
 PERMISSION_TIMEOUT_SECS="${AGENTCH_PERMISSION_TIMEOUT_SECS:-110}"
 if ! [[ "$PERMISSION_TIMEOUT_SECS" =~ ^[0-9]+$ ]]; then
@@ -291,7 +329,7 @@ dismiss_notch_on_signal() {
     exit 0
 }
 
-trap 'exec 3>&- 3<&- 2>/dev/null || true; rm -f "$PIPE"' EXIT
+trap 'rm -f "$PIPE"' EXIT
 trap dismiss_notch_on_signal TERM INT HUP
 
 if [ "$IS_ELICITATION" = "1" ]; then
@@ -302,7 +340,7 @@ if [ "$IS_ELICITATION" = "1" ]; then
     "$ISLAND" elicitation "$ELICITATION_JSON" "Claude" "$PPID" "$PIPE" "$SESSION_ID" "$BRANCH_LABEL"
 
     # Block reading from the FIFO — the island writes "answer:<selection>" or "deny"
-    if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION <&3; then
+    if DECISION="$(read_fifo_line_with_timeout "$PIPE" "$PERMISSION_TIMEOUT_SECS")"; then
         DECISION=$(printf '%s' "$DECISION" | tr -d '\n')
     else
         DECISION="deny"
@@ -354,7 +392,7 @@ else
     "$ISLAND" permission "$TOOL" "$COMMAND" "Claude" "$PPID" "$PIPE" "$SUGGESTIONS" "$SESSION_ID" "$BRANCH_LABEL"
 
     # Block reading from the FIFO — the island writes "allow", "deny", or "allow_always:<json>"
-    if IFS= read -r -t "$PERMISSION_TIMEOUT_SECS" DECISION <&3; then
+    if DECISION="$(read_fifo_line_with_timeout "$PIPE" "$PERMISSION_TIMEOUT_SECS")"; then
         DECISION=$(printf '%s' "$DECISION" | tr -d '\n')
     else
         DECISION="deny"

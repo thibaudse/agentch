@@ -29,6 +29,49 @@ resolve_branch_label() {
 
 BRANCH_LABEL="$(resolve_branch_label "$CWD")"
 
+read_fifo_line_with_timeout() {
+    local fifo_path="$1"
+    local timeout_secs="$2"
+
+    python3 - "$fifo_path" "$timeout_secs" <<'PY'
+import os
+import select
+import sys
+import time
+
+path = sys.argv[1]
+try:
+    timeout = float(sys.argv[2])
+except Exception:
+    timeout = 0.0
+
+deadline = time.monotonic() + max(timeout, 0.0)
+fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+
+try:
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            sys.exit(1)
+
+        ready, _, _ = select.select([fd], [], [], remaining)
+        if not ready:
+            sys.exit(1)
+
+        chunk = os.read(fd, 4096)
+        if not chunk:
+            time.sleep(0.01)
+            continue
+
+        line = chunk.decode("utf-8", "ignore").splitlines()
+        if line:
+            print(line[0])
+            sys.exit(0)
+finally:
+    os.close(fd)
+PY
+}
+
 echo "$(date '+%H:%M:%S') STOP HOOK INPUT: $(echo "$INPUT" | head -c 500)" >> "$LOG"
 
 # Note: we intentionally do NOT check stop_hook_active here.
@@ -146,12 +189,7 @@ fi
 # Create FIFO for the island to write the user's response back
 RESPONSE_PIPE="/tmp/agent-island-response-$$"
 mkfifo "$RESPONSE_PIPE" 2>/dev/null || true
-if ! exec 3<>"$RESPONSE_PIPE"; then
-    echo "$(date '+%H:%M:%S') STOP: failed to open response pipe '$RESPONSE_PIPE'" >> "$LOG"
-    rm -f "$RESPONSE_PIPE"
-    exit 0
-fi
-trap 'exec 3>&- 3<&- 2>/dev/null || true; rm -f "$RESPONSE_PIPE"' EXIT
+trap 'rm -f "$RESPONSE_PIPE"' EXIT
 
 STOP_TIMEOUT_SECS="${AGENTCH_STOP_TIMEOUT_SECS:-590}"
 if ! [[ "$STOP_TIMEOUT_SECS" =~ ^[0-9]+$ ]]; then
@@ -170,7 +208,7 @@ trap dismiss_notch_on_signal TERM INT HUP
 "$ISLAND" prompt "$MSG" "Claude" "$PPID" "" "" "" "$CONVO" "$RESPONSE_PIPE" "$SESSION_ID" "$BRANCH_LABEL"
 
 # Block reading from the FIFO — the island writes the user's text or "__dismiss__"
-if IFS= read -r -t "$STOP_TIMEOUT_SECS" RESPONSE <&3; then
+if RESPONSE="$(read_fifo_line_with_timeout "$RESPONSE_PIPE" "$STOP_TIMEOUT_SECS")"; then
     RESPONSE=$(printf '%s' "$RESPONSE" | tr -d '\n')
 else
     RESPONSE="__dismiss__"

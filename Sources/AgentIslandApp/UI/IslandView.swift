@@ -486,7 +486,23 @@ struct IslandView: View {
 
     private var permissionView: some View {
         VStack(spacing: DS.sp10) {
-            if hasPermissionPreview {
+            if isBashPermission,
+               let description = permissionCommandDescription,
+               !description.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Description")
+                        .font(DS.Font.caption)
+                        .foregroundColor(DS.text3)
+                    Text(description)
+                        .font(DS.Font.bodyMedium)
+                        .foregroundColor(DS.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, DS.sp8)
+            }
+
+            if hasPermissionCodeBlock {
                 ScrollView(.vertical, showsIndicators: true) {
                     VStack(alignment: .leading, spacing: DS.sp8) {
                         if permissionFilePath != nil || permissionReplaceAllValue != nil {
@@ -531,20 +547,6 @@ struct IslandView: View {
                         }
 
                         if isBashPermission {
-                            if let description = permissionCommandDescription, !description.isEmpty {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text("Description")
-                                        .font(DS.Font.caption)
-                                        .foregroundColor(DS.text3)
-                                    Text(description)
-                                        .font(DS.Font.bodyMedium)
-                                        .foregroundColor(DS.text2)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, DS.sp8)
-                            }
-
                             VStack(alignment: .leading, spacing: 2) {
                                 ForEach(Array(permissionCommandLines.enumerated()), id: \.offset) { _, line in
                                     Text(verbatim: line)
@@ -671,8 +673,7 @@ struct IslandView: View {
         guard isBashPermission else { return nil }
         for line in permissionBodyLines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard trimmed.hasPrefix("description:") else { continue }
-            let value = String(trimmed.dropFirst("description:".count)).trimmingCharacters(in: .whitespaces)
+            guard let value = descriptionValue(from: trimmed) else { continue }
             return value.isEmpty ? nil : value
         }
         return nil
@@ -686,7 +687,7 @@ struct IslandView: View {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty { continue }
             if trimmed == "Command" { continue }
-            if trimmed.hasPrefix("description:") { continue }
+            if descriptionValue(from: trimmed) != nil { continue }
 
             if line.hasPrefix("$ ") {
                 lines.append(String(line.dropFirst(2)))
@@ -699,14 +700,20 @@ struct IslandView: View {
         return lines
     }
 
-    private var hasPermissionPreview: Bool {
+    private func descriptionValue(from trimmedLine: String) -> String? {
+        guard let colonIndex = trimmedLine.firstIndex(of: ":") else { return nil }
+        let key = trimmedLine[..<colonIndex].trimmingCharacters(in: .whitespaces)
+        guard key.lowercased() == "description" else { return nil }
+
+        let valueStart = trimmedLine.index(after: colonIndex)
+        return String(trimmedLine[valueStart...]).trimmingCharacters(in: .whitespaces)
+    }
+
+    private var hasPermissionCodeBlock: Bool {
         if permissionFilePath != nil || permissionReplaceAllValue != nil {
             return true
         }
         if isBashPermission {
-            if let description = permissionCommandDescription, !description.isEmpty {
-                return true
-            }
             return !permissionCommandLines.isEmpty
         }
         return !permissionPreviewRows.isEmpty
