@@ -1,6 +1,30 @@
 {
   "description": "agentch - Dynamic Island notifications for Claude Code",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-session-start.sh",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/hooks/claude-session-end.sh",
+            "async": true,
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

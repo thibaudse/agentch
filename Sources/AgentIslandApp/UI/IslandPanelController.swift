@@ -117,6 +117,9 @@ final class IslandPanelController: NSObject {
     private var activeSessionID: String = ""
     private var geometryRefreshSuspendedUntil: Date = .distantPast
 
+    // Background session tracking — registered via SessionStart/SessionEnd hooks
+    private var registeredSessions: Set<String> = []
+
     override init() {
         super.init()
         installObservers()
@@ -145,6 +148,28 @@ final class IslandPanelController: NSObject {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         DistributedNotificationCenter.default().removeObserver(self)
         trackingTask?.cancel()
+    }
+
+    // MARK: - Background Session Tracking
+
+    func registerSession(_ sessionID: String) {
+        let sid = normalizedSessionID(sessionID)
+        guard !sid.isEmpty else { return }
+        registeredSessions.insert(sid)
+        NSLog("agentch: Registered session %@ (total=%d)", sid, registeredSessions.count)
+        withAnimation(DS.Anim.notchOpen) {
+            viewModel.activeSessionCount = registeredSessions.count
+        }
+    }
+
+    func unregisterSession(_ sessionID: String) {
+        let sid = normalizedSessionID(sessionID)
+        guard !sid.isEmpty else { return }
+        registeredSessions.remove(sid)
+        NSLog("agentch: Unregistered session %@ (total=%d)", sid, registeredSessions.count)
+        withAnimation(DS.Anim.notchClose) {
+            viewModel.activeSessionCount = registeredSessions.count
+        }
     }
 
     private var hasBlockingPromptInFlight: Bool {

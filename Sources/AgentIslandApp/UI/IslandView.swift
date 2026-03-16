@@ -110,6 +110,10 @@ struct IslandView: View {
         return max(minH, min(contentHeight, maxH))
     }
 
+    private var collapsedWidth: CGFloat {
+        model.geometry.notchWidth
+    }
+
     private var agentPalette: DS.AgentPalette {
         DS.palette(for: model.agentName)
     }
@@ -189,9 +193,10 @@ struct IslandView: View {
                     model.onContentHeightChange?(h)
                 }
             }
+
         }
         .frame(
-            width: model.expanded ? islandWidth : geometry.notchWidth,
+            width: model.expanded ? islandWidth : collapsedWidth,
             height: model.expanded ? islandHeight : geometry.notchHeight
         )
         .clipShape(shellShape)
@@ -206,6 +211,12 @@ struct IslandView: View {
                 .fill(Color.black)
                 .frame(height: 1)
                 .padding(.horizontal, topSeamInset)
+                .allowsHitTesting(false)
+        }
+        .overlay(alignment: .bottom) {
+            sessionDots
+                .offset(y: 14)
+                .opacity(!model.expanded && model.activeSessionCount > 0 ? 1 : 0)
                 .allowsHitTesting(false)
         }
         .frame(
@@ -295,6 +306,17 @@ struct IslandView: View {
     private func abbreviatedSessionLabel(_ text: String, maxCharacters: Int) -> String {
         guard maxCharacters > 6, text.count > maxCharacters else { return text }
         return String(text.prefix(maxCharacters - 3)) + "..."
+    }
+
+    private var sessionDots: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<model.activeSessionCount, id: \.self) { _ in
+                Circle()
+                    .fill(DS.claudeAccent)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: DS.claudeAccent.opacity(0.7), radius: 4)
+            }
+        }
     }
 
     private var displayedPermissionTool: String {

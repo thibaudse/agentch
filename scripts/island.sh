@@ -216,6 +216,16 @@ case "${1:-show}" in
         session_json="$(json_escape "$session_id")"
         send_message "{\"action\":\"dismiss\",\"session_id\":$session_json}"
         ;;
+    register)
+        session_id="${2:-}"
+        session_json="$(json_escape "$session_id")"
+        send_message "{\"action\":\"register\",\"session_id\":$session_json}"
+        ;;
+    unregister)
+        session_id="${2:-}"
+        session_json="$(json_escape "$session_id")"
+        send_message "{\"action\":\"unregister\",\"session_id\":$session_json}"
+        ;;
     start)
         start_daemon
         ;;
@@ -226,7 +236,7 @@ case "${1:-show}" in
         query_daemon_version
         ;;
     *)
-        echo "Usage: island.sh {show|prompt|permission|elicitation|dismiss|start|stop|version} ..." >&2
+        echo "Usage: island.sh {show|prompt|permission|elicitation|dismiss|register|unregister|start|stop|version} ..." >&2
         exit 1
         ;;
 esac

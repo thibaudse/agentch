@@ -46,6 +46,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             panelController.showElicitation(question: question, agent: agent, pid: pid, responsePipe: responsePipe, sessionID: sessionID, sessionLabel: sessionLabel)
         case let .dismiss(sessionID):
             panelController.dismiss(sessionID: sessionID)
+        case let .register(sessionID):
+            panelController.registerSession(sessionID)
+        case let .unregister(sessionID):
+            panelController.unregisterSession(sessionID)
         case .version:
             break  // Handled synchronously in UnixSocketServer
         case .quit:
