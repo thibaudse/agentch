@@ -184,6 +184,26 @@ final class IslandPanelController: NSObject {
         value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// If the same session has an active permission/elicitation that was already
+    /// answered in the terminal, dismiss it so the new command can proceed.
+    private func dismissStalePromptIfNeeded(for sessionID: String) -> Bool {
+        let sid = normalizedSessionID(sessionID)
+        let current = normalizedSessionID(activeSessionID)
+        guard !sid.isEmpty, sid == current else { return false }
+        guard isBlockingPromptPresented else { return false }
+
+        // Write deny/dismiss to unblock the stale hook script
+        if !permissionResponsePipe.isEmpty {
+            handlePermissionDecision(allow: false)
+            return true
+        }
+        if !responsePipe.isEmpty {
+            dismiss(sessionID: sid)
+            return true
+        }
+        return false
+    }
+
     private var isGeometryRefreshSuspended: Bool {
         Date() < geometryRefreshSuspendedUntil
     }
@@ -335,7 +355,7 @@ final class IslandPanelController: NSObject {
     ) {
         let sid = normalizedSessionID(sessionID)
 
-        if interactive, shouldQueueBlockingCommand() {
+        if interactive, shouldQueueBlockingCommand(), !dismissStalePromptIfNeeded(for: sid) {
             enqueue(
                 PendingCommand.show(
                     message: message,
@@ -556,7 +576,7 @@ final class IslandPanelController: NSObject {
     ) {
         let sid = normalizedSessionID(sessionID)
 
-        if shouldQueueBlockingCommand() {
+        if shouldQueueBlockingCommand(), !dismissStalePromptIfNeeded(for: sid) {
             enqueue(
                 PendingCommand.permission(
                     tool: tool,
@@ -661,7 +681,7 @@ final class IslandPanelController: NSObject {
     ) {
         let sid = normalizedSessionID(sessionID)
 
-        if shouldQueueBlockingCommand() {
+        if shouldQueueBlockingCommand(), !dismissStalePromptIfNeeded(for: sid) {
             enqueue(
                 PendingCommand.elicitation(
                     question: question,

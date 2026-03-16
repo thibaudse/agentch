@@ -217,6 +217,10 @@ dismiss_notch_on_signal() {
 
 trap dismiss_notch_on_signal TERM INT HUP
 
+# Dismiss any stale permission/elicitation prompt for this session
+# (e.g. if the user answered a permission in the terminal, the notch is still showing it)
+"$ISLAND" dismiss "$SESSION_ID" >/dev/null 2>&1 || true
+
 # Show interactive island prompt (no terminal info needed — we use decision:block)
 "$ISLAND" prompt "$MSG" "Claude" "$PPID" "" "" "" "$CONVO" "$RESPONSE_PIPE" "$SESSION_ID" "$BRANCH_LABEL"
 
