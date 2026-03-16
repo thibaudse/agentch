@@ -23,6 +23,7 @@ socket_has_listener() {
 
 ensure_daemon_running() {
     if socket_has_listener; then
+        ensure_version_match
         return 0
     fi
 
@@ -42,6 +43,37 @@ ensure_daemon_running() {
     fi
 
     start_daemon
+}
+
+query_daemon_version() {
+    if socket_has_listener; then
+        echo '{"action":"version"}' | nc -U "$SOCKET" -w 1 2>/dev/null || true
+    fi
+}
+
+get_binary_version() {
+    if [ -f "$BINARY_PATH" ]; then
+        "$BINARY_PATH" --version 2>/dev/null || true
+    fi
+}
+
+restart_daemon() {
+    stop_daemon
+    start_daemon
+}
+
+ensure_version_match() {
+    local running_version
+    running_version="$(query_daemon_version)"
+    [ -n "$running_version" ] || return 0
+
+    local binary_version
+    binary_version="$(get_binary_version)"
+    [ -n "$binary_version" ] || return 0
+
+    if [ "$running_version" != "$binary_version" ]; then
+        restart_daemon
+    fi
 }
 
 send_message() {
@@ -97,8 +129,9 @@ wait_for_socket() {
 }
 
 stop_daemon() {
+    # Send quit directly (not via send_message) to avoid recursion
     if [ -S "$SOCKET" ]; then
-        send_message '{"action":"quit"}' 2>/dev/null || true
+        echo '{"action":"quit"}' | nc -U "$SOCKET" -w 1 >/dev/null 2>&1 || true
     fi
 
     if [ -f "$PID_FILE" ]; then
@@ -189,8 +222,11 @@ case "${1:-show}" in
     stop)
         stop_daemon
         ;;
+    version)
+        query_daemon_version
+        ;;
     *)
-        echo "Usage: island.sh {show|prompt|permission|elicitation|dismiss|start|stop} ..." >&2
+        echo "Usage: island.sh {show|prompt|permission|elicitation|dismiss|start|stop|version} ..." >&2
         exit 1
         ;;
 esac

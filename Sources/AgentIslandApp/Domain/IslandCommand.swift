@@ -105,6 +105,7 @@ enum IslandCommand: Sendable {
     case permission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion], sessionID: String, sessionLabel: String)
     case elicitation(question: Elicitation, agent: String, pid: pid_t, responsePipe: String, sessionID: String, sessionLabel: String)
     case dismiss(sessionID: String)
+    case version
     case quit
 
     init?(jsonLine data: Data) {
@@ -150,6 +151,8 @@ enum IslandCommand: Sendable {
             )
         case "dismiss":
             self = .dismiss(sessionID: payload.session_id ?? "")
+        case "version":
+            self = .version
         case "quit":
             self = .quit
         default:

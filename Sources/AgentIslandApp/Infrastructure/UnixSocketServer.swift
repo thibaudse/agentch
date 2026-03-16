@@ -94,6 +94,15 @@ final class UnixSocketServer {
             return
         }
 
+        // Version is handled synchronously — no main-actor dispatch needed
+        if case .version = command {
+            let reply = AgentchVersion.current + "\n"
+            _ = reply.withCString { pointer in
+                write(clientSocket, pointer, reply.utf8.count)
+            }
+            return
+        }
+
         onCommand(command)
 
         _ = "OK\n".withCString { pointer in

@@ -42,14 +42,15 @@ After hook changes, restart Claude.
 
 ## Update (Homebrew)
 
-Use this flow whenever you want the latest `agentch` from the tap:
-
 ```bash
 brew update
 brew reinstall thibaudse/agentch/agentch
 agentch-install-hooks
-brew services restart thibaudse/agentch/agentch
 ```
+
+The running daemon detects version mismatches automatically — on the next Claude session, `island.sh` compares the running daemon version against the installed binary and restarts silently if they differ. No manual `brew services restart` needed.
+
+`agentch` also checks GitHub releases once per day and shows a non-blocking notch notification when a newer version is available.
 
 Notes:
 
@@ -80,7 +81,7 @@ Then restart Claude after changing hooks.
 
 - `brew services start thibaudse/agentch/agentch` keeps it running across login/reboot.
 - Hook calls still auto-start the daemon if it is not running.
-- `island.sh` also recovers stale socket state automatically.
+- `island.sh` also recovers stale socket state and auto-restarts on version mismatch.
 
 If you want startup check before every Claude launch, add this to `~/.zshrc`:
 
@@ -151,6 +152,7 @@ AGENTCH_STOP_TIMEOUT_SECS=300 AGENTCH_PERMISSION_TIMEOUT_SECS=90 claude
 ├── hooks/claude-code/hooks.json
 ├── scripts/
 │   ├── build.sh
+│   ├── check-update.sh
 │   ├── install-claude-hooks.sh
 │   ├── island.sh
 │   └── hooks/

@@ -17,7 +17,16 @@ This compiles release binary and installs scripts/hooks to:
 ~/.agent-island/scripts/island.sh start
 ~/.agent-island/scripts/island.sh stop
 ~/.agent-island/scripts/island.sh dismiss
+~/.agent-island/scripts/island.sh version
 ```
+
+## Versioning
+
+- Source of truth: `Sources/AgentIslandApp/Config/Version.swift` (`AgentchVersion.current`)
+- Binary supports `--version` flag
+- Daemon responds to `{"action":"version"}` socket command
+- `island.sh` auto-restarts daemon on version mismatch (installed binary vs running daemon)
+- `scripts/check-update.sh` checks GitHub releases (cached 24h), hook shows non-blocking notification
 
 ## Logs
 
@@ -72,6 +81,7 @@ Fix:
 ```bash
 swift build
 bash -n scripts/island.sh
+bash -n scripts/check-update.sh
 bash -n scripts/hooks/claude-show.sh
 bash -n scripts/hooks/claude-permission.sh
 bash -n scripts/hooks/claude-dismiss.sh

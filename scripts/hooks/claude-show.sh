@@ -8,7 +8,20 @@
 
 LOG="/tmp/agent-island-hook.log"
 ISLAND="${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/island.sh"
+CHECK_UPDATE="${AGENT_ISLAND_HOME:-$HOME/.agent-island}/scripts/check-update.sh"
 INPUT=$(cat)
+
+# Check for updates in the background (non-blocking, once per day via cache)
+check_for_update() {
+    if [ -x "$CHECK_UPDATE" ]; then
+        local latest
+        latest="$("$CHECK_UPDATE" 2>/dev/null)" || true
+        if [ -n "$latest" ]; then
+            "$ISLAND" show "agentch v${latest} available — run \`brew upgrade agentch\`" "agentch" 8 0 "" "" >/dev/null 2>&1 || true
+        fi
+    fi
+}
+check_for_update &
 SESSION_ID=$(printf '%s' "$INPUT" | python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('session_id',''))" 2>/dev/null || true)
 CWD=$(printf '%s' "$INPUT" | python3 -c "import json,sys; print(json.loads(sys.stdin.read()).get('cwd',''))" 2>/dev/null || true)
 

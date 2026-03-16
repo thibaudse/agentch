@@ -17,7 +17,7 @@ class Agentch < Formula
 
     libexec.install "#{bin_path}/AgentIsland"
     (libexec/"scripts/hooks").mkpath
-    (libexec/"scripts").install "scripts/island.sh", "scripts/install-claude-hooks.sh"
+    (libexec/"scripts").install "scripts/island.sh", "scripts/install-claude-hooks.sh", "scripts/check-update.sh"
     (libexec/"scripts/hooks").install "scripts/hooks/claude-show.sh"
     (libexec/"scripts/hooks").install "scripts/hooks/claude-permission.sh"
     (libexec/"scripts/hooks").install "scripts/hooks/claude-dismiss.sh"
