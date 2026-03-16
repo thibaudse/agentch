@@ -111,7 +111,10 @@ struct IslandView: View {
     }
 
     private var collapsedWidth: CGFloat {
-        model.geometry.notchWidth
+        let base = model.geometry.notchWidth
+        let count = CGFloat(model.activeSessionCount)
+        guard count > 0 else { return base }
+        return base + count * 14 + 48
     }
 
     private var agentPalette: DS.AgentPalette {
@@ -213,9 +216,9 @@ struct IslandView: View {
                 .padding(.horizontal, topSeamInset)
                 .allowsHitTesting(false)
         }
-        .overlay(alignment: .bottom) {
+        .overlay(alignment: .leading) {
             sessionDots
-                .offset(y: 14)
+                .padding(.leading, 18)
                 .opacity(!model.expanded && model.activeSessionCount > 0 ? 1 : 0)
                 .allowsHitTesting(false)
         }
