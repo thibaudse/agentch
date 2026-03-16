@@ -195,6 +195,8 @@ struct IslandView: View {
             height: model.expanded ? islandHeight : geometry.notchHeight
         )
         .clipShape(shellShape)
+        .shadow(color: .black.opacity(model.expanded ? 0.5 : 0), radius: 24, y: 8)
+        .shadow(color: .black.opacity(model.expanded ? 0.3 : 0), radius: 8, y: 4)
         .overlay(
             shellShape
                 .strokeBorder(DS.borderGradient(top: 0.12, bottom: 0.03), lineWidth: 0.5)
