@@ -586,6 +586,7 @@ struct IslandView: View {
                     .padding(.vertical, DS.sp6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(maxHeight: isBashPermission ? 180 : 160)
                 .background(
@@ -893,6 +894,7 @@ struct IslandView: View {
         Text(model.message)
             .font(DS.Font.bodyMedium)
             .foregroundColor(DS.text1)
+            .textSelection(.enabled)
             .lineLimit(3)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, DS.sp10)
@@ -916,6 +918,7 @@ struct IslandView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+                .textSelection(.enabled)
                 .padding(.bottom, model.isFullExpanded ? DS.sp2 : DS.sp10)
                 .id("msg-\(model.isFullExpanded)")
                 .transition(.blurReplace)
