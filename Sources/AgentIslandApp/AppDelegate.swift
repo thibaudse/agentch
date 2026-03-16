@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         installSignalHandlers()
         startSocketServer()
+        panelController.showIdle()
         NSLog("agentch: Ready")
     }
 

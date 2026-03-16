@@ -122,6 +122,24 @@ final class IslandPanelController: NSObject {
         installObservers()
     }
 
+    /// Show the collapsed notch idle on screen (called at launch).
+    func showIdle() {
+        let geometry = NotchGeometry.detect()
+        viewModel.geometry = geometry
+        viewModel.expanded = false
+
+        ensurePanel()
+        guard let panel else { return }
+
+        let frame = geometry.screenFrame
+        panel.ignoresMouseEvents = true
+        panel.acceptsKeyInput = false
+        panel.setFrame(frame, display: true)
+        panel.orderFrontRegardless()
+        topmostSpaceManager.attach(window: panel)
+        startTrackingLoop()
+    }
+
     deinit {
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
@@ -477,22 +495,16 @@ final class IslandPanelController: NSObject {
                 }
             }
 
-            // Step 3: After collapse animation, remove the panel
+            // Step 3: After collapse animation, reset state (panel stays visible in collapsed form)
             try? await Task.sleep(nanoseconds: AppConfig.hideDelayNanos)
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.hideTask = nil
                 self.isTransitioningOut = false
-
-                if !self.viewModel.expanded, let panel = self.panel {
-                    self.isPresented = false
-                    self.topmostSpaceManager.detach(window: panel)
-                    panel.orderOut(nil)
-                    self.stopTrackingLoop()
-                    // Reset contentVisible for next show
-                    self.viewModel.contentVisible = true
-                }
+                self.isPresented = false
+                // Reset contentVisible for next show
+                self.viewModel.contentVisible = true
 
                 self.activeSessionID = ""
 
@@ -862,14 +874,8 @@ final class IslandPanelController: NSObject {
                 guard let self else { return }
                 self.hideTask = nil
                 self.isTransitioningOut = false
-
-                if !self.viewModel.expanded, let panel = self.panel {
-                    self.isPresented = false
-                    self.topmostSpaceManager.detach(window: panel)
-                    panel.orderOut(nil)
-                    self.stopTrackingLoop()
-                    self.viewModel.contentVisible = true
-                }
+                self.isPresented = false
+                self.viewModel.contentVisible = true
 
                 self.activeSessionID = ""
 
