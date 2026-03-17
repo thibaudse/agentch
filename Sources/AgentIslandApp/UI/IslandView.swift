@@ -217,14 +217,6 @@ struct IslandView: View {
             height: model.expanded ? islandHeight : collapsedHeight
         )
         .clipShape(shellShape)
-        .contentShape(shellShape)
-        .onHover { hovering in
-            if !model.expanded, model.activeSessionCount > 0 {
-                model.badgeHovered = hovering
-            } else if !hovering {
-                model.badgeHovered = false
-            }
-        }
         .overlay(alignment: .bottom) {
             HStack(spacing: 6) {
                 ForEach(model.sessionLabels, id: \.self) { label in

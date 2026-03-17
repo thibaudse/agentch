@@ -840,13 +840,25 @@ final class IslandPanelController: NSObject {
     private func updatePanelInteractivity() {
         guard let panel else { return }
 
-        // When not presenting content, allow hover over collapsed notch for session pills
+        // When not presenting content, drive badge hover from mouse position
         if !isPresented || !viewModel.contentVisible {
             if viewModel.activeSessionCount > 0 {
                 let notchFrame = collapsedNotchScreenFrame()
-                panel.ignoresMouseEvents = !notchFrame.contains(NSEvent.mouseLocation)
+                let expandedFrame = viewModel.badgeHovered ? expandedNotchScreenFrame() : notchFrame
+                let mouseInNotch = notchFrame.contains(NSEvent.mouseLocation)
+                let mouseInExpanded = expandedFrame.contains(NSEvent.mouseLocation)
+                let shouldHover = mouseInNotch || (viewModel.badgeHovered && mouseInExpanded)
+                panel.ignoresMouseEvents = !shouldHover
+                if viewModel.badgeHovered != shouldHover {
+                    withAnimation(DS.Anim.notchOpen) {
+                        viewModel.badgeHovered = shouldHover
+                    }
+                }
             } else {
                 panel.ignoresMouseEvents = true
+                if viewModel.badgeHovered {
+                    viewModel.badgeHovered = false
+                }
             }
             return
         }
@@ -857,11 +869,19 @@ final class IslandPanelController: NSObject {
 
     private func collapsedNotchScreenFrame() -> CGRect {
         let geo = viewModel.geometry
-        // Hit area is just the physical notch — not the badge extension
         let width = geo.notchWidth
         let originX = geo.screenFrame.midX - width / 2
         let originY = geo.screenFrame.maxY - geo.notchHeight
         return CGRect(x: originX, y: originY, width: width, height: geo.notchHeight)
+    }
+
+    private func expandedNotchScreenFrame() -> CGRect {
+        let geo = viewModel.geometry
+        let width = geo.notchWidth + 80
+        let height = geo.notchHeight + 40
+        let originX = geo.screenFrame.midX - width / 2
+        let originY = geo.screenFrame.maxY - height
+        return CGRect(x: originX, y: originY, width: width, height: height)
     }
 
     // MARK: - Input Handling
