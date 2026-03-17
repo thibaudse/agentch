@@ -15,6 +15,8 @@ final class IslandViewModel: ObservableObject {
 
     /// Number of agent processes currently running in the background.
     @Published var activeSessionCount: Int = 0
+    @Published var sessionLabels: [String] = []
+    @Published var badgeHovered: Bool = false
 
     // Permission mode
     @Published var isPermission: Bool = false

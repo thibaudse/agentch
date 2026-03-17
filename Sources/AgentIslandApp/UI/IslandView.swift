@@ -110,6 +110,14 @@ struct IslandView: View {
         return max(minH, min(contentHeight, maxH))
     }
 
+    private var collapsedHeight: CGFloat {
+        let base = model.geometry.notchHeight
+        if model.badgeHovered, !model.sessionLabels.isEmpty {
+            return base + 40
+        }
+        return base
+    }
+
     private var collapsedWidth: CGFloat {
         let base = model.geometry.notchWidth
         guard model.activeSessionCount > 0 else { return base }
@@ -196,12 +204,42 @@ struct IslandView: View {
                 }
             }
 
+            // ── Session badge (last in ZStack = renders on top) ──
+            if !model.expanded, model.activeSessionCount > 0 {
+                sessionBadge
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.leading, 18)
+                    .padding(.top, (model.geometry.notchHeight - 16) / 2)
+            }
         }
         .frame(
             width: model.expanded ? islandWidth : collapsedWidth,
-            height: model.expanded ? islandHeight : geometry.notchHeight
+            height: model.expanded ? islandHeight : collapsedHeight
         )
         .clipShape(shellShape)
+        .contentShape(shellShape)
+        .onHover { hovering in
+            if !model.expanded, model.activeSessionCount > 0 {
+                model.badgeHovered = hovering
+            } else if !hovering {
+                model.badgeHovered = false
+            }
+        }
+        .overlay(alignment: .bottom) {
+            HStack(spacing: 6) {
+                ForEach(model.sessionLabels, id: \.self) { label in
+                    Text(label)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(.white.opacity(0.15)))
+                }
+            }
+            .padding(.bottom, 10)
+            .opacity(!model.expanded && model.badgeHovered && !model.sessionLabels.isEmpty ? 1 : 0)
+            .allowsHitTesting(false)
+        }
         .shadow(color: .black.opacity(model.expanded ? 0.5 : 0), radius: 24, y: 8)
         .shadow(color: .black.opacity(model.expanded ? 0.3 : 0), radius: 8, y: 4)
         .overlay(
@@ -215,18 +253,13 @@ struct IslandView: View {
                 .padding(.horizontal, topSeamInset)
                 .allowsHitTesting(false)
         }
-        .overlay(alignment: .leading) {
-            sessionDots
-                .padding(.leading, 18)
-                .opacity(!model.expanded && model.activeSessionCount > 0 ? 1 : 0)
-                .allowsHitTesting(false)
-        }
         .frame(
             maxWidth: geometry.fullExpandedWidth,
             maxHeight: geometry.notchHeight + AppConfig.maxIslandExtraHeight,
             alignment: .top
         )
         .animation(model.expanded ? DS.Anim.notchOpen : DS.Anim.notchClose, value: model.expanded)
+        .animation(DS.Anim.notchOpen, value: model.badgeHovered)
         .animation((model.isPermission || model.isElicitation) ? nil : DS.Anim.content, value: contentHeight)
         .animation(DS.Anim.expand, value: model.isPermission)
         .animation(DS.Anim.expand, value: model.isElicitation)
@@ -310,17 +343,18 @@ struct IslandView: View {
         return String(text.prefix(maxCharacters - 3)) + "..."
     }
 
-    private var sessionDots: some View {
+    private var sessionBadge: some View {
         ZStack {
             Circle()
                 .fill(DS.claudeAccent)
                 .frame(width: 16, height: 16)
-                .shadow(color: DS.claudeAccent.opacity(0.7), radius: 4)
+                .shadow(color: DS.claudeAccent.opacity(model.badgeHovered ? 1 : 0.7), radius: model.badgeHovered ? 8 : 4)
             Text("\(model.activeSessionCount)")
                 .font(.system(size: 9, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
         }
     }
+
 
     private var displayedPermissionTool: String {
         abbreviatedSessionLabel(model.permissionTool.trimmingCharacters(in: .whitespacesAndNewlines), maxCharacters: 28)

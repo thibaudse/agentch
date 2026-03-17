@@ -105,7 +105,7 @@ enum IslandCommand: Sendable {
     case permission(tool: String, command: String, agent: String, pid: pid_t, responsePipe: String, suggestions: [PermissionSuggestion], sessionID: String, sessionLabel: String)
     case elicitation(question: Elicitation, agent: String, pid: pid_t, responsePipe: String, sessionID: String, sessionLabel: String)
     case dismiss(sessionID: String)
-    case register(sessionID: String)
+    case register(sessionID: String, label: String)
     case unregister(sessionID: String)
     case version
     case quit
@@ -154,7 +154,7 @@ enum IslandCommand: Sendable {
         case "dismiss":
             self = .dismiss(sessionID: payload.session_id ?? "")
         case "register":
-            self = .register(sessionID: payload.session_id ?? "")
+            self = .register(sessionID: payload.session_id ?? "", label: payload.session_label ?? "")
         case "unregister":
             self = .unregister(sessionID: payload.session_id ?? "")
         case "version":

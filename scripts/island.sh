@@ -218,8 +218,10 @@ case "${1:-show}" in
         ;;
     register)
         session_id="${2:-}"
+        session_label="${3:-}"
         session_json="$(json_escape "$session_id")"
-        send_message "{\"action\":\"register\",\"session_id\":$session_json}"
+        session_label_json="$(json_escape "$session_label")"
+        send_message "{\"action\":\"register\",\"session_id\":$session_json,\"session_label\":$session_label_json}"
         ;;
     unregister)
         session_id="${2:-}"

@@ -118,7 +118,7 @@ final class IslandPanelController: NSObject {
     private var geometryRefreshSuspendedUntil: Date = .distantPast
 
     // Background session tracking — registered via SessionStart/SessionEnd hooks
-    private var registeredSessions: Set<String> = []
+    private var registeredSessions: [String: String] = [:]  // sessionID → label
 
     override init() {
         super.init()
@@ -152,23 +152,30 @@ final class IslandPanelController: NSObject {
 
     // MARK: - Background Session Tracking
 
-    func registerSession(_ sessionID: String) {
+    func registerSession(_ sessionID: String, label: String = "") {
         let sid = normalizedSessionID(sessionID)
         guard !sid.isEmpty else { return }
-        registeredSessions.insert(sid)
-        NSLog("agentch: Registered session %@ (total=%d)", sid, registeredSessions.count)
-        withAnimation(DS.Anim.notchOpen) {
-            viewModel.activeSessionCount = registeredSessions.count
-        }
+        registeredSessions[sid] = label.isEmpty ? sid : label
+        NSLog("agentch: Registered session %@ label=%@ (total=%d)", sid, registeredSessions[sid] ?? "", registeredSessions.count)
+        updateSessionViewModel()
     }
 
     func unregisterSession(_ sessionID: String) {
         let sid = normalizedSessionID(sessionID)
         guard !sid.isEmpty else { return }
-        registeredSessions.remove(sid)
+        registeredSessions.removeValue(forKey: sid)
         NSLog("agentch: Unregistered session %@ (total=%d)", sid, registeredSessions.count)
-        withAnimation(DS.Anim.notchClose) {
+        let closing = registeredSessions.isEmpty
+        withAnimation(closing ? DS.Anim.notchClose : DS.Anim.notchOpen) {
             viewModel.activeSessionCount = registeredSessions.count
+            viewModel.sessionLabels = Array(registeredSessions.values).sorted()
+        }
+    }
+
+    private func updateSessionViewModel() {
+        withAnimation(DS.Anim.notchOpen) {
+            viewModel.activeSessionCount = registeredSessions.count
+            viewModel.sessionLabels = Array(registeredSessions.values).sorted()
         }
     }
 
@@ -832,13 +839,29 @@ final class IslandPanelController: NSObject {
     /// Keep the full-screen panel click-through except over the island bounds.
     private func updatePanelInteractivity() {
         guard let panel else { return }
-        guard isPresented, viewModel.contentVisible else {
-            panel.ignoresMouseEvents = true
+
+        // When not presenting content, allow hover over collapsed notch for session pills
+        if !isPresented || !viewModel.contentVisible {
+            if viewModel.activeSessionCount > 0 {
+                let notchFrame = collapsedNotchScreenFrame()
+                panel.ignoresMouseEvents = !notchFrame.contains(NSEvent.mouseLocation)
+            } else {
+                panel.ignoresMouseEvents = true
+            }
             return
         }
 
         let hitFrame = islandScreenFrame().insetBy(dx: -2, dy: -2)
         panel.ignoresMouseEvents = !hitFrame.contains(NSEvent.mouseLocation)
+    }
+
+    private func collapsedNotchScreenFrame() -> CGRect {
+        let geo = viewModel.geometry
+        // Hit area is just the physical notch — not the badge extension
+        let width = geo.notchWidth
+        let originX = geo.screenFrame.midX - width / 2
+        let originY = geo.screenFrame.maxY - geo.notchHeight
+        return CGRect(x: originX, y: originY, width: width, height: geo.notchHeight)
     }
 
     // MARK: - Input Handling
@@ -989,6 +1012,7 @@ final class IslandPanelController: NSObject {
                     panel.setFrame(targetFrame, display: false)
                 }
             }
+            updatePanelInteractivity()
             return
         }
 
