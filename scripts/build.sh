@@ -28,6 +28,10 @@ cp "$SCRIPT_DIR/hooks/claude-permission.sh" "$INSTALL_DIR/scripts/hooks/claude-p
 chmod +x "$INSTALL_DIR/scripts/hooks/claude-permission.sh"
 cp "$SCRIPT_DIR/hooks/claude-dismiss.sh" "$INSTALL_DIR/scripts/hooks/claude-dismiss.sh"
 chmod +x "$INSTALL_DIR/scripts/hooks/claude-dismiss.sh"
+cp "$SCRIPT_DIR/hooks/claude-session-start.sh" "$INSTALL_DIR/scripts/hooks/claude-session-start.sh"
+chmod +x "$INSTALL_DIR/scripts/hooks/claude-session-start.sh"
+cp "$SCRIPT_DIR/hooks/claude-session-end.sh" "$INSTALL_DIR/scripts/hooks/claude-session-end.sh"
+chmod +x "$INSTALL_DIR/scripts/hooks/claude-session-end.sh"
 
 echo "Built successfully: $INSTALL_DIR/$BINARY_NAME"
 echo ""
