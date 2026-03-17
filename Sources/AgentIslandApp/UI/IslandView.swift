@@ -112,9 +112,8 @@ struct IslandView: View {
 
     private var collapsedWidth: CGFloat {
         let base = model.geometry.notchWidth
-        let count = CGFloat(model.activeSessionCount)
-        guard count > 0 else { return base }
-        return base + count * 14 + 48
+        guard model.activeSessionCount > 0 else { return base }
+        return base + 80
     }
 
     private var agentPalette: DS.AgentPalette {
@@ -312,13 +311,14 @@ struct IslandView: View {
     }
 
     private var sessionDots: some View {
-        HStack(spacing: 8) {
-            ForEach(0..<model.activeSessionCount, id: \.self) { _ in
-                Circle()
-                    .fill(DS.claudeAccent)
-                    .frame(width: 6, height: 6)
-                    .shadow(color: DS.claudeAccent.opacity(0.7), radius: 4)
-            }
+        ZStack {
+            Circle()
+                .fill(DS.claudeAccent)
+                .frame(width: 16, height: 16)
+                .shadow(color: DS.claudeAccent.opacity(0.7), radius: 4)
+            Text("\(model.activeSessionCount)")
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
         }
     }
 
