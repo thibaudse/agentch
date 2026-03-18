@@ -877,8 +877,12 @@ final class IslandPanelController: NSObject {
 
     private func expandedNotchScreenFrame() -> CGRect {
         let geo = viewModel.geometry
-        let width = geo.notchWidth + 80
-        let height = geo.notchHeight + 40
+        let labels = viewModel.sessionLabels
+        let totalChars = labels.reduce(0) { $0 + $1.count }
+        let count = CGFloat(labels.count)
+        let pillsWidth = CGFloat(totalChars) * 6.5 + count * 10 + max(0, count - 1) * 6
+        let width = max(geo.notchWidth, pillsWidth + 40)
+        let height = geo.notchHeight + 48
         let originX = geo.screenFrame.midX - width / 2
         let originY = geo.screenFrame.maxY - height
         return CGRect(x: originX, y: originY, width: width, height: height)

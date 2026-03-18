@@ -113,15 +113,21 @@ struct IslandView: View {
     private var collapsedHeight: CGFloat {
         let base = model.geometry.notchHeight
         if model.badgeHovered, !model.sessionLabels.isEmpty {
-            return base + 40
+            return base + 48
         }
         return base
     }
 
     private var collapsedWidth: CGFloat {
         let base = model.geometry.notchWidth
-        guard model.activeSessionCount > 0 else { return base }
-        return base + 80
+        if model.badgeHovered, !model.sessionLabels.isEmpty {
+            let totalChars = model.sessionLabels.reduce(0) { $0 + $1.count }
+            let count = CGFloat(model.sessionLabels.count)
+            // ~6.5pt per char (monospaced 11pt) + 10pt h-padding per pill + 6pt spacing
+            let pillsWidth = CGFloat(totalChars) * 6.5 + count * 10 + max(0, count - 1) * 6
+            return max(base, pillsWidth + 40)
+        }
+        return base
     }
 
     private var agentPalette: DS.AgentPalette {
@@ -144,6 +150,7 @@ struct IslandView: View {
 
         ZStack(alignment: .top) {
             Color.black
+
 
             VStack(spacing: 0) {
                 // ── Notch zone: visual controls only (dot + buttons) ──
@@ -204,34 +211,29 @@ struct IslandView: View {
                 }
             }
 
-            // ── Session badge (last in ZStack = renders on top) ──
+            // ── Session pills (last in ZStack = renders on top) ──
             if !model.expanded, model.activeSessionCount > 0 {
-                sessionBadge
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(.leading, 18)
-                    .padding(.top, (model.geometry.notchHeight - 16) / 2)
+                HStack(spacing: 6) {
+                    ForEach(model.sessionLabels, id: \.self) { label in
+                        Text(label)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 3)
+                            .background(Capsule().fill(.white.opacity(0.15)))
+                    }
+                }
+                .offset(y: collapsedHeight - 30)
+                .opacity(model.badgeHovered && !model.sessionLabels.isEmpty ? 1 : 0)
+                .allowsHitTesting(false)
             }
         }
         .frame(
             width: model.expanded ? islandWidth : collapsedWidth,
-            height: model.expanded ? islandHeight : collapsedHeight
+            height: model.expanded ? islandHeight : collapsedHeight,
+            alignment: .top
         )
         .clipShape(shellShape)
-        .overlay(alignment: .bottom) {
-            HStack(spacing: 6) {
-                ForEach(model.sessionLabels, id: \.self) { label in
-                    Text(label)
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(.white.opacity(0.15)))
-                }
-            }
-            .padding(.bottom, 10)
-            .opacity(!model.expanded && model.badgeHovered && !model.sessionLabels.isEmpty ? 1 : 0)
-            .allowsHitTesting(false)
-        }
         .shadow(color: .black.opacity(model.expanded ? 0.5 : 0), radius: 24, y: 8)
         .shadow(color: .black.opacity(model.expanded ? 0.3 : 0), radius: 8, y: 4)
         .overlay(
