@@ -66,15 +66,26 @@ import Foundation
 }
 
 @Test func hookInstallationStatus() throws {
-    let installed: [String: Any] = [
+    // Fully installed — all 4 hook events present
+    let fullyInstalled: [String: Any] = [
         "hooks": [
-            "SessionStart": [
-                ["type": "http", "url": "http://localhost:27182/events"]
-            ]
+            "SessionStart": [["type": "http", "url": "http://localhost:27182/events"]],
+            "SessionEnd": [["type": "http", "url": "http://localhost:27182/events"]],
+            "PreToolUse": [["type": "http", "url": "http://localhost:27182/events"]],
+            "Stop": [["type": "http", "url": "http://localhost:27182/events"]],
         ]
     ]
-    #expect(HookManager.isInstalled(in: installed, port: 27182) == true)
+    #expect(HookManager.isInstalled(in: fullyInstalled, port: 27182) == true)
 
+    // Partially installed — only 1 of 4 events
+    let partiallyInstalled: [String: Any] = [
+        "hooks": [
+            "SessionStart": [["type": "http", "url": "http://localhost:27182/events"]]
+        ]
+    ]
+    #expect(HookManager.isInstalled(in: partiallyInstalled, port: 27182) == false)
+
+    // Not installed
     let notInstalled: [String: Any] = [:]
     #expect(HookManager.isInstalled(in: notInstalled, port: 27182) == false)
 }

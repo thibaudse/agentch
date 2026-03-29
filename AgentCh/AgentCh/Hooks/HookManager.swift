@@ -74,7 +74,7 @@ struct HookManager {
     static func isInstalled(in settings: [String: Any], port: UInt16) -> Bool {
         guard let hooks = settings["hooks"] as? [String: Any] else { return false }
         let url = agentChURL(port: port)
-        return hookEvents.contains { event in
+        return hookEvents.allSatisfy { event in
             guard let eventHooks = hooks[event] as? [[String: Any]] else { return false }
             return eventHooks.contains { ($0["url"] as? String) == url }
         }

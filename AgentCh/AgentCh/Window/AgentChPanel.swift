@@ -15,7 +15,9 @@ final class AgentChPanel: NSPanel {
         isOpaque = false
         hasShadow = false
         hidesOnDeactivate = false
-        ignoresMouseEvents = true
+        // Mouse events are filtered by PillHostingView's hitTest override —
+        // it returns nil for non-pill areas, making them click-through
+        ignoresMouseEvents = false
         collectionBehavior = [
             .canJoinAllSpaces,
             .stationary,

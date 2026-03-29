@@ -15,6 +15,13 @@ struct MascotView: View {
                 .foregroundStyle(mascotColor)
         }
         .frame(width: size, height: size)
+        .onAppear {
+            if status == .thinking {
+                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                    animationPhase = 1
+                }
+            }
+        }
         .onChange(of: status) { _, newStatus in
             if newStatus == .thinking {
                 withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {

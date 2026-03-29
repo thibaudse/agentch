@@ -30,15 +30,16 @@ final class EventServer: Sendable {
     ) {
         connection.start(queue: .global(qos: .userInitiated))
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, error in
-            defer { connection.cancel() }
-
             guard let data = data, error == nil else {
+                connection.cancel()
                 return
             }
 
             guard let body = Self.extractHTTPBody(from: data) else {
                 let response = Self.httpResponse(status: 400, body: "{\"error\":\"invalid request\"}")
-                connection.send(content: response, completion: .contentProcessed { _ in })
+                connection.send(content: response, completion: .contentProcessed { _ in
+                    connection.cancel()
+                })
                 return
             }
 
@@ -46,10 +47,14 @@ final class EventServer: Sendable {
                 let event = try Self.parseEvent(from: body)
                 onEvent(event)
                 let response = Self.httpResponse(status: 200, body: "{\"ok\":true}")
-                connection.send(content: response, completion: .contentProcessed { _ in })
+                connection.send(content: response, completion: .contentProcessed { _ in
+                    connection.cancel()
+                })
             } catch {
                 let response = Self.httpResponse(status: 400, body: "{\"error\":\"invalid event\"}")
-                connection.send(content: response, completion: .contentProcessed { _ in })
+                connection.send(content: response, completion: .contentProcessed { _ in
+                    connection.cancel()
+                })
             }
         }
     }

@@ -2,17 +2,15 @@ import AppKit
 import SwiftUI
 
 final class PillHostingView<Content: View>: NSHostingView<Content> {
-    private var pillFrame: CGRect = .zero
-
-    func updatePillFrame(_ frame: CGRect) {
-        self.pillFrame = frame
-        window?.ignoresMouseEvents = false
-    }
-
     override func hitTest(_ point: NSPoint) -> NSView? {
-        if pillFrame.contains(point) {
-            return super.hitTest(point)
+        // Let SwiftUI handle hit testing — if super.hitTest returns a view,
+        // it means the point is over an interactive SwiftUI element (the pill).
+        // Otherwise return nil so the click passes through the transparent window.
+        let result = super.hitTest(point)
+        // If the result is self (the hosting view background), treat as pass-through
+        if result === self {
+            return nil
         }
-        return nil
+        return result
     }
 }

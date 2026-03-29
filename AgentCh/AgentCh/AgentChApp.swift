@@ -1,5 +1,9 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let agentChHooksToggled = Notification.Name("agentChHooksToggled")
+}
+
 @main
 struct AgentChApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -24,6 +28,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         setupPanel()
         startServer()
         autoInstallHooksIfNeeded()
+        observeHooksToggle()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -64,6 +69,24 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             self.eventServer = server
         } catch {
             print("Failed to start event server: \(error)")
+        }
+    }
+
+    private func observeHooksToggle() {
+        NotificationCenter.default.addObserver(
+            forName: .agentChHooksToggled,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if self.hooksDisabled {
+                    self.eventServer?.stop()
+                    self.eventServer = nil
+                } else {
+                    self.startServer()
+                }
+            }
         }
     }
 

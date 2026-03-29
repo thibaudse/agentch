@@ -32,6 +32,7 @@ struct MenuBarView: View {
         if hooksInstalled {
             Button(hooksDisabled ? "Enable Hooks" : "Disable Hooks") {
                 hooksDisabled.toggle()
+                NotificationCenter.default.post(name: .agentChHooksToggled, object: nil)
             }
             Button("Uninstall Hooks") {
                 uninstallHooks()
@@ -52,6 +53,9 @@ struct MenuBarView: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")
+        .onAppear {
+            hooksInstalled = HookManager.checkInstalled(port: UInt16(httpPort))
+        }
     }
 
     private var hookStatusText: String {

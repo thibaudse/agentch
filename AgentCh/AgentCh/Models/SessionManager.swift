@@ -33,22 +33,32 @@ final class SessionManager: ObservableObject {
         case .sessionStart:
             guard !sessions.contains(where: { $0.id == event.sessionId }) else { return }
             let agentType = AgentType(rawValue: event.agentType) ?? .unknown
-            let label = Session.deriveLabel(
-                cwd: event.cwd,
-                gitBranch: gitBranch(at: event.cwd),
-                isWorktree: isGitWorktree(at: event.cwd)
-            )
+            // Use folder name as temporary label, resolve git info in background
+            let folderName = URL(fileURLWithPath: event.cwd).lastPathComponent
             let session = Session(
                 id: event.sessionId,
                 agentType: agentType,
-                label: label,
+                label: folderName,
                 status: .idle,
                 startedAt: event.timestamp
             )
-            sessions.append(session)
+            withAnimation(.spring(duration: 0.3)) {
+                sessions.append(session)
+            }
+            // Resolve git branch/worktree off main thread
+            let cwd = event.cwd
+            let sessionId = event.sessionId
+            Task.detached { [weak self] in
+                let branch = Self.gitBranch(at: cwd)
+                let isWorktree = Self.isGitWorktree(at: cwd)
+                let label = Session.deriveLabel(cwd: cwd, gitBranch: branch, isWorktree: isWorktree)
+                await self?.updateLabel(sessionId: sessionId, label: label)
+            }
 
         case .sessionEnd:
-            sessions.removeAll { $0.id == event.sessionId }
+            withAnimation(.spring(duration: 0.3)) {
+                sessions.removeAll { $0.id == event.sessionId }
+            }
 
         case .toolUse:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
@@ -60,7 +70,12 @@ final class SessionManager: ObservableObject {
         }
     }
 
-    private func gitBranch(at path: String) -> String? {
+    private func updateLabel(sessionId: String, label: String) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
+        sessions[index].label = label
+    }
+
+    nonisolated private static func gitBranch(at path: String) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["rev-parse", "--abbrev-ref", "HEAD"]
@@ -79,7 +94,7 @@ final class SessionManager: ObservableObject {
         }
     }
 
-    private func isGitWorktree(at path: String) -> Bool {
+    nonisolated private static func isGitWorktree(at path: String) -> Bool {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["rev-parse", "--git-common-dir"]
