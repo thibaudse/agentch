@@ -10,7 +10,7 @@ struct AgentChApp: App {
 
     var body: some Scene {
         MenuBarExtra("AgentCh", systemImage: "bubble.left.and.bubble.right.fill") {
-            MenuBarView(sessionManager: appDelegate.sessionManager)
+            MenuBarView(sessionManager: appDelegate.sessionManager, screenManager: appDelegate.screenManager)
         }
         .menuBarExtraStyle(.menu)
     }
@@ -19,6 +19,7 @@ struct AgentChApp: App {
 @MainActor
 class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let sessionManager = SessionManager()
+    let screenManager = ScreenManager()
     private var panel: AgentChPanel?
     private var eventServer: EventServer?
     @AppStorage("httpPort") var httpPort: Int = 27182
@@ -29,6 +30,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         startServer()
         autoInstallHooksIfNeeded()
         observeHooksToggle()
+        observeScreenChange()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -37,12 +39,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private func setupPanel() {
         let panel = AgentChPanel()
-        let pillView = PillGroupView(sessionManager: sessionManager)
+        let pillView = PillGroupView(sessionManager: sessionManager, screenManager: screenManager)
         let hostingView = PillHostingView(rootView: pillView)
         hostingView.frame = panel.frame
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
-        panel.coverScreen()
+        panel.coverScreen(screenManager.selectedScreen)
         panel.orderFrontRegardless()
         self.panel = panel
 
@@ -50,9 +52,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             forName: NSApplication.didChangeScreenParametersNotification,
             object: nil,
             queue: .main
-        ) { [weak panel] _ in
+        ) { [weak self] _ in
             Task { @MainActor in
-                panel?.coverScreen()
+                self?.panel?.coverScreen(self?.screenManager.selectedScreen)
             }
         }
     }
@@ -86,6 +88,18 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 } else {
                     self.startServer()
                 }
+            }
+        }
+    }
+
+    private func observeScreenChange() {
+        NotificationCenter.default.addObserver(
+            forName: .agentChScreenChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.panel?.coverScreen(self?.screenManager.selectedScreen)
             }
         }
     }

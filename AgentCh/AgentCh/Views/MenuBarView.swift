@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MenuBarView: View {
     @ObservedObject var sessionManager: SessionManager
+    @ObservedObject var screenManager: ScreenManager
     @AppStorage("httpPort") var httpPort: Int = 27182
     @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
     @State private var hooksInstalled: Bool = false
@@ -40,6 +41,16 @@ struct MenuBarView: View {
         } else {
             Button("Install Hooks") {
                 installHooks()
+            }
+        }
+
+        Divider()
+
+        Menu("Display: \(screenManager.screenNames.first(where: { $0.index == screenManager.selectedScreenIndex })?.name ?? "Unknown")") {
+            ForEach(screenManager.screenNames, id: \.index) { screen in
+                Button(screen.name) {
+                    screenManager.selectedScreenIndex = screen.index
+                }
             }
         }
 

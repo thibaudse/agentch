@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PillGroupView: View {
     @ObservedObject var sessionManager: SessionManager
+    @ObservedObject var screenManager: ScreenManager
     @State private var isHovering = false
     @State private var dragOffset: CGSize = .zero
     @State private var position: CGPoint = .zero
@@ -27,6 +28,11 @@ struct PillGroupView: View {
                     if !hasSetInitialPosition {
                         loadOrDefaultPosition()
                         hasSetInitialPosition = true
+                    }
+                }
+                .onChange(of: screenManager.selectedScreenIndex) { _, _ in
+                    withAnimation(.spring(duration: 0.3)) {
+                        setDefaultPosition()
                     }
                 }
                 .transition(.scale.combined(with: .opacity))
@@ -106,13 +112,17 @@ struct PillGroupView: View {
            let savedY = UserDefaults.standard.object(forKey: "pillPositionY") as? CGFloat {
             position = CGPoint(x: savedX, y: savedY)
         } else {
-            if let screen = NSScreen.main {
-                position = CGPoint(
-                    x: screen.frame.midX,
-                    y: screen.frame.maxY - screen.safeAreaInsets.top - 30
-                )
-            }
+            setDefaultPosition()
         }
+    }
+
+    private func setDefaultPosition() {
+        let screen = screenManager.selectedScreen
+        position = CGPoint(
+            x: screen.frame.midX,
+            y: screen.frame.maxY - screen.safeAreaInsets.top - 30
+        )
+        savePosition()
     }
 
     private func savePosition() {

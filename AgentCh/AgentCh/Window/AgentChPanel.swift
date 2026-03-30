@@ -29,8 +29,9 @@ final class AgentChPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    func coverScreen() {
-        guard let screen = NSScreen.main else { return }
-        setFrame(screen.frame, display: true)
+    func coverScreen(_ screen: NSScreen? = nil) {
+        let target = screen ?? NSScreen.main ?? NSScreen.screens.first
+        guard let target else { return }
+        setFrame(target.frame, display: true)
     }
 }
