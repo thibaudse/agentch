@@ -122,13 +122,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private nonisolated func requestAccessibilityIfNeeded() {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
-        if !trusted {
-            NSLog("[AgentCh] Accessibility not granted — opening System Settings")
-            // Open System Settings to Accessibility pane directly
-            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                NSWorkspace.shared.open(url)
-            }
-        }
+        NSLog("[AgentCh] Accessibility trusted: %@", trusted ? "yes" : "no")
     }
 
     private func autoInstallHooksIfNeeded() {
