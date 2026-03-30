@@ -2,10 +2,8 @@ import SwiftUI
 
 struct PillGroupView: View {
     @ObservedObject var sessionManager: SessionManager
-    @ObservedObject var screenManager: ScreenManager
+    @ObservedObject var pillPosition: PillPosition
     @State private var isHovering = false
-    @State private var dragOffset: CGSize = .zero
-    @State private var pillOffset: CGSize = .zero
 
     private let compactMascotSize: CGFloat = 24
     private let expandedMascotSize: CGFloat = 20
@@ -24,38 +22,14 @@ struct PillGroupView: View {
                             isHovering = hovering
                         }
                     }
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                dragOffset = value.translation
-                            }
-                            .onEnded { value in
-                                pillOffset.width += value.translation.width
-                                pillOffset.height += value.translation.height
-                                dragOffset = .zero
-                                saveOffset()
-                            }
-                    )
-                    .offset(x: pillOffset.width + dragOffset.width,
-                            y: pillOffset.height + dragOffset.height)
-                    .padding(.top, topPadding)
+                    .offset(pillPosition.offset)
+                    .padding(.top, pillPosition.topPadding)
                     .transition(.scale.combined(with: .opacity))
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onAppear {
-            loadOffset()
-        }
-        .onChange(of: screenManager.selectedScreenIndex) { _, _ in
-            withAnimation(.spring(duration: 0.3)) {
-                pillOffset = .zero
-                saveOffset()
-            }
-        }
-    }
-
-    private var topPadding: CGFloat {
-        max(screenManager.selectedScreen.safeAreaInsets.top, 8) + 10
+        // Invisible background so SwiftUI allocates the full frame for layout
+        .background(Color.white.opacity(0.0001))
     }
 
     @ViewBuilder
@@ -86,27 +60,13 @@ struct PillGroupView: View {
     private var pillBackground: some View {
         if #available(macOS 26.0, *) {
             Capsule()
-                .fill(.ultraThinMaterial)
-                .glassEffect(.regular.interactive(), in: .capsule)
+                .fill(.clear)
+                .glassEffect(.clear.interactive(), in: .capsule)
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
         } else {
             Capsule()
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
         }
-    }
-
-    // MARK: - Offset Persistence
-
-    private func loadOffset() {
-        if let w = UserDefaults.standard.object(forKey: "pillOffsetW") as? CGFloat,
-           let h = UserDefaults.standard.object(forKey: "pillOffsetH") as? CGFloat {
-            pillOffset = CGSize(width: w, height: h)
-        }
-    }
-
-    private func saveOffset() {
-        UserDefaults.standard.set(pillOffset.width, forKey: "pillOffsetW")
-        UserDefaults.standard.set(pillOffset.height, forKey: "pillOffsetH")
     }
 }

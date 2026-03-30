@@ -20,6 +20,7 @@ struct AgentChApp: App {
 class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     let sessionManager = SessionManager()
     let screenManager = ScreenManager()
+    let pillPosition = PillPosition()
     private var panel: AgentChPanel?
     private var eventServer: EventServer?
     @AppStorage("httpPort") var httpPort: Int = 27182
@@ -35,18 +36,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func applicationWillTerminate(_ notification: Notification) {
         eventServer?.stop()
+        pillPosition.stopMonitoring()
     }
 
     private func setupPanel() {
         let panel = AgentChPanel()
-        let pillView = PillGroupView(sessionManager: sessionManager, screenManager: screenManager)
+        panel.coverScreen(screenManager.selectedScreen)
+
+        let pillView = PillGroupView(sessionManager: sessionManager, pillPosition: pillPosition)
         let hostingView = PillHostingView(rootView: pillView)
-        hostingView.frame = panel.frame
+        hostingView.frame = NSRect(origin: .zero, size: panel.frame.size)
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView = hostingView
-        panel.coverScreen(screenManager.selectedScreen)
+
         panel.orderFrontRegardless()
         self.panel = panel
+
+        pillPosition.startMonitoring()
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -101,6 +107,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.panel?.coverScreen(self.screenManager.selectedScreen)
+                self.pillPosition.resetToDefault()
             }
         }
     }
