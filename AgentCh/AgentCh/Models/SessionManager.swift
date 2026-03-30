@@ -98,13 +98,20 @@ final class SessionManager: ObservableObject {
         }
         if let pid = event.termPid {
             sessions[index].termPid = pid
-            // Update tab title — it changes as Claude works on different tasks
-            if let title = TerminalFocuser.captureActiveTabTitle(claudePid: pid) {
-                sessions[index].tabTitle = title
-            }
         }
         if let tty = event.tty, sessions[index].tty == nil {
             sessions[index].tty = tty
+        }
+        // Capture tab title on every event — it's the terminal's window title
+        // which reflects the active tab. Use it as both the label and for jump matching.
+        if let pid = event.termPid,
+           let title = TerminalFocuser.captureActiveTabTitle(claudePid: pid) {
+            sessions[index].tabTitle = title
+            // Use the tab title as the display label (strip leading status icons)
+            let cleanLabel = String(title.drop(while: { !$0.isASCII }).trimmingCharacters(in: .whitespaces))
+            if !cleanLabel.isEmpty {
+                sessions[index].label = cleanLabel
+            }
         }
     }
 

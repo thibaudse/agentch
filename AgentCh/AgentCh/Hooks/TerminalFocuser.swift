@@ -3,25 +3,35 @@ import ApplicationServices
 
 struct TerminalFocuser {
 
+    /// Focus the terminal tab for a session. Matches by stored tab title.
     static func focus(session: Session) {
         guard let claudePid = session.termPid else { return }
         guard let terminalPid = findTerminalPid(from: claudePid) else { return }
         guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
         guard let appName = app.localizedName else { return }
+        guard let tabTitle = session.tabTitle else {
+            // No tab title stored — just activate the app
+            DispatchQueue.global(qos: .userInitiated).async {
+                runAppleScript("tell application \"\(appName)\" to activate")
+            }
+            return
+        }
 
-        // Use osascript to activate — completely external, won't fight with our panel
-        let marker = "agentch:\(session.id)"
+        // Strip leading non-ASCII (status icons like ⠂, ✳) for matching
+        let cleanTitle = String(tabTitle.drop(while: { !$0.isASCII }).trimmingCharacters(in: .whitespaces))
+
+        NSLog("[Focus] Searching for tab '%@' (clean: '%@') in %@", tabTitle, cleanTitle, appName)
+
         DispatchQueue.global(qos: .userInitiated).async {
-            let script: String
-            // Activate app, then find and click the tab with our marker
-            script = """
+            let script = """
             tell application "\(appName)" to activate
             delay 0.05
             tell application "System Events"
                 tell process "\(appName)"
                     set tabGroup to first UI element of front window whose role is "AXTabGroup"
                     repeat with btn in (UI elements of tabGroup whose role is "AXRadioButton")
-                        if name of btn contains "\(marker)" then
+                        set tabName to name of btn
+                        if tabName contains "\(escapeForAppleScript(cleanTitle))" then
                             click btn
                             return
                         end if
@@ -29,49 +39,22 @@ struct TerminalFocuser {
                 end tell
             end tell
             """
-            NSLog("[Focus] Running AppleScript for marker '%@' in %@", marker, appName)
-            if let appleScript = NSAppleScript(source: script) {
-                var error: NSDictionary?
-                appleScript.executeAndReturnError(&error)
-                if let error {
-                    NSLog("[Focus] AppleScript error: %@", error)
-                }
-            }
+            runAppleScript(script)
         }
     }
 
-    // MARK: - Tab selection
-
-    private static func selectTab(terminalPid: pid_t, session: Session) {
-        let appElement = AXUIElementCreateApplication(terminalPid)
+    /// Capture the terminal's current window title (= active tab title).
+    /// Call this when receiving a hook event — the active tab is the session's tab.
+    static func captureActiveTabTitle(claudePid: Int) -> String? {
+        guard let terminalPid = findTerminalPid(from: claudePid) else { return nil }
+        let appElement = AXUIElementCreateApplication(pid_t(terminalPid))
         guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
-              let window = windows.first else {
-            return
+              let window = windows.first,
+              let title = axAttr(window, kAXTitleAttribute) as? String,
+              !title.isEmpty else {
+            return nil
         }
-
-        guard let tabs = findTabButtons(in: window), tabs.count > 1 else {
-            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-            return
-        }
-
-        // Look for the tab whose title contains our marker: "agentch:SESSION_ID"
-        let marker = "agentch:\(session.id)"
-        NSLog("[Focus] Searching %d tabs for marker '%@'", tabs.count, marker)
-
-        for (index, tab) in tabs.enumerated() {
-            guard let title = axAttr(tab, kAXTitleAttribute) as? String else { continue }
-            NSLog("[Focus] Tab %d: '%@'", index, title)
-
-            if title.contains(marker) {
-                NSLog("[Focus] Matched tab %d", index)
-                AXUIElementPerformAction(tab, kAXPressAction as CFString)
-                AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-                return
-            }
-        }
-
-        NSLog("[Focus] No marker match")
-        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        return title
     }
 
     // MARK: - Process tree
@@ -98,25 +81,7 @@ struct TerminalFocuser {
         return Int(info.kp_eproc.e_ppid)
     }
 
-    // MARK: - AX helpers
-
-    private static func findTabButtons(in element: AXUIElement) -> [AXUIElement]? {
-        guard let children = axAttr(element, kAXChildrenAttribute) as? [AXUIElement] else { return nil }
-        for child in children {
-            if (axAttr(child, kAXRoleAttribute) as? String) == "AXTabGroup" {
-                if let tabChildren = axAttr(child, kAXChildrenAttribute) as? [AXUIElement] {
-                    let buttons = tabChildren.filter {
-                        (axAttr($0, kAXRoleAttribute) as? String) == "AXRadioButton"
-                    }
-                    if !buttons.isEmpty { return buttons }
-                }
-            }
-        }
-        for child in children {
-            if let found = findTabButtons(in: child) { return found }
-        }
-        return nil
-    }
+    // MARK: - Helpers
 
     private static func axAttr(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
         var value: CFTypeRef?
@@ -124,5 +89,18 @@ struct TerminalFocuser {
         return value
     }
 
-    static func captureActiveTabTitle(claudePid: Int) -> String? { nil }
+    private static func runAppleScript(_ source: String) {
+        if let script = NSAppleScript(source: source) {
+            var error: NSDictionary?
+            script.executeAndReturnError(&error)
+            if let error {
+                NSLog("[Focus] AppleScript error: %@", error)
+            }
+        }
+    }
+
+    private static func escapeForAppleScript(_ str: String) -> String {
+        str.replacingOccurrences(of: "\\", with: "\\\\")
+           .replacingOccurrences(of: "\"", with: "\\\"")
+    }
 }
