@@ -34,7 +34,16 @@ private func event(_ type: SessionEventType, sessionId: String = "s1", cwd: Stri
     manager.handleEvent(event(.sessionStart))
     manager.handleEvent(event(.preToolUse))
     manager.handleEvent(event(.stop))
-    #expect(manager.sessions.first?.status == .idle)
+    #expect(manager.sessions.first?.status == .waiting)
+}
+
+@Test @MainActor func userPromptSetsThinking() {
+    let manager = SessionManager()
+    manager.handleEvent(event(.sessionStart))
+    manager.handleEvent(event(.stop))
+    #expect(manager.sessions.first?.status == .waiting)
+    manager.handleEvent(event(.userPromptSubmit))
+    #expect(manager.sessions.first?.status == .thinking)
 }
 
 @Test @MainActor func duplicateSessionStartIgnored() {

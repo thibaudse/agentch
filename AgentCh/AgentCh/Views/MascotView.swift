@@ -10,7 +10,7 @@ struct MascotView: View {
     var body: some View {
         ZStack {
             mascotShape
-                .opacity(status == .idle ? 0.65 : 1.0)
+                .opacity(status == .idle ? 0.5 : 1.0)
                 .scaleEffect(thinkingScale)
                 .offset(y: thinkingBounce)
         }
@@ -71,29 +71,34 @@ struct StatusDot: View {
     let status: SessionStatus
     @State private var pulse = false
 
+    private var shouldPulse: Bool {
+        status == .thinking || status == .waiting
+    }
+
     var body: some View {
         Circle()
             .fill(color)
             .frame(width: 6, height: 6)
-            .scaleEffect(status == .thinking && pulse ? 1.4 : 1.0)
-            .opacity(status == .thinking && pulse ? 0.6 : 1.0)
+            .scaleEffect(shouldPulse && pulse ? 1.4 : 1.0)
+            .opacity(shouldPulse && pulse ? 0.6 : 1.0)
             .animation(
-                status == .thinking
-                    ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+                shouldPulse
+                    ? .easeInOut(duration: status == .waiting ? 1.2 : 0.8).repeatForever(autoreverses: true)
                     : .default,
                 value: pulse
             )
             .onAppear {
-                if status == .thinking { pulse = true }
+                if shouldPulse { pulse = true }
             }
-            .onChange(of: status) { _, newStatus in
-                pulse = newStatus == .thinking
+            .onChange(of: status) { _, _ in
+                pulse = shouldPulse
             }
     }
 
     private var color: Color {
         switch status {
         case .thinking: return .green
+        case .waiting: return .orange
         case .idle: return .gray
         case .error: return .red
         }
@@ -112,10 +117,19 @@ struct ClawdMascot: View {
             ClawdBodyShape()
                 .fill(status == .error ? .red : bodyColor)
 
-            ClawdEyesShape(animationPhase: status == .thinking ? animationPhase : 0)
+            ClawdEyesShape(animationPhase: eyePhase)
                 .fill(.black)
         }
         .aspectRatio(490.0 / 385.0, contentMode: .fit)
+    }
+
+    /// Thinking: squint (blink). Waiting: wide open (negative phase = taller eyes). Idle/error: normal.
+    private var eyePhase: CGFloat {
+        switch status {
+        case .thinking: return animationPhase
+        case .waiting: return -0.3
+        case .idle, .error: return 0
+        }
     }
 }
 
@@ -170,7 +184,9 @@ struct ClawdEyesShape: Shape {
         let t = CGAffineTransform(scaleX: sx, y: sy)
             .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
 
-        let eyeHeight: CGFloat = 48.5 * (1.0 - animationPhase * 0.7)
+        // Positive phase = squint (blink), negative phase = wide open
+        let scale = 1.0 - animationPhase * 0.7
+        let eyeHeight: CGFloat = 48.5 * max(scale, 0.1)
         let eyeYOffset: CGFloat = (48.5 - eyeHeight) / 2
 
         var p = Path()

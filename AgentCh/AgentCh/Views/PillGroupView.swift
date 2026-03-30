@@ -73,10 +73,21 @@ struct PillGroupView: View {
 
     // MARK: - Pill body
 
+    /// Sessions sorted: waiting first, then thinking, then rest.
+    private var sortedSessions: [Session] {
+        sessionManager.sessions.sorted { a, b in
+            a.status.sortOrder < b.status.sortOrder
+        }
+    }
+
+    private var waitingCount: Int {
+        sessionManager.sessions.filter { $0.status == .waiting }.count
+    }
+
     @ViewBuilder
     private var pillBody: some View {
         VStack(alignment: .leading, spacing: 5) {
-            ForEach(Array(sessionManager.sessions.enumerated()), id: \.element.id) { index, session in
+            ForEach(Array(sortedSessions.enumerated()), id: \.element.id) { index, session in
                 let isFirst = index == 0
 
                 if isFirst || isExpanded {
@@ -109,7 +120,7 @@ struct PillGroupView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    Text(session.status.rawValue)
+                    Text(statusLabel(session.status))
                         .font(.system(size: 9, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
@@ -117,11 +128,27 @@ struct PillGroupView: View {
             }
 
             if isFirst && !isExpanded && sessionManager.sessions.count > 1 {
-                Text("\(sessionManager.sessions.count)")
+                Text(compactBadge)
                     .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(waitingCount > 0 ? .orange : .primary)
                     .transition(.blurReplace)
             }
+        }
+    }
+
+    private var compactBadge: String {
+        if waitingCount > 0 {
+            return "\(waitingCount)!"
+        }
+        return "\(sessionManager.sessions.count)"
+    }
+
+    private func statusLabel(_ status: SessionStatus) -> String {
+        switch status {
+        case .thinking: return "working..."
+        case .waiting: return "needs input"
+        case .idle: return "idle"
+        case .error: return "error"
         }
     }
 

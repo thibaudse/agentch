@@ -77,6 +77,7 @@ struct MenuBarView: View {
     private func statusColor(_ status: SessionStatus) -> Color {
         switch status {
         case .thinking: return .green
+        case .waiting: return .orange
         case .idle: return .gray
         case .error: return .red
         }

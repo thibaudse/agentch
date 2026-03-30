@@ -71,13 +71,14 @@ import Foundation
 }
 
 @Test func hookInstallationStatus() throws {
-    let cmd = "curl -s -X POST http://localhost:27182/agentch -H 'Content-Type: application/json' -d \"$(cat)\" > /dev/null 2>&1 || true"
+    let cmd = "curl -s -X POST http://localhost:27182/agentch -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true"
     let fullyInstalled: [String: Any] = [
         "hooks": [
             "SessionStart": [["matcher": "", "hooks": [["type": "command", "command": cmd]]]],
             "SessionEnd": [["matcher": "", "hooks": [["type": "command", "command": cmd]]]],
             "PreToolUse": [["matcher": "", "hooks": [["type": "command", "command": cmd]]]],
             "Stop": [["matcher": "", "hooks": [["type": "command", "command": cmd]]]],
+            "UserPromptSubmit": [["matcher": "", "hooks": [["type": "command", "command": cmd]]]],
         ]
     ]
     #expect(HookManager.isInstalled(in: fullyInstalled, port: 27182) == true)

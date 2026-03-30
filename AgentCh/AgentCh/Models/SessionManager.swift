@@ -72,7 +72,7 @@ final class SessionManager: ObservableObject {
 
         case .stop:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
-            sessions[index].status = .idle
+            sessions[index].status = .waiting
         }
     }
 

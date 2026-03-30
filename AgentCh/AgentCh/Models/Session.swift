@@ -8,8 +8,18 @@ enum AgentType: String, Codable, Sendable, Equatable {
 
 enum SessionStatus: String, Codable, Sendable, Equatable {
     case thinking
+    case waiting
     case idle
     case error
+
+    var sortOrder: Int {
+        switch self {
+        case .waiting: return 0
+        case .thinking: return 1
+        case .error: return 2
+        case .idle: return 3
+        }
+    }
 }
 
 struct Session: Identifiable, Sendable {
