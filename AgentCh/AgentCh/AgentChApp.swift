@@ -66,17 +66,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private func startServer() {
-        guard !hooksDisabled else { return }
+        guard eventServer == nil else {
+            NSLog("[AgentCh] Server already running")
+            return
+        }
+        let port = UInt16(httpPort)
+        NSLog("[AgentCh] Starting server on port %d", port)
         do {
-            let server = try EventServer(port: UInt16(httpPort)) { [weak self] event in
+            let server = try EventServer(port: port) { [weak self] event in
                 Task { @MainActor in
                     self?.sessionManager.handleEvent(event)
                 }
             }
             server.start()
             self.eventServer = server
+            NSLog("[AgentCh] Server started successfully on port %d", port)
         } catch {
-            print("Failed to start event server: \(error)")
+            NSLog("[AgentCh] Failed to start event server: %@", error.localizedDescription)
         }
     }
 
