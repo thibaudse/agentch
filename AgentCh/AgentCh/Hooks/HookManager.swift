@@ -1,7 +1,7 @@
 import Foundation
 
 struct HookManager {
-    static let hookEvents = ["SessionStart", "SessionEnd", "PreToolUse", "Stop"]
+    static let hookEvents = ["SessionStart", "SessionEnd", "PreToolUse", "Stop", "UserPromptSubmit"]
 
     static var settingsPath: String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path

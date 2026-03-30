@@ -5,6 +5,7 @@ enum SessionEventType: String, Codable, Sendable {
     case sessionStart = "SessionStart"
     case sessionEnd = "SessionEnd"
     case preToolUse = "PreToolUse"
+    case userPromptSubmit = "UserPromptSubmit"
     case stop = "Stop"
 }
 
@@ -65,7 +66,7 @@ final class SessionManager: ObservableObject {
                 sessions.removeAll { $0.id == event.sessionId }
             }
 
-        case .preToolUse:
+        case .preToolUse, .userPromptSubmit:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             sessions[index].status = .thinking
 
