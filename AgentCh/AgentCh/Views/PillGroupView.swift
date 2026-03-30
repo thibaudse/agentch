@@ -118,9 +118,10 @@ struct PillGroupView: View {
 
     private func setDefaultPosition() {
         let screen = screenManager.selectedScreen
+        // Position is in the SwiftUI view's local coords (0,0 = top-left)
         position = CGPoint(
-            x: screen.frame.midX,
-            y: screen.frame.maxY - screen.safeAreaInsets.top - 30
+            x: screen.frame.width / 2,
+            y: screen.safeAreaInsets.top + 30
         )
         savePosition()
     }
