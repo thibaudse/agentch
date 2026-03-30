@@ -7,11 +7,36 @@ struct TerminalFocuser {
         guard let claudePid = session.termPid else { return }
         guard let terminalPid = findTerminalPid(from: claudePid) else { return }
         guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
+        guard let appName = app.localizedName else { return }
 
-        app.activate()
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            selectTab(terminalPid: pid_t(terminalPid), session: session)
+        // Use osascript to activate — completely external, won't fight with our panel
+        let marker = "agentch:\(session.id)"
+        DispatchQueue.global(qos: .userInitiated).async {
+            let script: String
+            // Activate app, then find and click the tab with our marker
+            script = """
+            tell application "\(appName)" to activate
+            delay 0.05
+            tell application "System Events"
+                tell process "\(appName)"
+                    set tabGroup to first UI element of front window whose role is "AXTabGroup"
+                    repeat with btn in (UI elements of tabGroup whose role is "AXRadioButton")
+                        if name of btn contains "\(marker)" then
+                            click btn
+                            return
+                        end if
+                    end repeat
+                end tell
+            end tell
+            """
+            NSLog("[Focus] Running AppleScript for marker '%@' in %@", marker, appName)
+            if let appleScript = NSAppleScript(source: script) {
+                var error: NSDictionary?
+                appleScript.executeAndReturnError(&error)
+                if let error {
+                    NSLog("[Focus] AppleScript error: %@", error)
+                }
+            }
         }
     }
 
