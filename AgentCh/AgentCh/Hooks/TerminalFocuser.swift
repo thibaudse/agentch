@@ -1,205 +1,153 @@
 import AppKit
+import ApplicationServices
 
 struct TerminalFocuser {
-    private static let bundleIDs: [String: String] = [
+
+    /// Focus the terminal window/tab running the given session.
+    static func focus(session: Session) {
+        let folderName = URL(fileURLWithPath: session.cwd).lastPathComponent
+
+        // Find the terminal app by walking up from Claude's PID
+        if let claudePid = session.termPid,
+           let terminalPid = findTerminalPid(from: claudePid) {
+            let app = NSRunningApplication(processIdentifier: pid_t(terminalPid))
+            app?.activate()
+
+            // Use AX API to find and raise the right window/tab
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                focusWindowAndTab(pid: pid_t(terminalPid), matching: folderName)
+            }
+            return
+        }
+
+        // Fallback: try known terminal by TERM_PROGRAM
+        if let termProgram = session.termProgram,
+           let bundleID = knownBundleIDs[termProgram],
+           let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
+            app.activate()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                focusWindowAndTab(pid: app.processIdentifier, matching: folderName)
+            }
+            return
+        }
+    }
+
+    // MARK: - Process tree walking
+
+    /// Walk up from a PID to find the first GUI app (the terminal).
+    private static func findTerminalPid(from pid: Int) -> Int? {
+        var current = pid
+        for _ in 0..<15 {
+            let parent = parentPid(of: current)
+            if parent <= 1 { break }
+
+            // Check if this process is a GUI app
+            if let app = NSRunningApplication(processIdentifier: pid_t(parent)),
+               app.activationPolicy == .regular {
+                return parent
+            }
+            current = parent
+        }
+        return nil
+    }
+
+    private static func parentPid(of pid: Int) -> Int {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return 0 }
+        return Int(info.kp_eproc.e_ppid)
+    }
+
+    // MARK: - Accessibility API (universal window/tab focus)
+
+    /// Find the window matching the folder name and raise it. Also try to select the right tab.
+    private static func focusWindowAndTab(pid: pid_t, matching substring: String) {
+        let appElement = AXUIElementCreateApplication(pid)
+
+        guard let windows = axAttribute(appElement, kAXWindowsAttribute) as? [AXUIElement] else { return }
+
+        // First pass: find a window whose title contains the folder name
+        for window in windows {
+            if let title = axAttribute(window, kAXTitleAttribute) as? String,
+               title.localizedCaseInsensitiveContains(substring) {
+                AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+                selectTabMatching(in: window, substring: substring)
+                return
+            }
+        }
+
+        // Second pass: check tabs inside each window
+        for window in windows {
+            if selectTabMatching(in: window, substring: substring) {
+                AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+                return
+            }
+        }
+
+        // Last resort: just raise the first window
+        if let first = windows.first {
+            AXUIElementPerformAction(first, kAXRaiseAction as CFString)
+        }
+    }
+
+    /// Try to find and select a tab matching the substring. Returns true if found.
+    @discardableResult
+    private static func selectTabMatching(in window: AXUIElement, substring: String) -> Bool {
+        // Look for tab groups (AXTabGroup role)
+        guard let children = axAttribute(window, kAXChildrenAttribute) as? [AXUIElement] else { return false }
+
+        for child in children {
+            if let role = axAttribute(child, kAXRoleAttribute) as? String, role == "AXTabGroup" {
+                if let tabs = axAttribute(child, kAXTabsAttribute) as? [AXUIElement] {
+                    for tab in tabs {
+                        if let title = axAttribute(tab, kAXTitleAttribute) as? String,
+                           title.localizedCaseInsensitiveContains(substring) {
+                            AXUIElementPerformAction(tab, kAXPressAction as CFString)
+                            return true
+                        }
+                    }
+                }
+                // Also try AXChildren of the tab group
+                if let tabChildren = axAttribute(child, kAXChildrenAttribute) as? [AXUIElement] {
+                    for tab in tabChildren {
+                        if let title = axAttribute(tab, kAXTitleAttribute) as? String,
+                           title.localizedCaseInsensitiveContains(substring) {
+                            AXUIElementPerformAction(tab, kAXPressAction as CFString)
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+
+        // Recurse into children (some apps nest tab groups deeper)
+        for child in children {
+            if selectTabMatching(in: child, substring: substring) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /// Helper to read an AX attribute.
+    private static func axAttribute(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+        var value: CFTypeRef?
+        AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
+        return value
+    }
+
+    // MARK: - Known terminals
+
+    private static let knownBundleIDs: [String: String] = [
         "Apple_Terminal": "com.apple.Terminal",
         "iTerm.app": "com.googlecode.iterm2",
         "WarpTerminal": "dev.warp.Warp-Stable",
         "vscode": "com.microsoft.VSCode",
         "cursor": "com.todesktop.230313mzl4w4u92",
-        "Hyper": "co.zeit.hyper",
         "kitty": "net.kovidgoyal.kitty",
         "alacritty": "org.alacritty",
         "ghostty": "com.mitchellh.ghostty",
     ]
-
-    static func focus(session: Session) {
-        if let termProgram = session.termProgram,
-           let bundleID = bundleIDs[termProgram] {
-            if activateApp(bundleID: bundleID, termProgram: termProgram, cwd: session.cwd) { return }
-        }
-
-        if let pid = session.termPid {
-            if activateByProcessTree(pid: pid) { return }
-        }
-
-        for (term, bundleID) in [("Apple_Terminal", "com.apple.Terminal"),
-                                  ("iTerm.app", "com.googlecode.iterm2"),
-                                  ("ghostty", "com.mitchellh.ghostty")] {
-            if activateApp(bundleID: bundleID, termProgram: term, cwd: session.cwd) { return }
-        }
-    }
-
-    @discardableResult
-    private static func activateApp(bundleID: String, termProgram: String, cwd: String) -> Bool {
-        guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else {
-            return false
-        }
-
-        app.activate()
-
-        let folderName = URL(fileURLWithPath: cwd).lastPathComponent
-
-        switch termProgram {
-        case "Apple_Terminal":
-            focusTerminalTab(matching: folderName)
-        case "iTerm.app":
-            focusITermTab(matching: folderName)
-        case "ghostty":
-            focusGhosttyTab(matching: folderName)
-        case "vscode", "cursor":
-            focusVSCodeWindow(appName: app.localizedName ?? "Code", matching: folderName)
-        default:
-            focusWindowByTitle(appName: app.localizedName ?? "", matching: folderName)
-        }
-
-        return true
-    }
-
-    // MARK: - Terminal.app
-
-    private static func focusTerminalTab(matching substring: String) {
-        let script = """
-        tell application "Terminal"
-            repeat with w in windows
-                repeat with t in tabs of w
-                    if custom title of t contains "\(substring)" or name of t contains "\(substring)" then
-                        set selected tab of w to t
-                        set index of w to 1
-                        activate
-                        return
-                    end if
-                end repeat
-            end repeat
-        end tell
-        """
-        runAppleScript(script)
-    }
-
-    // MARK: - iTerm2
-
-    private static func focusITermTab(matching substring: String) {
-        let script = """
-        tell application "iTerm2"
-            repeat with w in windows
-                repeat with t in tabs of w
-                    repeat with s in sessions of t
-                        if name of s contains "\(substring)" or profile name of s contains "\(substring)" then
-                            select t
-                            select s
-                            set index of w to 1
-                            activate
-                            return
-                        end if
-                    end repeat
-                end repeat
-            end repeat
-        end tell
-        """
-        runAppleScript(script)
-    }
-
-    // MARK: - Ghostty
-
-    private static func focusGhosttyTab(matching substring: String) {
-        // Ghostty doesn't have rich AppleScript — use System Events to find window + tab
-        let script = """
-        tell application "System Events"
-            tell process "Ghostty"
-                set frontmost to true
-                repeat with w in windows
-                    if name of w contains "\(substring)" then
-                        perform action "AXRaise" of w
-                        return
-                    end if
-                end repeat
-            end tell
-        end tell
-        """
-        runAppleScript(script)
-    }
-
-    // MARK: - VS Code / Cursor
-
-    private static func focusVSCodeWindow(appName: String, matching substring: String) {
-        let script = """
-        tell application "System Events"
-            tell process "\(appName)"
-                set frontmost to true
-                repeat with w in windows
-                    if name of w contains "\(substring)" then
-                        perform action "AXRaise" of w
-                        return
-                    end if
-                end repeat
-            end tell
-        end tell
-        """
-        runAppleScript(script)
-    }
-
-    // MARK: - Generic fallback
-
-    private static func focusWindowByTitle(appName: String, matching substring: String) {
-        let script = """
-        tell application "System Events"
-            tell process "\(appName)"
-                set frontmost to true
-                repeat with w in windows
-                    if name of w contains "\(substring)" then
-                        perform action "AXRaise" of w
-                        return
-                    end if
-                end repeat
-            end tell
-        end tell
-        """
-        runAppleScript(script)
-    }
-
-    // MARK: - Process tree
-
-    @discardableResult
-    private static func activateByProcessTree(pid: Int) -> Bool {
-        var currentPid = pid
-        for _ in 0..<10 {
-            let parentPid = getParentPid(currentPid)
-            if parentPid <= 1 { break }
-
-            if let app = NSRunningApplication(processIdentifier: pid_t(parentPid)),
-               app.activationPolicy == .regular {
-                app.activate()
-                return true
-            }
-            currentPid = parentPid
-        }
-        return false
-    }
-
-    private static func getParentPid(_ pid: Int) -> Int {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-o", "ppid=", "-p", "\(pid)"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-            process.waitUntilExit()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let str = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return Int(str) ?? 0
-        } catch {
-            return 0
-        }
-    }
-
-    // MARK: - Helpers
-
-    private static func runAppleScript(_ source: String) {
-        if let script = NSAppleScript(source: source) {
-            var error: NSDictionary?
-            script.executeAndReturnError(&error)
-        }
-    }
 }
