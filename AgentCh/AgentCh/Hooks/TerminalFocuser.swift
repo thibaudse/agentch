@@ -10,65 +10,42 @@ struct TerminalFocuser {
 
         app.activate()
 
-        // Match by stored tab title (captured at session start)
-        if let tabTitle = session.tabTitle {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                selectTabByTitle(terminalPid: pid_t(terminalPid), title: tabTitle)
-            }
-            return
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            selectTab(terminalPid: pid_t(terminalPid), session: session)
         }
-
-        raiseFirstWindow(pid: pid_t(terminalPid))
     }
 
-    /// Capture the currently active tab title for the terminal owning this Claude PID.
-    /// Call this at SessionStart when the user's tab is still likely active.
-    static func captureActiveTabTitle(claudePid: Int) -> String? {
-        guard let terminalPid = findTerminalPid(from: claudePid) else { return nil }
-        let appElement = AXUIElementCreateApplication(pid_t(terminalPid))
-        guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
-              let window = windows.first else { return nil }
+    // MARK: - Tab selection
 
-        // The window title typically matches the active tab title
-        if let title = axAttr(window, kAXTitleAttribute) as? String, !title.isEmpty {
-            NSLog("[Focus] Captured tab title: '%@'", title)
-            return title
-        }
-        return nil
-    }
-
-    // MARK: - Tab selection by title
-
-    private static func selectTabByTitle(terminalPid: pid_t, title: String) {
+    private static func selectTab(terminalPid: pid_t, session: Session) {
         let appElement = AXUIElementCreateApplication(terminalPid)
         guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
-              let window = windows.first,
-              let tabs = findTabButtons(in: window) else {
-            raiseFirstWindow(pid: terminalPid)
+              let window = windows.first else {
             return
         }
 
-        // Find the tab whose title matches (exact or contains)
-        for (index, tab) in tabs.enumerated() {
-            if let tabTitle = axAttr(tab, kAXTitleAttribute) as? String {
-                // Strip leading status icons (⠂, ✳, etc.) for comparison
-                let cleanTab = tabTitle.trimmingCharacters(in: .whitespaces)
-                    .drop(while: { !$0.isASCII })
-                    .trimmingCharacters(in: .whitespaces)
-                let cleanTarget = title.trimmingCharacters(in: .whitespaces)
-                    .drop(while: { !$0.isASCII })
-                    .trimmingCharacters(in: .whitespaces)
+        guard let tabs = findTabButtons(in: window), tabs.count > 1 else {
+            AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+            return
+        }
 
-                if cleanTab == cleanTarget || tabTitle.contains(cleanTarget) || cleanTab.contains(cleanTarget) {
-                    NSLog("[Focus] Matched tab %d: '%@'", index, tabTitle)
-                    AXUIElementPerformAction(tab, kAXPressAction as CFString)
-                    AXUIElementPerformAction(window, kAXRaiseAction as CFString)
-                    return
-                }
+        // Look for the tab whose title contains our marker: "agentch:SESSION_ID"
+        let marker = "agentch:\(session.id)"
+        NSLog("[Focus] Searching %d tabs for marker '%@'", tabs.count, marker)
+
+        for (index, tab) in tabs.enumerated() {
+            guard let title = axAttr(tab, kAXTitleAttribute) as? String else { continue }
+            NSLog("[Focus] Tab %d: '%@'", index, title)
+
+            if title.contains(marker) {
+                NSLog("[Focus] Matched tab %d", index)
+                AXUIElementPerformAction(tab, kAXPressAction as CFString)
+                AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+                return
             }
         }
 
-        NSLog("[Focus] No tab title match for '%@'", title)
+        NSLog("[Focus] No marker match")
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
     }
 
@@ -116,17 +93,11 @@ struct TerminalFocuser {
         return nil
     }
 
-    private static func raiseFirstWindow(pid: pid_t) {
-        let appElement = AXUIElementCreateApplication(pid)
-        if let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
-           let first = windows.first {
-            AXUIElementPerformAction(first, kAXRaiseAction as CFString)
-        }
-    }
-
     private static func axAttr(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
         var value: CFTypeRef?
         AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
         return value
     }
+
+    static func captureActiveTabTitle(claudePid: Int) -> String? { nil }
 }

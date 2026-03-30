@@ -12,7 +12,15 @@ struct HookManager {
         "http://localhost:\(port)/events"
     }
 
-    private static func agentChCommand(port: UInt16) -> String {
+    /// SessionStart hook: sets tab title marker + posts event
+    private static func sessionStartCommand(port: UInt16) -> String {
+        """
+        INPUT=$(cat); SID=$(echo "$INPUT" | grep -o '"session_id":"[^"]*"' | head -1 | cut -d'"' -f4); TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' '); [ -n "$TTY" ] && printf '\\033]2;agentch:%s\\007' "$SID" > /dev/$TTY 2>/dev/null; echo "$INPUT" | curl -s -X POST "http://localhost:\(port)/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true
+        """
+    }
+
+    /// All other hooks: just post the event, no title change
+    private static func defaultCommand(port: UInt16) -> String {
         "TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' '); curl -s -X POST \"http://localhost:\(port)/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY\" -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true"
     }
 
@@ -42,23 +50,11 @@ struct HookManager {
         try data.write(to: url, options: .atomic)
     }
 
-    // MARK: - Install/Uninstall (pure functions for testability)
-    //
-    // Claude hooks format:
-    //   "SessionStart": [{"matcher": "", "hooks": [{"type": "http", "url": "..."}]}]
-    // Each event has an array of matcher groups. We use matcher "" (match all).
-    // Our hook entry lives inside a matcher group whose hooks array contains our URL.
+    // MARK: - Install/Uninstall
 
     static func mergeHooks(into settings: [String: Any], port: UInt16) throws -> [String: Any] {
         var result = settings
         var hooks = (settings["hooks"] as? [String: Any]) ?? [:]
-        let command = agentChCommand(port: port)
-        let ourHook: [String: Any] = [
-            "type": "command",
-            "command": command,
-            "timeout": 5,
-            "async": true,
-        ]
 
         for event in hookEvents {
             var matcherGroups = (hooks[event] as? [[String: Any]]) ?? []
@@ -69,6 +65,17 @@ struct HookManager {
             }
 
             if !alreadyExists {
+                // SessionStart gets the special command that sets tab title marker
+                let command = event == "SessionStart"
+                    ? sessionStartCommand(port: port)
+                    : defaultCommand(port: port)
+
+                let ourHook: [String: Any] = [
+                    "type": "command",
+                    "command": command,
+                    "timeout": 5,
+                    "async": true,
+                ]
                 let matcherGroup: [String: Any] = [
                     "matcher": "",
                     "hooks": [ourHook]
@@ -92,11 +99,9 @@ struct HookManager {
             guard var matcherGroups = hooks[event] as? [[String: Any]] else { continue }
 
             matcherGroups = matcherGroups.compactMap { group in
-                // Remove legacy flat-format http entries
                 if group["hooks"] == nil && (group["url"] as? String) == url {
                     return nil
                 }
-
                 var group = group
                 guard var groupHooks = group["hooks"] as? [[String: Any]] else { return group }
                 groupHooks.removeAll {
@@ -126,7 +131,7 @@ struct HookManager {
         }
     }
 
-    // MARK: - High-level operations (touch filesystem)
+    // MARK: - High-level operations
 
     static func install(port: UInt16) throws {
         let settings = try readSettings()
