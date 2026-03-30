@@ -3,24 +3,18 @@ import ApplicationServices
 
 struct TerminalFocuser {
 
-    /// Focus the terminal tab for a session. Matches by stored tab title.
+    /// Focus the terminal tab for a session.
+    /// Activates the terminal app, then searches tabs by session label (cwd-derived).
     static func focus(session: Session) {
         guard let claudePid = session.termPid else { return }
         guard let terminalPid = findTerminalPid(from: claudePid) else { return }
         guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
         guard let appName = app.localizedName else { return }
-        guard let tabTitle = session.tabTitle else {
-            // No tab title stored — just activate the app
-            DispatchQueue.global(qos: .userInitiated).async {
-                runAppleScript("tell application \"\(appName)\" to activate")
-            }
-            return
-        }
 
-        // Strip leading non-ASCII (status icons like ⠂, ✳) for matching
-        let cleanTitle = String(tabTitle.drop(while: { !$0.isASCII }).trimmingCharacters(in: .whitespaces))
+        // Search tab titles for the session label (folder/branch name)
+        let searchTerm = escapeForAppleScript(session.label)
 
-        NSLog("[Focus] Searching for tab '%@' (clean: '%@') in %@", tabTitle, cleanTitle, appName)
+        NSLog("[Focus] Activating %@, searching tabs for '%@'", appName, session.label)
 
         DispatchQueue.global(qos: .userInitiated).async {
             let script = """
@@ -31,7 +25,7 @@ struct TerminalFocuser {
                     set tabGroup to first UI element of front window whose role is "AXTabGroup"
                     repeat with btn in (UI elements of tabGroup whose role is "AXRadioButton")
                         set tabName to name of btn
-                        if tabName contains "\(escapeForAppleScript(cleanTitle))" then
+                        if tabName contains "\(searchTerm)" then
                             click btn
                             return
                         end if
@@ -41,20 +35,6 @@ struct TerminalFocuser {
             """
             runAppleScript(script)
         }
-    }
-
-    /// Capture the terminal's current window title (= active tab title).
-    /// Call this when receiving a hook event — the active tab is the session's tab.
-    static func captureActiveTabTitle(claudePid: Int) -> String? {
-        guard let terminalPid = findTerminalPid(from: claudePid) else { return nil }
-        let appElement = AXUIElementCreateApplication(pid_t(terminalPid))
-        guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
-              let window = windows.first,
-              let title = axAttr(window, kAXTitleAttribute) as? String,
-              !title.isEmpty else {
-            return nil
-        }
-        return title
     }
 
     // MARK: - Process tree

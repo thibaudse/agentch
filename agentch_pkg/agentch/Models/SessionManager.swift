@@ -88,7 +88,6 @@ final class SessionManager: ObservableObject {
     private func createSession(from event: SessionEvent) {
         let agentType = AgentType(rawValue: event.agentType) ?? .unknown
         let folderName = URL(fileURLWithPath: event.cwd).lastPathComponent
-        let tabTitle = event.termPid.flatMap { TerminalFocuser.captureActiveTabTitle(claudePid: $0) }
 
         let session = Session(
             id: event.sessionId,
@@ -99,8 +98,7 @@ final class SessionManager: ObservableObject {
             cwd: event.cwd,
             termProgram: event.termProgram,
             termPid: event.termPid,
-            tty: event.tty,
-            tabTitle: tabTitle
+            tty: event.tty
         )
         withAnimation(.spring(duration: 0.3)) {
             sessions.append(session)
@@ -124,17 +122,6 @@ final class SessionManager: ObservableObject {
         }
         if let tty = event.tty, sessions[index].tty == nil {
             sessions[index].tty = tty
-        }
-        // Capture tab title on every event — it's the terminal's window title
-        // which reflects the active tab. Use it as both the label and for jump matching.
-        if let pid = event.termPid,
-           let title = TerminalFocuser.captureActiveTabTitle(claudePid: pid) {
-            sessions[index].tabTitle = title
-            // Use the tab title as the display label (strip leading status icons)
-            let cleanLabel = String(title.drop(while: { !$0.isASCII }).trimmingCharacters(in: .whitespaces))
-            if !cleanLabel.isEmpty {
-                sessions[index].label = cleanLabel
-            }
         }
     }
 
