@@ -8,7 +8,8 @@ import Foundation
         agentType: .claude,
         label: "agentch/main",
         status: .idle,
-        startedAt: Date()
+        startedAt: Date(),
+        cwd: "/Users/thibaud/Projects/agentch"
     )
     #expect(session.id == "abc123")
     #expect(session.agentType == .claude)
