@@ -4,107 +4,148 @@ struct PillGroupView: View {
     @ObservedObject var sessionManager: SessionManager
     @ObservedObject var pillPosition: PillPosition
     @State private var isHovering = false
+    @State private var isPeeking = false
+    @State private var peekTask: Task<Void, Never>?
 
-    private let compactMascotSize: CGFloat = 24
-    private let expandedMascotSize: CGFloat = 20
-    private let padding: CGFloat = 8
-    private let spacing: CGFloat = 6
+    private let mascotSize: CGFloat = 20
+    private let hPadding: CGFloat = 10
+    private let vPadding: CGFloat = 6
+    private let peekDuration: TimeInterval = 2.5
+
+    private var isExpanded: Bool { isHovering || isPeeking }
+
+    /// Snapshot of sessions state — changes trigger a peek.
+    private var sessionsSnapshot: String {
+        sessionManager.sessions.map { "\($0.id):\($0.status.rawValue)" }.joined(separator: ",")
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
             if !sessionManager.sessions.isEmpty {
-                pillContent
-                    .background(pillBackground)
+                pillBody
                     .fixedSize()
-                    .contentShape(Capsule())
+                    .padding(20)
+                    .contentShape(Rectangle())
                     .onHover { hovering in
-                        withAnimation(.spring(duration: 0.3)) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                             isHovering = hovering
                         }
+                        if hovering { cancelPeek() }
                     }
+                    .padding(-20)
                     .offset(pillPosition.offset)
                     .padding(.top, pillPosition.topPadding)
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.blurReplace)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.white.opacity(0.0001))
-    }
-
-    @ViewBuilder
-    private var pillContent: some View {
-        if isHovering {
-            expandedContent
-        } else {
-            compactContent
+        .onChange(of: sessionsSnapshot) { _, _ in
+            peek()
         }
     }
 
-    // MARK: - Compact: single mascot + optional count badge
+    // MARK: - Peek (auto-expand then collapse)
 
-    @ViewBuilder
-    private var compactContent: some View {
-        HStack(spacing: 2) {
-            // Show the most active session's mascot (thinking > idle > error)
-            MascotView(
-                agentType: primarySession.agentType,
-                status: primarySession.status,
-                size: compactMascotSize
-            )
-
-            if sessionManager.sessions.count > 1 {
-                Text("×\(sessionManager.sessions.count)")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .transition(.opacity.combined(with: .scale))
+    private func peek() {
+        cancelPeek()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            isPeeking = true
+        }
+        peekTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(peekDuration))
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                isPeeking = false
             }
         }
-        .padding(.horizontal, padding)
-        .padding(.vertical, padding / 2)
     }
 
-    // MARK: - Expanded: all sessions listed
+    private func cancelPeek() {
+        peekTask?.cancel()
+        peekTask = nil
+        if isPeeking {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                isPeeking = false
+            }
+        }
+    }
+
+    // MARK: - Pill body
 
     @ViewBuilder
-    private var expandedContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(sessionManager.sessions) { session in
-                HStack(spacing: 6) {
-                    MascotView(
-                        agentType: session.agentType,
-                        status: session.status,
-                        size: expandedMascotSize
-                    )
+    private var pillBody: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(Array(sessionManager.sessions.enumerated()), id: \.element.id) { index, session in
+                let isFirst = index == 0
+
+                if isFirst || isExpanded {
+                    sessionRow(session: session, isFirst: isFirst)
+                        .transition(.blurReplace)
+                }
+            }
+        }
+        .padding(.horizontal, hPadding)
+        .padding(.vertical, vPadding)
+        .background(pillBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func sessionRow(session: Session, isFirst: Bool) -> some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(statusColor(session.status))
+                .frame(width: 6, height: 6)
+
+            MascotView(
+                agentType: session.agentType,
+                status: session.status,
+                size: mascotSize
+            )
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(session.label)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+
+                    Text(session.status.rawValue)
+                        .font(.system(size: 9, weight: .regular, design: .rounded))
+                        .foregroundStyle(.secondary)
                 }
+                .transition(.blurReplace)
+            }
+
+            if isFirst && !isExpanded && sessionManager.sessions.count > 1 {
+                Text("\(sessionManager.sessions.count)")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.primary)
+                    .transition(.blurReplace)
             }
         }
-        .padding(.horizontal, padding)
-        .padding(.vertical, padding / 2)
-        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
     }
 
-    /// The session to show in compact mode — prefer thinking over idle.
-    private var primarySession: Session {
-        sessionManager.sessions.first(where: { $0.status == .thinking })
-            ?? sessionManager.sessions.first(where: { $0.status == .error })
-            ?? sessionManager.sessions.first!
+    private func statusColor(_ status: SessionStatus) -> Color {
+        switch status {
+        case .thinking: return .green
+        case .idle: return .gray
+        case .error: return .red
+        }
     }
 
     @ViewBuilder
     private var pillBackground: some View {
         if #available(macOS 26.0, *) {
-            Capsule()
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.clear)
-                .glassEffect(.clear.interactive(), in: .capsule)
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+                .glassEffect(.clear.interactive(), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         } else {
-            Capsule()
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+                .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         }
     }
 }
