@@ -42,38 +42,18 @@ final class SessionManager: ObservableObject {
     @Published var sessions: [Session] = []
 
     func handleEvent(_ event: SessionEvent) {
+        // Auto-create session if we receive an event for an unknown session
+        // (e.g., agentch started while Claude sessions were already running)
+        if event.event != .sessionEnd && event.event != .sessionStart {
+            if !sessions.contains(where: { $0.id == event.sessionId }) {
+                createSession(from: event)
+            }
+        }
+
         switch event.event {
         case .sessionStart:
-            guard !sessions.contains(where: { $0.id == event.sessionId }) else { return }
-            let agentType = AgentType(rawValue: event.agentType) ?? .unknown
-            // Use folder name as temporary label, resolve git info in background
-            let folderName = URL(fileURLWithPath: event.cwd).lastPathComponent
-            // Capture the active tab title from the terminal (best effort)
-            let tabTitle = event.termPid.flatMap { TerminalFocuser.captureActiveTabTitle(claudePid: $0) }
-
-            let session = Session(
-                id: event.sessionId,
-                agentType: agentType,
-                label: folderName,
-                status: .idle,
-                startedAt: Date(),
-                cwd: event.cwd,
-                termProgram: event.termProgram,
-                termPid: event.termPid,
-                tty: event.tty,
-                tabTitle: tabTitle
-            )
-            withAnimation(.spring(duration: 0.3)) {
-                sessions.append(session)
-            }
-            // Resolve git branch/worktree off main thread
-            let cwd = event.cwd
-            let sessionId = event.sessionId
-            Task.detached { [weak self] in
-                let branch = Self.gitBranch(at: cwd)
-                let isWorktree = Self.isGitWorktree(at: cwd)
-                let label = Session.deriveLabel(cwd: cwd, gitBranch: branch, isWorktree: isWorktree)
-                await self?.updateLabel(sessionId: sessionId, label: label)
+            if !sessions.contains(where: { $0.id == event.sessionId }) {
+                createSession(from: event)
             }
 
         case .sessionEnd:
@@ -88,7 +68,6 @@ final class SessionManager: ObservableObject {
 
         case .preToolUse:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
-            // Only set thinking if not already waiting (permission prompt)
             if sessions[index].status != .waiting {
                 sessions[index].status = .thinking
             }
@@ -103,6 +82,36 @@ final class SessionManager: ObservableObject {
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             sessions[index].status = .waiting
             updateTermInfo(at: index, from: event)
+        }
+    }
+
+    private func createSession(from event: SessionEvent) {
+        let agentType = AgentType(rawValue: event.agentType) ?? .unknown
+        let folderName = URL(fileURLWithPath: event.cwd).lastPathComponent
+        let tabTitle = event.termPid.flatMap { TerminalFocuser.captureActiveTabTitle(claudePid: $0) }
+
+        let session = Session(
+            id: event.sessionId,
+            agentType: agentType,
+            label: folderName,
+            status: .idle,
+            startedAt: Date(),
+            cwd: event.cwd,
+            termProgram: event.termProgram,
+            termPid: event.termPid,
+            tty: event.tty,
+            tabTitle: tabTitle
+        )
+        withAnimation(.spring(duration: 0.3)) {
+            sessions.append(session)
+        }
+        let cwd = event.cwd
+        let sessionId = event.sessionId
+        Task.detached { [weak self] in
+            let branch = Self.gitBranch(at: cwd)
+            let isWorktree = Self.isGitWorktree(at: cwd)
+            let label = Session.deriveLabel(cwd: cwd, gitBranch: branch, isWorktree: isWorktree)
+            await self?.updateLabel(sessionId: sessionId, label: label)
         }
     }
 
