@@ -10,53 +10,71 @@ struct TerminalFocuser {
 
         app.activate()
 
-        guard let tty = session.tty else {
-            raiseFirstWindow(pid: pid_t(terminalPid))
+        // Match by stored tab title (captured at session start)
+        if let tabTitle = session.tabTitle {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                selectTabByTitle(terminalPid: pid_t(terminalPid), title: tabTitle)
+            }
             return
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            selectTabByTTY(terminalPid: terminalPid, targetTTY: tty)
-        }
+        raiseFirstWindow(pid: pid_t(terminalPid))
     }
 
-    // MARK: - Tab selection by TTY
-
-    private static func selectTabByTTY(terminalPid: Int, targetTTY: String) {
-        // Get AX tab buttons (visual order, left to right)
+    /// Capture the currently active tab title for the terminal owning this Claude PID.
+    /// Call this at SessionStart when the user's tab is still likely active.
+    static func captureActiveTabTitle(claudePid: Int) -> String? {
+        guard let terminalPid = findTerminalPid(from: claudePid) else { return nil }
         let appElement = AXUIElementCreateApplication(pid_t(terminalPid))
         guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
+              let window = windows.first else { return nil }
+
+        // The window title typically matches the active tab title
+        if let title = axAttr(window, kAXTitleAttribute) as? String, !title.isEmpty {
+            NSLog("[Focus] Captured tab title: '%@'", title)
+            return title
+        }
+        return nil
+    }
+
+    // MARK: - Tab selection by title
+
+    private static func selectTabByTitle(terminalPid: pid_t, title: String) {
+        let appElement = AXUIElementCreateApplication(terminalPid)
+        guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
               let window = windows.first,
-              let tabs = findTabButtons(in: window),
-              tabs.count > 1 else {
-            raiseFirstWindow(pid: pid_t(terminalPid))
+              let tabs = findTabButtons(in: window) else {
+            raiseFirstWindow(pid: terminalPid)
             return
         }
 
-        // Get direct children of terminal sorted by PID (= creation order = tab order)
-        let tabPids = childPids(of: terminalPid).sorted()
+        // Find the tab whose title matches (exact or contains)
+        for (index, tab) in tabs.enumerated() {
+            if let tabTitle = axAttr(tab, kAXTitleAttribute) as? String {
+                // Strip leading status icons (⠂, ✳, etc.) for comparison
+                let cleanTab = tabTitle.trimmingCharacters(in: .whitespaces)
+                    .drop(while: { !$0.isASCII })
+                    .trimmingCharacters(in: .whitespaces)
+                let cleanTarget = title.trimmingCharacters(in: .whitespaces)
+                    .drop(while: { !$0.isASCII })
+                    .trimmingCharacters(in: .whitespaces)
 
-        // Map each child PID to its TTY
-        var ttyToIndex: [String: Int] = [:]
-        for (index, pid) in tabPids.enumerated() {
-            if let tty = ttyOf(pid: pid) {
-                ttyToIndex[tty] = index
+                if cleanTab == cleanTarget || tabTitle.contains(cleanTarget) || cleanTab.contains(cleanTarget) {
+                    NSLog("[Focus] Matched tab %d: '%@'", index, tabTitle)
+                    AXUIElementPerformAction(tab, kAXPressAction as CFString)
+                    AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+                    return
+                }
             }
         }
 
-        NSLog("[Focus] TTY map: %@, target: %@", String(describing: ttyToIndex), targetTTY)
-
-        if let tabIndex = ttyToIndex[targetTTY], tabIndex < tabs.count {
-            NSLog("[Focus] Selecting tab %d for TTY %@", tabIndex, targetTTY)
-            AXUIElementPerformAction(tabs[tabIndex], kAXPressAction as CFString)
-        }
-
+        NSLog("[Focus] No tab title match for '%@'", title)
         AXUIElementPerformAction(window, kAXRaiseAction as CFString)
     }
 
     // MARK: - Process tree
 
-    private static func findTerminalPid(from pid: Int) -> Int? {
+    static func findTerminalPid(from pid: Int) -> Int? {
         var current = pid
         for _ in 0..<15 {
             let parent = parentPid(of: current)
@@ -76,30 +94,6 @@ struct TerminalFocuser {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
         guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return 0 }
         return Int(info.kp_eproc.e_ppid)
-    }
-
-    private static func childPids(of pid: Int) -> [Int] {
-        var size = 0
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
-        sysctl(&mib, 3, nil, &size, nil, 0)
-        let count = size / MemoryLayout<kinfo_proc>.stride
-        var procs = [kinfo_proc](repeating: kinfo_proc(), count: count)
-        sysctl(&mib, 3, &procs, &size, nil, 0)
-        let actualCount = size / MemoryLayout<kinfo_proc>.stride
-        return procs[0..<actualCount]
-            .filter { Int($0.kp_eproc.e_ppid) == pid }
-            .map { Int($0.kp_proc.p_pid) }
-    }
-
-    private static func ttyOf(pid: Int) -> String? {
-        var info = kinfo_proc()
-        var size = MemoryLayout<kinfo_proc>.size
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
-        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return nil }
-        let dev = info.kp_eproc.e_tdev
-        if dev == 0 || dev == -1 { return nil }
-        let minor = dev & 0xffffff
-        return String(format: "ttys%03d", minor)
     }
 
     // MARK: - AX helpers

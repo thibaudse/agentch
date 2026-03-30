@@ -47,6 +47,9 @@ final class SessionManager: ObservableObject {
             let agentType = AgentType(rawValue: event.agentType) ?? .unknown
             // Use folder name as temporary label, resolve git info in background
             let folderName = URL(fileURLWithPath: event.cwd).lastPathComponent
+            // Capture the active tab title from the terminal (best effort)
+            let tabTitle = event.termPid.flatMap { TerminalFocuser.captureActiveTabTitle(claudePid: $0) }
+
             let session = Session(
                 id: event.sessionId,
                 agentType: agentType,
@@ -56,7 +59,8 @@ final class SessionManager: ObservableObject {
                 cwd: event.cwd,
                 termProgram: event.termProgram,
                 termPid: event.termPid,
-                tty: event.tty
+                tty: event.tty,
+                tabTitle: tabTitle
             )
             withAnimation(.spring(duration: 0.3)) {
                 sessions.append(session)
@@ -92,8 +96,12 @@ final class SessionManager: ObservableObject {
         if let term = event.termProgram, sessions[index].termProgram == nil {
             sessions[index].termProgram = term
         }
-        if let pid = event.termPid, sessions[index].termPid == nil {
+        if let pid = event.termPid {
             sessions[index].termPid = pid
+            // Update tab title — it changes as Claude works on different tasks
+            if let title = TerminalFocuser.captureActiveTabTitle(claudePid: pid) {
+                sessions[index].tabTitle = title
+            }
         }
         if let tty = event.tty, sessions[index].tty == nil {
             sessions[index].tty = tty
