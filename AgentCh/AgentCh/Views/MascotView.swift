@@ -10,8 +10,9 @@ struct MascotView: View {
     var body: some View {
         ZStack {
             mascotShape
-                .opacity(status == .idle ? 0.7 : 1.0)
+                .opacity(status == .idle ? 0.65 : 1.0)
                 .scaleEffect(thinkingScale)
+                .offset(y: thinkingBounce)
         }
         .frame(width: size, height: size)
         .onAppear {
@@ -31,13 +32,17 @@ struct MascotView: View {
     }
 
     private func startThinkingAnimation() {
-        withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+        withAnimation(.easeInOut(duration: 0.7).repeatForever(autoreverses: true)) {
             animationPhase = 1
         }
     }
 
     private var thinkingScale: CGFloat {
-        status == .thinking ? 1.0 + animationPhase * 0.06 : 1.0
+        status == .thinking ? 1.0 + animationPhase * 0.05 : 1.0
+    }
+
+    private var thinkingBounce: CGFloat {
+        status == .thinking ? -animationPhase * 1.5 : 0
     }
 
     @ViewBuilder
@@ -61,21 +66,52 @@ struct MascotView: View {
     }
 }
 
+/// Pulsing status indicator dot.
+struct StatusDot: View {
+    let status: SessionStatus
+    @State private var pulse = false
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 6, height: 6)
+            .scaleEffect(status == .thinking && pulse ? 1.4 : 1.0)
+            .opacity(status == .thinking && pulse ? 0.6 : 1.0)
+            .animation(
+                status == .thinking
+                    ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+                    : .default,
+                value: pulse
+            )
+            .onAppear {
+                if status == .thinking { pulse = true }
+            }
+            .onChange(of: status) { _, newStatus in
+                pulse = newStatus == .thinking
+            }
+    }
+
+    private var color: Color {
+        switch status {
+        case .thinking: return .green
+        case .idle: return .gray
+        case .error: return .red
+        }
+    }
+}
+
 /// Clawd mascot — pixel-art Claude character.
-/// SVG viewBox: 490x385. Body is #DA7758, eyes are black.
 struct ClawdMascot: View {
     let status: SessionStatus
     let animationPhase: CGFloat
 
-    private let bodyColor = Color(red: 0.855, green: 0.467, blue: 0.345) // #DA7758
+    private let bodyColor = Color(red: 0.855, green: 0.467, blue: 0.345)
 
     var body: some View {
         ZStack {
-            // Body
             ClawdBodyShape()
                 .fill(status == .error ? .red : bodyColor)
 
-            // Eyes
             ClawdEyesShape(animationPhase: status == .thinking ? animationPhase : 0)
                 .fill(.black)
         }
@@ -83,7 +119,6 @@ struct ClawdMascot: View {
     }
 }
 
-/// The Clawd body shape (the orange silhouette).
 struct ClawdBodyShape: Shape {
     func path(in rect: CGRect) -> Path {
         let sx = rect.width / 490
@@ -92,7 +127,6 @@ struct ClawdBodyShape: Shape {
             .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
 
         var p = Path()
-        // Main body path from SVG
         p.move(to: CGPoint(x: 89.5, y: 384.5))
         p.addLine(to: CGPoint(x: 45, y: 384.5))
         p.addLine(to: CGPoint(x: 45, y: 192))
@@ -122,7 +156,6 @@ struct ClawdBodyShape: Shape {
     }
 }
 
-/// The Clawd eyes — two square eyes that blink when thinking.
 struct ClawdEyesShape: Shape {
     var animationPhase: CGFloat
 
@@ -137,16 +170,12 @@ struct ClawdEyesShape: Shape {
         let t = CGAffineTransform(scaleX: sx, y: sy)
             .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
 
-        // Eye height squishes for blink effect
         let eyeHeight: CGFloat = 48.5 * (1.0 - animationPhase * 0.7)
         let eyeYOffset: CGFloat = (48.5 - eyeHeight) / 2
 
         var p = Path()
-        // Left eye (89, 95) to (134.5, 143.5)
         p.addRect(CGRect(x: 89, y: 95 + eyeYOffset, width: 45.5, height: eyeHeight))
-        // Right eye (355, 95) to (400.5, 143.5)
         p.addRect(CGRect(x: 355, y: 95 + eyeYOffset, width: 45.5, height: eyeHeight))
-
         return p.applying(t)
     }
 }

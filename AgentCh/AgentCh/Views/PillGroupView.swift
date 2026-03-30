@@ -94,9 +94,7 @@ struct PillGroupView: View {
     @ViewBuilder
     private func sessionRow(session: Session, isFirst: Bool) -> some View {
         HStack(spacing: 6) {
-            Circle()
-                .fill(statusColor(session.status))
-                .frame(width: 6, height: 6)
+            StatusDot(status: session.status)
 
             MascotView(
                 agentType: session.agentType,
@@ -124,14 +122,6 @@ struct PillGroupView: View {
                     .foregroundStyle(.primary)
                     .transition(.blurReplace)
             }
-        }
-    }
-
-    private func statusColor(_ status: SessionStatus) -> Color {
-        switch status {
-        case .thinking: return .green
-        case .idle: return .gray
-        case .error: return .red
         }
     }
 
