@@ -31,6 +31,7 @@ struct Session: Identifiable, Sendable {
     let cwd: String
     var termProgram: String?
     var termPid: Int?
+    var tty: String?
 
     static let defaultBranches: Set<String> = ["main", "master"]
 

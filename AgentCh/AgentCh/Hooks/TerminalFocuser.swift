@@ -4,43 +4,54 @@ import ApplicationServices
 struct TerminalFocuser {
 
     static func focus(session: Session) {
-        guard let claudePid = session.termPid else {
-            NSLog("[Focus] No PID for session %@", session.id)
-            return
-        }
+        guard let claudePid = session.termPid else { return }
+        guard let terminalPid = findTerminalPid(from: claudePid) else { return }
+        guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
 
-        // Walk up from Claude PID to find the terminal app
-        guard let terminalPid = findTerminalPid(from: claudePid) else {
-            NSLog("[Focus] No terminal found for PID %d", claudePid)
-            return
-        }
-
-        guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else {
-            NSLog("[Focus] No app for terminal PID %d", terminalPid)
-            return
-        }
-
-        NSLog("[Focus] Activating %@ (PID %d)", app.localizedName ?? "?", terminalPid)
         app.activate()
 
-        // Find which direct child of the terminal owns our Claude process (= which tab)
-        let directChild = findDirectChildOfTerminal(claudePid: claudePid, terminalPid: terminalPid)
-        if let directChild {
-            // Get all direct children of terminal (each = a tab), sorted by PID as proxy for tab order
-            let allTabPids = childPids(of: terminalPid).sorted()
-            if let tabIndex = allTabPids.firstIndex(of: directChild) {
-                NSLog("[Focus] Tab index: %d (child PID %d out of %d tabs)", tabIndex, directChild, allTabPids.count)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    selectTab(index: tabIndex, terminalPid: pid_t(terminalPid))
-                }
-                return
+        guard let tty = session.tty else {
+            raiseFirstWindow(pid: pid_t(terminalPid))
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            selectTabByTTY(terminalPid: terminalPid, targetTTY: tty)
+        }
+    }
+
+    // MARK: - Tab selection by TTY
+
+    private static func selectTabByTTY(terminalPid: Int, targetTTY: String) {
+        // Get AX tab buttons (visual order, left to right)
+        let appElement = AXUIElementCreateApplication(pid_t(terminalPid))
+        guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
+              let window = windows.first,
+              let tabs = findTabButtons(in: window),
+              tabs.count > 1 else {
+            raiseFirstWindow(pid: pid_t(terminalPid))
+            return
+        }
+
+        // Get direct children of terminal sorted by PID (= creation order = tab order)
+        let tabPids = childPids(of: terminalPid).sorted()
+
+        // Map each child PID to its TTY
+        var ttyToIndex: [String: Int] = [:]
+        for (index, pid) in tabPids.enumerated() {
+            if let tty = ttyOf(pid: pid) {
+                ttyToIndex[tty] = index
             }
         }
 
-        NSLog("[Focus] Could not determine tab, just raising window")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            raiseFirstWindow(pid: pid_t(terminalPid))
+        NSLog("[Focus] TTY map: %@, target: %@", String(describing: ttyToIndex), targetTTY)
+
+        if let tabIndex = ttyToIndex[targetTTY], tabIndex < tabs.count {
+            NSLog("[Focus] Selecting tab %d for TTY %@", tabIndex, targetTTY)
+            AXUIElementPerformAction(tabs[tabIndex], kAXPressAction as CFString)
         }
+
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
     }
 
     // MARK: - Process tree
@@ -54,22 +65,6 @@ struct TerminalFocuser {
                app.activationPolicy == .regular {
                 return parent
             }
-            current = parent
-        }
-        return nil
-    }
-
-    /// Find the direct child of the terminal that's an ancestor of Claude.
-    private static func findDirectChildOfTerminal(claudePid: Int, terminalPid: Int) -> Int? {
-        var current = claudePid
-        var previous = claudePid
-        for _ in 0..<15 {
-            let parent = parentPid(of: current)
-            if parent == terminalPid {
-                return current
-            }
-            if parent <= 1 { break }
-            previous = current
             current = parent
         }
         return nil
@@ -96,34 +91,23 @@ struct TerminalFocuser {
             .map { Int($0.kp_proc.p_pid) }
     }
 
-    // MARK: - Accessibility: tab selection
-
-    private static func selectTab(index: Int, terminalPid: pid_t) {
-        let appElement = AXUIElementCreateApplication(terminalPid)
-        guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
-              let window = windows.first else {
-            NSLog("[Focus] No AX windows")
-            return
-        }
-
-        // Find AXTabGroup and its AXRadioButton children
-        if let tabs = findTabButtons(in: window) {
-            NSLog("[Focus] Found %d tab buttons, selecting index %d", tabs.count, index)
-            if index < tabs.count {
-                AXUIElementPerformAction(tabs[index], kAXPressAction as CFString)
-            }
-        }
-
-        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+    private static func ttyOf(pid: Int) -> String? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return nil }
+        let dev = info.kp_eproc.e_tdev
+        if dev == 0 || dev == -1 { return nil }
+        let minor = dev & 0xffffff
+        return String(format: "ttys%03d", minor)
     }
+
+    // MARK: - AX helpers
 
     private static func findTabButtons(in element: AXUIElement) -> [AXUIElement]? {
         guard let children = axAttr(element, kAXChildrenAttribute) as? [AXUIElement] else { return nil }
-
         for child in children {
-            let role = axAttr(child, kAXRoleAttribute) as? String ?? ""
-            if role == "AXTabGroup" {
-                // Collect AXRadioButton children (these are the tabs)
+            if (axAttr(child, kAXRoleAttribute) as? String) == "AXTabGroup" {
                 if let tabChildren = axAttr(child, kAXChildrenAttribute) as? [AXUIElement] {
                     let buttons = tabChildren.filter {
                         (axAttr($0, kAXRoleAttribute) as? String) == "AXRadioButton"
@@ -132,12 +116,8 @@ struct TerminalFocuser {
                 }
             }
         }
-
-        // Recurse
         for child in children {
-            if let found = findTabButtons(in: child) {
-                return found
-            }
+            if let found = findTabButtons(in: child) { return found }
         }
         return nil
     }
@@ -155,13 +135,4 @@ struct TerminalFocuser {
         AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
         return value
     }
-
-    private static let knownBundleIDs: [String: String] = [
-        "Apple_Terminal": "com.apple.Terminal",
-        "iTerm.app": "com.googlecode.iterm2",
-        "WarpTerminal": "dev.warp.Warp-Stable",
-        "vscode": "com.microsoft.VSCode",
-        "cursor": "com.todesktop.230313mzl4w4u92",
-        "ghostty": "com.mitchellh.ghostty",
-    ]
 }

@@ -16,8 +16,8 @@ struct SessionEvent: Sendable {
     let agentType: String
     var termProgram: String?
     var termPid: Int?
+    var tty: String?
 
-    /// Parse from Claude's native hook payload + URL query params for terminal info.
     static func from(json: [String: Any], queryParams: [String: String] = [:]) -> SessionEvent? {
         guard let hookEventName = json["hook_event_name"] as? String,
               let event = SessionEventType(rawValue: hookEventName),
@@ -28,9 +28,10 @@ struct SessionEvent: Sendable {
         let agentType = json["agent_type"] as? String ?? "claude"
         let termProgram = queryParams["term"]?.isEmpty == true ? nil : queryParams["term"]
         let termPid = queryParams["pid"].flatMap(Int.init)
+        let tty = queryParams["tty"]?.isEmpty == true ? nil : queryParams["tty"]
         return SessionEvent(
             event: event, sessionId: sessionId, cwd: cwd, agentType: agentType,
-            termProgram: termProgram, termPid: termPid
+            termProgram: termProgram, termPid: termPid, tty: tty
         )
     }
 }
@@ -54,7 +55,8 @@ final class SessionManager: ObservableObject {
                 startedAt: Date(),
                 cwd: event.cwd,
                 termProgram: event.termProgram,
-                termPid: event.termPid
+                termPid: event.termPid,
+                tty: event.tty
             )
             withAnimation(.spring(duration: 0.3)) {
                 sessions.append(session)
@@ -92,6 +94,9 @@ final class SessionManager: ObservableObject {
         }
         if let pid = event.termPid, sessions[index].termPid == nil {
             sessions[index].termPid = pid
+        }
+        if let tty = event.tty, sessions[index].tty == nil {
+            sessions[index].tty = tty
         }
     }
 
