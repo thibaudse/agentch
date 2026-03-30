@@ -5,8 +5,7 @@ struct PillGroupView: View {
     @ObservedObject var screenManager: ScreenManager
     @State private var isHovering = false
     @State private var dragOffset: CGSize = .zero
-    @State private var position: CGPoint = .zero
-    @State private var hasSetInitialPosition = false
+    @State private var pillOffset: CGSize = .zero
 
     private let compactMascotSize: CGFloat = 24
     private let expandedMascotSize: CGFloat = 20
@@ -14,29 +13,49 @@ struct PillGroupView: View {
     private let spacing: CGFloat = 6
 
     var body: some View {
-        if !sessionManager.sessions.isEmpty {
-            pillContent
-                .background(pillBackground)
-                .onHover { hovering in
-                    withAnimation(.spring(duration: 0.3)) {
-                        isHovering = hovering
+        ZStack(alignment: .top) {
+            if !sessionManager.sessions.isEmpty {
+                pillContent
+                    .background(pillBackground)
+                    .fixedSize()
+                    .contentShape(Capsule())
+                    .onHover { hovering in
+                        withAnimation(.spring(duration: 0.3)) {
+                            isHovering = hovering
+                        }
                     }
-                }
-                .gesture(dragGesture)
-                .position(currentPosition)
-                .onAppear {
-                    if !hasSetInitialPosition {
-                        loadOrDefaultPosition()
-                        hasSetInitialPosition = true
-                    }
-                }
-                .onChange(of: screenManager.selectedScreenIndex) { _, _ in
-                    withAnimation(.spring(duration: 0.3)) {
-                        setDefaultPosition()
-                    }
-                }
-                .transition(.scale.combined(with: .opacity))
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                dragOffset = value.translation
+                            }
+                            .onEnded { value in
+                                pillOffset.width += value.translation.width
+                                pillOffset.height += value.translation.height
+                                dragOffset = .zero
+                                saveOffset()
+                            }
+                    )
+                    .offset(x: pillOffset.width + dragOffset.width,
+                            y: pillOffset.height + dragOffset.height)
+                    .padding(.top, topPadding)
+                    .transition(.scale.combined(with: .opacity))
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onAppear {
+            loadOffset()
+        }
+        .onChange(of: screenManager.selectedScreenIndex) { _, _ in
+            withAnimation(.spring(duration: 0.3)) {
+                pillOffset = .zero
+                saveOffset()
+            }
+        }
+    }
+
+    private var topPadding: CGFloat {
+        max(screenManager.selectedScreen.safeAreaInsets.top, 8) + 10
     }
 
     @ViewBuilder
@@ -87,47 +106,17 @@ struct PillGroupView: View {
         }
     }
 
-    private var dragGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                dragOffset = value.translation
-            }
-            .onEnded { value in
-                position.x += value.translation.width
-                position.y += value.translation.height
-                dragOffset = .zero
-                savePosition()
-            }
-    }
+    // MARK: - Offset Persistence
 
-    private var currentPosition: CGPoint {
-        CGPoint(
-            x: position.x + dragOffset.width,
-            y: position.y + dragOffset.height
-        )
-    }
-
-    private func loadOrDefaultPosition() {
-        if let savedX = UserDefaults.standard.object(forKey: "pillPositionX") as? CGFloat,
-           let savedY = UserDefaults.standard.object(forKey: "pillPositionY") as? CGFloat {
-            position = CGPoint(x: savedX, y: savedY)
-        } else {
-            setDefaultPosition()
+    private func loadOffset() {
+        if let w = UserDefaults.standard.object(forKey: "pillOffsetW") as? CGFloat,
+           let h = UserDefaults.standard.object(forKey: "pillOffsetH") as? CGFloat {
+            pillOffset = CGSize(width: w, height: h)
         }
     }
 
-    private func setDefaultPosition() {
-        let screen = screenManager.selectedScreen
-        // Position is in the SwiftUI view's local coords (0,0 = top-left)
-        position = CGPoint(
-            x: screen.frame.width / 2,
-            y: screen.safeAreaInsets.top + 30
-        )
-        savePosition()
-    }
-
-    private func savePosition() {
-        UserDefaults.standard.set(position.x, forKey: "pillPositionX")
-        UserDefaults.standard.set(position.y, forKey: "pillPositionY")
+    private func saveOffset() {
+        UserDefaults.standard.set(pillOffset.width, forKey: "pillOffsetW")
+        UserDefaults.standard.set(pillOffset.height, forKey: "pillOffsetH")
     }
 }

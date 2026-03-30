@@ -10,14 +10,12 @@ final class AgentChPanel: NSPanel {
         )
 
         isFloatingPanel = true
-        level = .floating
+        level = .mainMenu + 3
         backgroundColor = .clear
         isOpaque = false
         hasShadow = false
         hidesOnDeactivate = false
-        // Mouse events are filtered by PillHostingView's hitTest override —
-        // it returns nil for non-pill areas, making them click-through
-        ignoresMouseEvents = false
+        isMovable = false
         collectionBehavior = [
             .canJoinAllSpaces,
             .stationary,

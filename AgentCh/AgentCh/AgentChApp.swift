@@ -99,7 +99,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.panel?.coverScreen(self?.screenManager.selectedScreen)
+                guard let self else { return }
+                self.panel?.coverScreen(self.screenManager.selectedScreen)
             }
         }
     }
