@@ -12,14 +12,14 @@ struct HookManager {
         "http://localhost:\(port)/events"
     }
 
-    /// SessionStart hook: sets tab title marker + posts event
-    private static func sessionStartCommand(port: UInt16) -> String {
+    /// Hook that sets tab title marker + posts event (used for SessionStart and Stop)
+    private static func markerCommand(port: UInt16) -> String {
         """
-        INPUT=$(cat); SID=$(echo "$INPUT" | grep -o '"session_id":"[^"]*"' | head -1 | cut -d'"' -f4); TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' '); [ -n "$TTY" ] && printf '\\033]2;agentch:%s\\007' "$SID" > /dev/$TTY 2>/dev/null; echo "$INPUT" | curl -s -X POST "http://localhost:\(port)/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true
+        INPUT=$(cat); SID=$(echo "$INPUT" | grep -o '"session_id":"[^"]*"' | head -1 | cut -d'"' -f4); CWD=$(echo "$INPUT" | grep -o '"cwd":"[^"]*"' | head -1 | cut -d'"' -f4); FOLDER=$(basename "$CWD"); TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' '); [ -n "$TTY" ] && printf '\\033]2;%s [agentch:%s]\\007' "$FOLDER" "$SID" > /dev/$TTY 2>/dev/null; echo "$INPUT" | curl -s -X POST "http://localhost:\(port)/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true
         """
     }
 
-    /// All other hooks: just post the event, no title change
+    /// Default hook: just posts event, no title change
     private static func defaultCommand(port: UInt16) -> String {
         "TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' '); curl -s -X POST \"http://localhost:\(port)/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY\" -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true"
     }
@@ -65,9 +65,10 @@ struct HookManager {
             }
 
             if !alreadyExists {
-                // SessionStart gets the special command that sets tab title marker
-                let command = event == "SessionStart"
-                    ? sessionStartCommand(port: port)
+                // SessionStart and Stop set the tab title marker
+                // Stop is key: Claude has finished, marker stays until next user message
+                let command = (event == "SessionStart" || event == "Stop")
+                    ? markerCommand(port: port)
                     : defaultCommand(port: port)
 
                 let ourHook: [String: Any] = [
