@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import AgentCh
+@testable import agentch
 
 @Test func sessionCreation() {
     let session = Session(

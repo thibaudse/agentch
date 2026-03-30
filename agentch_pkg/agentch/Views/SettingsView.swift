@@ -76,7 +76,7 @@ final class SettingsWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "AgentCh Settings"
+        window.title = "agentch Settings"
         window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)

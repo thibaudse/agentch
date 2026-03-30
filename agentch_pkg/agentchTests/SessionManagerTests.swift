@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import AgentCh
+@testable import agentch
 
 private func event(_ type: SessionEventType, sessionId: String = "s1", cwd: String = "/Users/thibaud/Projects/myapp") -> SessionEvent {
     SessionEvent(event: type, sessionId: sessionId, cwd: cwd, agentType: "claude")

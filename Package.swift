@@ -2,17 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "AgentCh",
+    name: "agentch",
     platforms: [.macOS(.v15)],
     targets: [
         .executableTarget(
-            name: "AgentCh",
-            path: "AgentCh/AgentCh"
-        ),
-        .testTarget(
-            name: "AgentChTests",
-            dependencies: ["AgentCh"],
-            path: "AgentCh/AgentChTests"
+            name: "agentch",
+            path: "agentch_pkg/agentch"
         ),
     ]
 )

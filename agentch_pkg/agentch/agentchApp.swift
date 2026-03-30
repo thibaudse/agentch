@@ -5,11 +5,11 @@ extension Notification.Name {
 }
 
 @main
-struct AgentChApp: App {
+struct agentchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("AgentCh", systemImage: "bubble.left.and.bubble.right.fill") {
+        MenuBarExtra("agentch", systemImage: "bubble.left.and.bubble.right.fill") {
             MenuBarView(sessionManager: appDelegate.sessionManager, screenManager: appDelegate.screenManager)
         }
         .menuBarExtraStyle(.menu)
@@ -68,11 +68,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private func startServer() {
         guard eventServer == nil else {
-            NSLog("[AgentCh] Server already running")
+            NSLog("[agentch] Server already running")
             return
         }
         let port = UInt16(httpPort)
-        NSLog("[AgentCh] Starting server on port %d", port)
+        NSLog("[agentch] Starting server on port %d", port)
         do {
             let server = try EventServer(port: port) { [weak self] event in
                 Task { @MainActor in
@@ -81,9 +81,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             }
             server.start()
             self.eventServer = server
-            NSLog("[AgentCh] Server started successfully on port %d", port)
+            NSLog("[agentch] Server started successfully on port %d", port)
         } catch {
-            NSLog("[AgentCh] Failed to start event server: %@", error.localizedDescription)
+            NSLog("[agentch] Failed to start event server: %@", error.localizedDescription)
         }
     }
 
@@ -122,7 +122,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private nonisolated func requestAccessibilityIfNeeded() {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
-        NSLog("[AgentCh] Accessibility trusted: %@", trusted ? "yes" : "no")
+        NSLog("[agentch] Accessibility trusted: %@", trusted ? "yes" : "no")
     }
 
     private func autoInstallHooksIfNeeded() {
