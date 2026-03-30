@@ -1,7 +1,6 @@
 import AppKit
 
 struct TerminalFocuser {
-    /// Known terminal app bundle identifiers by TERM_PROGRAM value.
     private static let bundleIDs: [String: String] = [
         "Apple_Terminal": "com.apple.Terminal",
         "iTerm.app": "com.googlecode.iterm2",
@@ -14,42 +13,152 @@ struct TerminalFocuser {
         "ghostty": "com.mitchellh.ghostty",
     ]
 
-    /// Focus the terminal window running the given session.
     static func focus(session: Session) {
-        // Strategy 1: Find terminal by TERM_PROGRAM
         if let termProgram = session.termProgram,
            let bundleID = bundleIDs[termProgram] {
-            if activateApp(bundleID: bundleID, cwd: session.cwd) { return }
+            if activateApp(bundleID: bundleID, termProgram: termProgram, cwd: session.cwd) { return }
         }
 
-        // Strategy 2: Walk up process tree from the hook's PID to find a GUI app
         if let pid = session.termPid {
             if activateByProcessTree(pid: pid) { return }
         }
 
-        // Strategy 3: Try common terminals, look for matching window title
-        for bundleID in ["com.apple.Terminal", "com.googlecode.iterm2", "dev.warp.Warp-Stable", "com.mitchellh.ghostty"] {
-            if activateApp(bundleID: bundleID, cwd: session.cwd) { return }
+        for (term, bundleID) in [("Apple_Terminal", "com.apple.Terminal"),
+                                  ("iTerm.app", "com.googlecode.iterm2"),
+                                  ("ghostty", "com.mitchellh.ghostty")] {
+            if activateApp(bundleID: bundleID, termProgram: term, cwd: session.cwd) { return }
         }
     }
 
-    /// Activate an app by bundle ID and try to focus a window matching the cwd.
     @discardableResult
-    private static func activateApp(bundleID: String, cwd: String) -> Bool {
+    private static func activateApp(bundleID: String, termProgram: String, cwd: String) -> Bool {
         guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first else {
             return false
         }
 
         app.activate()
 
-        // Try AppleScript to focus the right window/tab by title containing cwd
         let folderName = URL(fileURLWithPath: cwd).lastPathComponent
-        focusWindowByTitle(appName: app.localizedName ?? "", matching: folderName)
+
+        switch termProgram {
+        case "Apple_Terminal":
+            focusTerminalTab(matching: folderName)
+        case "iTerm.app":
+            focusITermTab(matching: folderName)
+        case "ghostty":
+            focusGhosttyTab(matching: folderName)
+        case "vscode", "cursor":
+            focusVSCodeWindow(appName: app.localizedName ?? "Code", matching: folderName)
+        default:
+            focusWindowByTitle(appName: app.localizedName ?? "", matching: folderName)
+        }
 
         return true
     }
 
-    /// Walk up process tree to find a GUI app ancestor.
+    // MARK: - Terminal.app
+
+    private static func focusTerminalTab(matching substring: String) {
+        let script = """
+        tell application "Terminal"
+            repeat with w in windows
+                repeat with t in tabs of w
+                    if custom title of t contains "\(substring)" or name of t contains "\(substring)" then
+                        set selected tab of w to t
+                        set index of w to 1
+                        activate
+                        return
+                    end if
+                end repeat
+            end repeat
+        end tell
+        """
+        runAppleScript(script)
+    }
+
+    // MARK: - iTerm2
+
+    private static func focusITermTab(matching substring: String) {
+        let script = """
+        tell application "iTerm2"
+            repeat with w in windows
+                repeat with t in tabs of w
+                    repeat with s in sessions of t
+                        if name of s contains "\(substring)" or profile name of s contains "\(substring)" then
+                            select t
+                            select s
+                            set index of w to 1
+                            activate
+                            return
+                        end if
+                    end repeat
+                end repeat
+            end repeat
+        end tell
+        """
+        runAppleScript(script)
+    }
+
+    // MARK: - Ghostty
+
+    private static func focusGhosttyTab(matching substring: String) {
+        // Ghostty doesn't have rich AppleScript — use System Events to find window + tab
+        let script = """
+        tell application "System Events"
+            tell process "Ghostty"
+                set frontmost to true
+                repeat with w in windows
+                    if name of w contains "\(substring)" then
+                        perform action "AXRaise" of w
+                        return
+                    end if
+                end repeat
+            end tell
+        end tell
+        """
+        runAppleScript(script)
+    }
+
+    // MARK: - VS Code / Cursor
+
+    private static func focusVSCodeWindow(appName: String, matching substring: String) {
+        let script = """
+        tell application "System Events"
+            tell process "\(appName)"
+                set frontmost to true
+                repeat with w in windows
+                    if name of w contains "\(substring)" then
+                        perform action "AXRaise" of w
+                        return
+                    end if
+                end repeat
+            end tell
+        end tell
+        """
+        runAppleScript(script)
+    }
+
+    // MARK: - Generic fallback
+
+    private static func focusWindowByTitle(appName: String, matching substring: String) {
+        let script = """
+        tell application "System Events"
+            tell process "\(appName)"
+                set frontmost to true
+                repeat with w in windows
+                    if name of w contains "\(substring)" then
+                        perform action "AXRaise" of w
+                        return
+                    end if
+                end repeat
+            end tell
+        end tell
+        """
+        runAppleScript(script)
+    }
+
+    // MARK: - Process tree
+
     @discardableResult
     private static func activateByProcessTree(pid: Int) -> Bool {
         var currentPid = pid
@@ -85,24 +194,12 @@ struct TerminalFocuser {
         }
     }
 
-    /// Use AppleScript to focus a window whose title contains the given string.
-    private static func focusWindowByTitle(appName: String, matching substring: String) {
-        let script = """
-        tell application "System Events"
-            tell process "\(appName)"
-                set frontmost to true
-                repeat with w in windows
-                    if name of w contains "\(substring)" then
-                        perform action "AXRaise" of w
-                        return
-                    end if
-                end repeat
-            end tell
-        end tell
-        """
-        if let appleScript = NSAppleScript(source: script) {
+    // MARK: - Helpers
+
+    private static func runAppleScript(_ source: String) {
+        if let script = NSAppleScript(source: source) {
             var error: NSDictionary?
-            appleScript.executeAndReturnError(&error)
+            script.executeAndReturnError(&error)
         }
     }
 }
