@@ -10,17 +10,12 @@ struct MenuBarView: View {
     var body: some View {
         if sessionManager.sessions.isEmpty {
             Text("No active sessions")
-                .foregroundStyle(.secondary)
         } else {
             ForEach(sessionManager.sessions) { session in
-                HStack {
-                    Circle()
-                        .fill(statusColor(session.status))
-                        .frame(width: 8, height: 8)
-                    Text(session.label)
-                    Spacer()
-                    Text(session.agentType.rawValue)
-                        .foregroundStyle(.secondary)
+                Button {
+                    // TODO: jump to terminal
+                } label: {
+                    Text("\(statusEmoji(session.status)) \(session.label) — \(statusText(session.status))")
                 }
             }
         }
@@ -28,7 +23,6 @@ struct MenuBarView: View {
         Divider()
 
         Text("Hooks: \(hookStatusText)")
-            .foregroundStyle(.secondary)
 
         if hooksInstalled {
             Button(hooksDisabled ? "Enable Hooks" : "Disable Hooks") {
@@ -74,12 +68,21 @@ struct MenuBarView: View {
         return hooksDisabled ? "Installed & Disabled" : "Installed & Enabled"
     }
 
-    private func statusColor(_ status: SessionStatus) -> Color {
+    private func statusEmoji(_ status: SessionStatus) -> String {
         switch status {
-        case .thinking: return .green
-        case .waiting: return .orange
-        case .idle: return .gray
-        case .error: return .red
+        case .thinking: return "🟢"
+        case .waiting: return "🟠"
+        case .idle: return "⚪"
+        case .error: return "🔴"
+        }
+    }
+
+    private func statusText(_ status: SessionStatus) -> String {
+        switch status {
+        case .thinking: return "working"
+        case .waiting: return "needs input"
+        case .idle: return "idle"
+        case .error: return "error"
         }
     }
 

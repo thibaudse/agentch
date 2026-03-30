@@ -124,6 +124,12 @@ struct PillGroupView: View {
                         .font(.system(size: 9, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
+
+                Spacer(minLength: 4)
+
+                JumpButton {
+                    // TODO: focus terminal window for session
+                }
                 .transition(.blurReplace)
             }
 
