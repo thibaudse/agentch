@@ -28,6 +28,9 @@ struct Session: Identifiable, Sendable {
     var label: String
     var status: SessionStatus
     let startedAt: Date
+    let cwd: String
+    var termProgram: String?
+    var termPid: Int?
 
     static let defaultBranches: Set<String> = ["main", "master"]
 

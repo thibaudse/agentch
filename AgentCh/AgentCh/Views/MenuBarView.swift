@@ -13,7 +13,7 @@ struct MenuBarView: View {
         } else {
             ForEach(sessionManager.sessions) { session in
                 Button {
-                    // TODO: jump to terminal
+                    TerminalFocuser.focus(session: session)
                 } label: {
                     Text("\(statusEmoji(session.status)) \(session.label) — \(statusText(session.status))")
                 }

@@ -128,7 +128,7 @@ struct PillGroupView: View {
                 Spacer(minLength: 4)
 
                 JumpButton {
-                    // TODO: focus terminal window for session
+                    TerminalFocuser.focus(session: session)
                 }
                 .transition(.blurReplace)
             }

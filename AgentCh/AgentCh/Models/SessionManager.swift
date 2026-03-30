@@ -14,19 +14,24 @@ struct SessionEvent: Sendable {
     let sessionId: String
     let cwd: String
     let agentType: String
+    var termProgram: String?
+    var termPid: Int?
 
-    /// Parse from Claude's native hook payload.
-    /// Claude sends: { "hook_event_name": "SessionStart", "session_id": "...", "cwd": "...", ... }
-    static func from(json: [String: Any]) -> SessionEvent? {
+    /// Parse from Claude's native hook payload + URL query params for terminal info.
+    static func from(json: [String: Any], queryParams: [String: String] = [:]) -> SessionEvent? {
         guard let hookEventName = json["hook_event_name"] as? String,
               let event = SessionEventType(rawValue: hookEventName),
               let sessionId = json["session_id"] as? String else {
             return nil
         }
         let cwd = json["cwd"] as? String ?? ""
-        // agent_type is not sent by Claude — default to "claude"
         let agentType = json["agent_type"] as? String ?? "claude"
-        return SessionEvent(event: event, sessionId: sessionId, cwd: cwd, agentType: agentType)
+        let termProgram = queryParams["term"]?.isEmpty == true ? nil : queryParams["term"]
+        let termPid = queryParams["pid"].flatMap(Int.init)
+        return SessionEvent(
+            event: event, sessionId: sessionId, cwd: cwd, agentType: agentType,
+            termProgram: termProgram, termPid: termPid
+        )
     }
 }
 
@@ -46,7 +51,10 @@ final class SessionManager: ObservableObject {
                 agentType: agentType,
                 label: folderName,
                 status: .idle,
-                startedAt: Date()
+                startedAt: Date(),
+                cwd: event.cwd,
+                termProgram: event.termProgram,
+                termPid: event.termPid
             )
             withAnimation(.spring(duration: 0.3)) {
                 sessions.append(session)
@@ -69,10 +77,21 @@ final class SessionManager: ObservableObject {
         case .preToolUse, .userPromptSubmit:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             sessions[index].status = .thinking
+            updateTermInfo(at: index, from: event)
 
         case .stop:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             sessions[index].status = .waiting
+            updateTermInfo(at: index, from: event)
+        }
+    }
+
+    private func updateTermInfo(at index: Int, from event: SessionEvent) {
+        if let term = event.termProgram, sessions[index].termProgram == nil {
+            sessions[index].termProgram = term
+        }
+        if let pid = event.termPid, sessions[index].termPid == nil {
+            sessions[index].termPid = pid
         }
     }
 

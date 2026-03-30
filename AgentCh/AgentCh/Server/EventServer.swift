@@ -35,6 +35,9 @@ final class EventServer: Sendable {
                 return
             }
 
+            let httpStr = String(data: data, encoding: .utf8) ?? ""
+            let queryParams = Self.extractQueryParams(from: httpStr)
+
             guard let body = Self.extractHTTPBody(from: data) else {
                 let response = Self.httpResponse(status: 400, body: "{\"error\":\"invalid request\"}")
                 connection.send(content: response, completion: .contentProcessed { _ in
@@ -44,7 +47,7 @@ final class EventServer: Sendable {
             }
 
             do {
-                let event = try Self.parseEvent(from: body)
+                let event = try Self.parseEvent(from: body, queryParams: queryParams)
                 onEvent(event)
                 let response = Self.httpResponse(status: 200, body: "{\"ok\":true}")
                 connection.send(content: response, completion: .contentProcessed { _ in
@@ -59,9 +62,9 @@ final class EventServer: Sendable {
         }
     }
 
-    static func parseEvent(from data: Data) throws -> SessionEvent {
+    static func parseEvent(from data: Data, queryParams: [String: String] = [:]) throws -> SessionEvent {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let event = SessionEvent.from(json: json) else {
+              let event = SessionEvent.from(json: json, queryParams: queryParams) else {
             throw EventParseError.invalidPayload
         }
         return event
@@ -69,6 +72,26 @@ final class EventServer: Sendable {
 
     enum EventParseError: Error {
         case invalidPayload
+    }
+
+    static func extractQueryParams(from httpRequest: String) -> [String: String] {
+        // Extract URL from first line: "POST /agentch?term=foo&pid=123 HTTP/1.1"
+        guard let firstLine = httpRequest.split(separator: "\r\n").first ?? httpRequest.split(separator: "\n").first,
+              let urlPart = firstLine.split(separator: " ").dropFirst().first,
+              let queryStart = urlPart.firstIndex(of: "?") else {
+            return [:]
+        }
+        let queryString = String(urlPart[urlPart.index(after: queryStart)...])
+        var params: [String: String] = [:]
+        for pair in queryString.split(separator: "&") {
+            let parts = pair.split(separator: "=", maxSplits: 1)
+            if parts.count == 2 {
+                let key = String(parts[0]).removingPercentEncoding ?? String(parts[0])
+                let value = String(parts[1]).removingPercentEncoding ?? String(parts[1])
+                params[key] = value
+            }
+        }
+        return params
     }
 
     static func extractHTTPBody(from data: Data) -> Data? {
