@@ -62,34 +62,24 @@ struct PillGroupView: View {
     private var pillContent: some View {
         HStack(spacing: spacing) {
             ForEach(sessionManager.sessions) { session in
-                if isHovering {
-                    expandedPill(for: session)
-                } else {
+                HStack(spacing: 4) {
                     MascotView(
                         agentType: session.agentType,
                         status: session.status,
-                        size: compactMascotSize
+                        size: isHovering ? expandedMascotSize : compactMascotSize
                     )
+                    if isHovering {
+                        Text(session.label)
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
+                    }
                 }
             }
         }
         .padding(.horizontal, padding)
         .padding(.vertical, padding / 2)
-    }
-
-    @ViewBuilder
-    private func expandedPill(for session: Session) -> some View {
-        HStack(spacing: 4) {
-            MascotView(
-                agentType: session.agentType,
-                status: session.status,
-                size: expandedMascotSize
-            )
-            Text(session.label)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-        }
     }
 
     @ViewBuilder

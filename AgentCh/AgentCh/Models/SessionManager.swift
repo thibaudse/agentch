@@ -2,25 +2,30 @@ import Foundation
 import SwiftUI
 
 enum SessionEventType: String, Codable, Sendable {
-    case sessionStart = "session_start"
-    case sessionEnd = "session_end"
-    case toolUse = "tool_use"
-    case stop = "stop"
+    case sessionStart = "SessionStart"
+    case sessionEnd = "SessionEnd"
+    case preToolUse = "PreToolUse"
+    case stop = "Stop"
 }
 
-struct SessionEvent: Codable, Sendable {
+struct SessionEvent: Sendable {
     let event: SessionEventType
     let sessionId: String
     let cwd: String
     let agentType: String
-    let timestamp: Date
 
-    enum CodingKeys: String, CodingKey {
-        case event
-        case sessionId = "session_id"
-        case cwd
-        case agentType = "agent_type"
-        case timestamp
+    /// Parse from Claude's native hook payload.
+    /// Claude sends: { "hook_event_name": "SessionStart", "session_id": "...", "cwd": "...", ... }
+    static func from(json: [String: Any]) -> SessionEvent? {
+        guard let hookEventName = json["hook_event_name"] as? String,
+              let event = SessionEventType(rawValue: hookEventName),
+              let sessionId = json["session_id"] as? String else {
+            return nil
+        }
+        let cwd = json["cwd"] as? String ?? ""
+        // agent_type is not sent by Claude — default to "claude"
+        let agentType = json["agent_type"] as? String ?? "claude"
+        return SessionEvent(event: event, sessionId: sessionId, cwd: cwd, agentType: agentType)
     }
 }
 
@@ -40,7 +45,7 @@ final class SessionManager: ObservableObject {
                 agentType: agentType,
                 label: folderName,
                 status: .idle,
-                startedAt: event.timestamp
+                startedAt: Date()
             )
             withAnimation(.spring(duration: 0.3)) {
                 sessions.append(session)
@@ -60,7 +65,7 @@ final class SessionManager: ObservableObject {
                 sessions.removeAll { $0.id == event.sessionId }
             }
 
-        case .toolUse:
+        case .preToolUse:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             sessions[index].status = .thinking
 

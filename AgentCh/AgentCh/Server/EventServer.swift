@@ -60,9 +60,15 @@ final class EventServer: Sendable {
     }
 
     static func parseEvent(from data: Data) throws -> SessionEvent {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(SessionEvent.self, from: data)
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let event = SessionEvent.from(json: json) else {
+            throw EventParseError.invalidPayload
+        }
+        return event
+    }
+
+    enum EventParseError: Error {
+        case invalidPayload
     }
 
     static func extractHTTPBody(from data: Data) -> Data? {

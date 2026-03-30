@@ -5,11 +5,9 @@ import Foundation
 @Test func parseSessionStartEvent() throws {
     let json = """
     {
-        "event": "session_start",
+        "hook_event_name": "SessionStart",
         "session_id": "abc123",
-        "cwd": "/Users/thibaud/Projects/agentch",
-        "agent_type": "claude",
-        "timestamp": "2026-03-30T12:00:00Z"
+        "cwd": "/Users/thibaud/Projects/agentch"
     }
     """.data(using: .utf8)!
 
@@ -20,29 +18,26 @@ import Foundation
     #expect(event.agentType == "claude")
 }
 
-@Test func parseToolUseEvent() throws {
+@Test func parsePreToolUseEvent() throws {
     let json = """
     {
-        "event": "tool_use",
+        "hook_event_name": "PreToolUse",
         "session_id": "abc123",
         "cwd": "/Users/thibaud/Projects/agentch",
-        "agent_type": "claude",
-        "timestamp": "2026-03-30T12:00:01Z"
+        "tool_name": "Bash"
     }
     """.data(using: .utf8)!
 
     let event = try EventServer.parseEvent(from: json)
-    #expect(event.event == .toolUse)
+    #expect(event.event == .preToolUse)
 }
 
 @Test func parseStopEvent() throws {
     let json = """
     {
-        "event": "stop",
+        "hook_event_name": "Stop",
         "session_id": "abc123",
-        "cwd": "/Users/thibaud/Projects/agentch",
-        "agent_type": "claude",
-        "timestamp": "2026-03-30T12:00:02Z"
+        "cwd": "/Users/thibaud/Projects/agentch"
     }
     """.data(using: .utf8)!
 
