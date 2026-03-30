@@ -6,6 +6,7 @@ enum SessionEventType: String, Codable, Sendable {
     case sessionEnd = "SessionEnd"
     case preToolUse = "PreToolUse"
     case userPromptSubmit = "UserPromptSubmit"
+    case permissionRequest = "PermissionRequest"
     case stop = "Stop"
 }
 
@@ -80,9 +81,22 @@ final class SessionManager: ObservableObject {
                 sessions.removeAll { $0.id == event.sessionId }
             }
 
-        case .preToolUse, .userPromptSubmit:
+        case .userPromptSubmit:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             sessions[index].status = .thinking
+            updateTermInfo(at: index, from: event)
+
+        case .preToolUse:
+            guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
+            // Only set thinking if not already waiting (permission prompt)
+            if sessions[index].status != .waiting {
+                sessions[index].status = .thinking
+            }
+            updateTermInfo(at: index, from: event)
+
+        case .permissionRequest:
+            guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
+            sessions[index].status = .waiting
             updateTermInfo(at: index, from: event)
 
         case .stop:
