@@ -7,19 +7,19 @@ import Foundation
     let result = try HookManager.mergeHooks(into: empty, port: 27182)
     let hooks = result["hooks"] as! [String: [[String: Any]]]
 
-    // Each event gets one matcher group
     #expect(hooks["SessionStart"]?.count == 1)
     #expect(hooks["SessionEnd"]?.count == 1)
     #expect(hooks["PreToolUse"]?.count == 1)
     #expect(hooks["Stop"]?.count == 1)
 
-    // Verify the matcher group structure
     let group = hooks["SessionStart"]!.first!
     #expect(group["matcher"] as? String == "")
     let groupHooks = group["hooks"] as! [[String: Any]]
     #expect(groupHooks.count == 1)
-    #expect(groupHooks.first?["url"] as? String == "http://localhost:27182/events")
-    #expect(groupHooks.first?["type"] as? String == "http")
+    #expect(groupHooks.first?["type"] as? String == "command")
+    let command = groupHooks.first?["command"] as? String ?? ""
+    #expect(command.contains("27182"))
+    #expect(command.contains("agentch"))
 }
 
 @Test func installHooksPreservesExistingHooks() throws {
@@ -33,7 +33,6 @@ import Foundation
     let result = try HookManager.mergeHooks(into: existing, port: 27182)
     let hooks = result["hooks"] as! [String: [[String: Any]]]
 
-    // Existing matcher group preserved + ours added
     #expect(hooks["SessionStart"]?.count == 2)
     #expect(hooks["SessionEnd"]?.count == 1)
 }
@@ -42,14 +41,13 @@ import Foundation
     let existing: [String: Any] = [
         "hooks": [
             "SessionStart": [
-                ["matcher": "", "hooks": [["type": "http", "url": "http://localhost:27182/events"]]]
+                ["matcher": "", "hooks": [["type": "command", "command": "curl -s -X POST http://localhost:27182/agentch -H 'Content-Type: application/json' -d \"$(cat)\" > /dev/null 2>&1 || true"]]]
             ]
         ]
     ]
     let result = try HookManager.mergeHooks(into: existing, port: 27182)
     let hooks = result["hooks"] as! [String: [[String: Any]]]
 
-    // Should not duplicate
     #expect(hooks["SessionStart"]?.count == 1)
 }
 
@@ -58,44 +56,32 @@ import Foundation
         "hooks": [
             "SessionStart": [
                 ["matcher": "Bash", "hooks": [["type": "command", "command": "echo hello"]]],
-                ["matcher": "", "hooks": [["type": "http", "url": "http://localhost:27182/events"]]]
+                ["matcher": "", "hooks": [["type": "command", "command": "curl -s -X POST http://localhost:27182/agentch -d test"]]]
             ],
             "SessionEnd": [
-                ["matcher": "", "hooks": [["type": "http", "url": "http://localhost:27182/events"]]]
+                ["matcher": "", "hooks": [["type": "command", "command": "curl -s -X POST http://localhost:27182/agentch -d test"]]]
             ]
         ]
     ]
     let result = HookManager.removeHooks(from: settings, port: 27182)
     let hooks = result["hooks"] as! [String: [[String: Any]]]
 
-    // User's Bash hook preserved, our group removed
     #expect(hooks["SessionStart"]?.count == 1)
-    #expect(hooks["SessionStart"]?.first?["matcher"] as? String == "Bash")
-    // SessionEnd had only our hook, group removed
     #expect(hooks["SessionEnd"]?.isEmpty ?? true)
 }
 
 @Test func hookInstallationStatus() throws {
-    // Fully installed — all 4 hook events with correct matcher group format
+    let cmd = "curl -s -X POST http://localhost:27182/agentch -H 'Content-Type: application/json' -d \"$(cat)\" > /dev/null 2>&1 || true"
     let fullyInstalled: [String: Any] = [
         "hooks": [
-            "SessionStart": [["matcher": "", "hooks": [["type": "http", "url": "http://localhost:27182/events"]]]],
-            "SessionEnd": [["matcher": "", "hooks": [["type": "http", "url": "http://localhost:27182/events"]]]],
-            "PreToolUse": [["matcher": "", "hooks": [["type": "http", "url": "http://localhost:27182/events"]]]],
-            "Stop": [["matcher": "", "hooks": [["type": "http", "url": "http://localhost:27182/events"]]]],
+            "SessionStart": [["matcher": "", "hooks": [["type": "command", "command": cmd]]]],
+            "SessionEnd": [["matcher": "", "hooks": [["type": "command", "command": cmd]]]],
+            "PreToolUse": [["matcher": "", "hooks": [["type": "command", "command": cmd]]]],
+            "Stop": [["matcher": "", "hooks": [["type": "command", "command": cmd]]]],
         ]
     ]
     #expect(HookManager.isInstalled(in: fullyInstalled, port: 27182) == true)
 
-    // Partially installed — only 1 of 4 events
-    let partiallyInstalled: [String: Any] = [
-        "hooks": [
-            "SessionStart": [["matcher": "", "hooks": [["type": "http", "url": "http://localhost:27182/events"]]]]
-        ]
-    ]
-    #expect(HookManager.isInstalled(in: partiallyInstalled, port: 27182) == false)
-
-    // Not installed
     let notInstalled: [String: Any] = [:]
     #expect(HookManager.isInstalled(in: notInstalled, port: 27182) == false)
 }

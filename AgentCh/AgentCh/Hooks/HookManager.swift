@@ -12,6 +12,12 @@ struct HookManager {
         "http://localhost:\(port)/events"
     }
 
+    private static func agentChCommand(port: UInt16) -> String {
+        "curl -s -X POST http://localhost:\(port)/agentch -H 'Content-Type: application/json' -d \"$(cat)\" > /dev/null 2>&1 || true"
+    }
+
+    static let hookIdentifier = "agentch"
+
     // MARK: - Read/Write settings.json
 
     static func readSettings() throws -> [String: Any] {
@@ -46,20 +52,23 @@ struct HookManager {
     static func mergeHooks(into settings: [String: Any], port: UInt16) throws -> [String: Any] {
         var result = settings
         var hooks = (settings["hooks"] as? [String: Any]) ?? [:]
-        let url = agentChURL(port: port)
-        let ourHook: [String: Any] = ["type": "http", "url": url]
+        let command = agentChCommand(port: port)
+        let ourHook: [String: Any] = [
+            "type": "command",
+            "command": command,
+            "timeout": 5,
+            "async": true,
+        ]
 
         for event in hookEvents {
             var matcherGroups = (hooks[event] as? [[String: Any]]) ?? []
 
-            // Check if our hook already exists in any matcher group
             let alreadyExists = matcherGroups.contains { group in
                 guard let groupHooks = group["hooks"] as? [[String: Any]] else { return false }
-                return groupHooks.contains { ($0["url"] as? String) == url }
+                return groupHooks.contains { ($0["command"] as? String)?.contains(hookIdentifier) == true }
             }
 
             if !alreadyExists {
-                // Add a new matcher group for AgentCh
                 let matcherGroup: [String: Any] = [
                     "matcher": "",
                     "hooks": [ourHook]
@@ -83,15 +92,17 @@ struct HookManager {
             guard var matcherGroups = hooks[event] as? [[String: Any]] else { continue }
 
             matcherGroups = matcherGroups.compactMap { group in
-                // Remove legacy flat-format entries (no "hooks" key, url at top level)
+                // Remove legacy flat-format http entries
                 if group["hooks"] == nil && (group["url"] as? String) == url {
                     return nil
                 }
 
-                // Remove from properly structured matcher groups
                 var group = group
                 guard var groupHooks = group["hooks"] as? [[String: Any]] else { return group }
-                groupHooks.removeAll { ($0["url"] as? String) == url }
+                groupHooks.removeAll {
+                    ($0["url"] as? String) == url ||
+                    ($0["command"] as? String)?.contains(hookIdentifier) == true
+                }
                 if groupHooks.isEmpty { return nil }
                 group["hooks"] = groupHooks
                 return group
@@ -106,12 +117,11 @@ struct HookManager {
 
     static func isInstalled(in settings: [String: Any], port: UInt16) -> Bool {
         guard let hooks = settings["hooks"] as? [String: Any] else { return false }
-        let url = agentChURL(port: port)
         return hookEvents.allSatisfy { event in
             guard let matcherGroups = hooks[event] as? [[String: Any]] else { return false }
             return matcherGroups.contains { group in
                 guard let groupHooks = group["hooks"] as? [[String: Any]] else { return false }
-                return groupHooks.contains { ($0["url"] as? String) == url }
+                return groupHooks.contains { ($0["command"] as? String)?.contains(hookIdentifier) == true }
             }
         }
     }
