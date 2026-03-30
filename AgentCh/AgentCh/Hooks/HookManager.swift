@@ -13,7 +13,7 @@ struct HookManager {
     }
 
     private static func agentChCommand(port: UInt16) -> String {
-        "curl -s -X POST http://localhost:\(port)/agentch -H 'Content-Type: application/json' -d \"$(cat)\" > /dev/null 2>&1 || true"
+        "curl -s -X POST http://localhost:\(port)/agentch -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true"
     }
 
     static let hookIdentifier = "agentch"
