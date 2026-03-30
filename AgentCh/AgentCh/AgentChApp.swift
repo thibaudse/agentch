@@ -27,6 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        requestAccessibilityIfNeeded()
         setupPanel()
         startServer()
         autoInstallHooksIfNeeded()
@@ -115,6 +116,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 self.panel?.coverScreen(self.screenManager.selectedScreen)
                 self.pillPosition.resetToDefault()
             }
+        }
+    }
+
+    private nonisolated func requestAccessibilityIfNeeded() {
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        let trusted = AXIsProcessTrustedWithOptions(options)
+        if !trusted {
+            NSLog("[AgentCh] Accessibility permission not granted — tab switching will be limited")
         }
     }
 
