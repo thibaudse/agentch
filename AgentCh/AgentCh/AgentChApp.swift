@@ -123,7 +123,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
         if !trusted {
-            NSLog("[AgentCh] Accessibility permission not granted — tab switching will be limited")
+            NSLog("[AgentCh] Accessibility not granted — opening System Settings")
+            // Open System Settings to Accessibility pane directly
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                NSWorkspace.shared.open(url)
+            }
         }
     }
 
