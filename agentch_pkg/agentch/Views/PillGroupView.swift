@@ -57,9 +57,10 @@ struct PillGroupView: View {
         let halfW = pillSize.width / 2
         let halfH = pillSize.height / 2
         let margin: CGFloat = 8
+        let menuBarHeight = NSScreen.main?.safeAreaInsets.top ?? 25
 
         let clampedX = min(max(rawX, halfW + margin), containerSize.width - halfW - margin)
-        let clampedY = min(max(rawY, halfH + margin), containerSize.height - halfH - margin)
+        let clampedY = min(max(rawY, halfH + menuBarHeight + margin), containerSize.height - halfH - margin)
 
         return CGPoint(x: clampedX, y: clampedY)
     }
