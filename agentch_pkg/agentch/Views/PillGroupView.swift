@@ -25,11 +25,28 @@ struct PillGroupView: View {
         return pillY < screenHeight / 2
     }
 
+    private var expandsRight: Bool {
+        let screenWidth = NSScreen.main?.frame.width ?? 1920
+        // Pill starts at center (screenWidth/2), offset moves it
+        return pillPosition.offset.width < 0
+    }
+
+    private var expandAlignment: Alignment {
+        switch (expandsRight, expandsDown) {
+        case (true, true): return .topLeading
+        case (false, true): return .topTrailing
+        case (true, false): return .bottomLeading
+        case (false, false): return .bottomTrailing
+        }
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             if !sessionManager.sessions.isEmpty {
                 pillBody
                     .fixedSize()
+                    // Anchor the pill so it grows away from the nearest edge
+                    .frame(maxWidth: 0, maxHeight: 0, alignment: expandAlignment)
                     .padding(20)
                     .contentShape(Rectangle())
                     .onHover { hovering in
