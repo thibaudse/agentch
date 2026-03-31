@@ -55,6 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     private func setupPanel() {
         let panel = AgentChPanel()
+        pillPosition.screen = screenManager.selectedScreen
         panel.coverScreen(screenManager.selectedScreen)
 
         let pillView = PillGroupView(sessionManager: sessionManager, pillPosition: pillPosition)
@@ -126,7 +127,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                self.panel?.coverScreen(self.screenManager.selectedScreen)
+                let selectedScreen = self.screenManager.selectedScreen
+                self.panel?.coverScreen(selectedScreen)
+                self.pillPosition.screen = selectedScreen
                 self.pillPosition.resetToDefault()
             }
         }

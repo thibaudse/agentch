@@ -8,12 +8,14 @@ final class PillPosition: ObservableObject {
 
     var isMouseOverPill = false
 
+    /// Set by AppDelegate when the selected screen changes
+    var screen: NSScreen = NSScreen.main ?? NSScreen.screens.first!
+
     private var mouseIsDown = false
     private var localMonitor: Any?
 
     var topPadding: CGFloat {
-        let screen = NSScreen.main ?? NSScreen.screens.first
-        return max(screen?.safeAreaInsets.top ?? 8, 8) + 10
+        max(screen.safeAreaInsets.top, 8) + 10
     }
 
     init() {
@@ -43,7 +45,7 @@ final class PillPosition: ObservableObject {
         case .leftMouseDragged:
             guard mouseIsDown else { return event }
             if !isDragging { isDragging = true }
-            guard let screen = NSScreen.main else { return event }
+            let screen = self.screen
             let mouse = NSEvent.mouseLocation
             offset = clampOffset(CGSize(
                 width: mouse.x - screen.frame.width / 2,
@@ -82,7 +84,7 @@ final class PillPosition: ObservableObject {
     }
 
     func moveTo(_ position: PillScreenPosition) {
-        guard let screen = NSScreen.main else { return }
+        let screen = self.screen
         let padding = screenPadding(screen)
         let w = screen.frame.width
         let h = screen.frame.height
@@ -110,7 +112,7 @@ final class PillPosition: ObservableObject {
     }
 
     private func clampOffset(_ raw: CGSize) -> CGSize {
-        guard let screen = NSScreen.main else { return raw }
+        let screen = self.screen
         let padding = screenPadding(screen)
         let maxW = screen.frame.width / 2 - padding
         // offset.height = 0 means pill is at topPadding. Minimum offset = padding (same as moveTo .top)
