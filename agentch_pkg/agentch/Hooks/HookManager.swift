@@ -12,9 +12,51 @@ struct HookManager {
         "http://localhost:\(port)/events"
     }
 
-    /// Default hook: posts event only
+    /// Path to the hook helper script (installed alongside the binary)
+    static var hookScriptPath: String {
+        // Use a well-known location
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return "\(home)/.agentch/hook.sh"
+    }
+
     private static func hookCommand(port: UInt16) -> String {
-        "TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' '); curl -s -X POST \"http://localhost:\(port)/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY\" -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true"
+        "AGENTCH_PORT=\(port) bash \(hookScriptPath)"
+    }
+
+    /// Install the hook helper script to ~/.agentch/hook.sh
+    static func installScript() {
+        let scriptContent = """
+        #!/bin/bash
+        PORT="${AGENTCH_PORT:-27182}"
+        INPUT=$(cat)
+        SID=$(echo "$INPUT" | grep -o '"session_id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        [ -z "$SID" ] && exit 0
+        TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' ')
+
+        # Walk up to find terminal app PID
+        TPID=$PPID
+        for i in $(seq 1 10); do
+            PARENT=$(ps -o ppid= -p $TPID 2>/dev/null | tr -d ' ')
+            [ -z "$PARENT" ] || [ "$PARENT" -le 1 ] && break
+            TPID=$PARENT
+            osascript -e "tell application \\"System Events\\" to return (count of windows of first process whose unix id is $TPID)" 2>/dev/null | grep -q '[1-9]' && break
+        done
+
+        # Save terminal window title for tab matching
+        mkdir -p /tmp/agentch
+        [ -n "$TPID" ] && [ "$TPID" -gt 1 ] && \\
+            osascript -e "tell application \\"System Events\\" to return name of front window of first process whose unix id is $TPID" \\
+            > "/tmp/agentch/$SID" 2>/dev/null
+
+        echo "$INPUT" | curl -s -X POST "http://localhost:$PORT/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
+            -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true
+        """
+
+        let dir = (hookScriptPath as NSString).deletingLastPathComponent
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try? scriptContent.write(toFile: hookScriptPath, atomically: true, encoding: .utf8)
+        // Make executable
+        try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hookScriptPath)
     }
 
 

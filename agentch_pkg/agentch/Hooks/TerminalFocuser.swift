@@ -10,11 +10,14 @@ struct TerminalFocuser {
         guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
         guard let appName = app.localizedName else { return }
 
-        // Search tab titles for the stored tab title (stripped of status icons)
+        // Read tab title from the hook's saved file (written by hook.sh via osascript)
+        let savedTitle = (try? String(contentsOfFile: "/tmp/agentch/\(session.id)", encoding: .utf8))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Strip leading non-ASCII status icons (⠂, ✳, etc.)
         let searchTerm: String
-        if let tabTitle = session.tabTitle {
-            // Strip leading non-ASCII status icons (⠂, ✳, etc.)
-            searchTerm = String(tabTitle.drop(while: { !$0.isASCII }).trimmingCharacters(in: .whitespaces))
+        if let title = savedTitle, !title.isEmpty {
+            searchTerm = String(title.drop(while: { !$0.isASCII }).trimmingCharacters(in: .whitespaces))
         } else {
             searchTerm = session.label
         }
