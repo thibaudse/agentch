@@ -112,14 +112,14 @@ final class PillPosition: ObservableObject {
     private func clampOffset(_ raw: CGSize) -> CGSize {
         guard let screen = NSScreen.main else { return raw }
         let padding = screenPadding(screen)
-        let menuBar = screen.safeAreaInsets.top
         let maxW = screen.frame.width / 2 - padding
-        let maxUp = -(topPadding - menuBar - padding)
-        let maxDown = screen.frame.height - topPadding - padding
+        // offset.height = 0 means pill is at topPadding. Minimum offset = padding (same as moveTo .top)
+        let minH = padding
+        let maxH = screen.frame.height - topPadding - padding
 
         return CGSize(
             width: min(max(raw.width, -maxW), maxW),
-            height: min(max(raw.height, maxUp), maxDown)
+            height: min(max(raw.height, minH), maxH)
         )
     }
 }
