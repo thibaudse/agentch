@@ -3,29 +3,29 @@ import ApplicationServices
 
 struct TerminalFocuser {
 
-    /// Focus the terminal tab for a session.
     static func focus(session: Session) {
         guard let claudePid = session.termPid else { return }
         guard let terminalPid = findTerminalPid(from: claudePid) else { return }
         guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
         guard let appName = app.localizedName else { return }
-
-        // Read tab title from the hook's saved file (written by hook.sh via osascript)
-        let savedTitle = (try? String(contentsOfFile: "/tmp/agentch/\(session.id)", encoding: .utf8))?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // Strip leading non-ASCII status icons (⠂, ✳, etc.)
-        let searchTerm: String
-        if let title = savedTitle, !title.isEmpty {
-            searchTerm = String(title.drop(while: { !$0.isASCII }).trimmingCharacters(in: .whitespaces))
-        } else {
-            searchTerm = session.label
+        guard let tty = session.tty else {
+            DispatchQueue.global(qos: .userInitiated).async {
+                runAppleScript("tell application \"\(appName)\" to activate")
+            }
+            return
         }
 
-        NSLog("[Focus] Activating %@, searching for '%@'", appName, searchTerm)
+        let marker = "agentch:\(session.id)"
 
         DispatchQueue.global(qos: .userInitiated).async {
-            let escaped = escapeForAppleScript(searchTerm)
+            // 1. Set a unique title on the session's TTY
+            setTerminalTitle(marker, onTTY: tty)
+
+            // 2. Small delay for the terminal to process the escape sequence
+            Thread.sleep(forTimeInterval: 0.05)
+
+            // 3. Activate the terminal and click the tab with our marker
+            let escaped = escapeForAppleScript(marker)
             let script = """
             tell application "\(appName)" to activate
             delay 0.05
@@ -33,8 +33,7 @@ struct TerminalFocuser {
                 tell process "\(appName)"
                     set tabGroup to first UI element of front window whose role is "AXTabGroup"
                     repeat with btn in (UI elements of tabGroup whose role is "AXRadioButton")
-                        set tabName to name of btn
-                        if tabName contains "\(escaped)" then
+                        if name of btn contains "\(escaped)" then
                             click btn
                             return
                         end if
@@ -46,17 +45,19 @@ struct TerminalFocuser {
         }
     }
 
-    /// Capture the terminal's current window title.
-    /// Best called during Stop events when Claude has finished and the title is stable.
-    static func captureWindowTitle(terminalPid: Int) -> String? {
-        let appElement = AXUIElementCreateApplication(pid_t(terminalPid))
-        guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
-              let window = windows.first,
-              let title = axAttr(window, kAXTitleAttribute) as? String,
-              !title.isEmpty else {
-            return nil
+    /// Write an ANSI title escape to a specific TTY device.
+    private static func setTerminalTitle(_ title: String, onTTY tty: String) {
+        let path = "/dev/\(tty)"
+        guard let fh = FileHandle(forWritingAtPath: path) else {
+            NSLog("[Focus] Cannot open %@", path)
+            return
         }
-        return title
+        // OSC 2 = set window title
+        let escape = "\u{1b}]2;\(title)\u{07}"
+        if let data = escape.data(using: .utf8) {
+            fh.write(data)
+        }
+        fh.closeFile()
     }
 
     // MARK: - Process tree
@@ -84,12 +85,6 @@ struct TerminalFocuser {
     }
 
     // MARK: - Helpers
-
-    private static func axAttr(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
-        var value: CFTypeRef?
-        AXUIElementCopyAttributeValue(element, attribute as CFString, &value)
-        return value
-    }
 
     private static func runAppleScript(_ source: String) {
         if let script = NSAppleScript(source: source) {
