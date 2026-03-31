@@ -20,22 +20,41 @@ struct PillGroupView: View {
 
     /// Vertical expansion direction: expand down if pill is in top half, up if bottom half.
     private var expandsDown: Bool {
-        let screenHeight = NSScreen.main?.frame.height ?? 1080
-        let pillY = pillPosition.topPadding + pillPosition.offset.height
-        return pillY < screenHeight / 2
+        verticalZone != 1
     }
 
-    private var expandsRight: Bool {
-        pillPosition.offset.width < 0
+    /// Split screen into 3 horizontal zones: left, center, right
+    private var horizontalZone: Int {
+        let screenWidth = NSScreen.main?.frame.width ?? 1920
+        let pillX = screenWidth / 2 + pillPosition.offset.width
+        let third = screenWidth / 3
+        if pillX < third { return -1 }       // left
+        if pillX > third * 2 { return 1 }    // right
+        return 0                               // center
+    }
+
+    /// Split screen into 3 vertical zones: top, center, bottom
+    private var verticalZone: Int {
+        let screenHeight = NSScreen.main?.frame.height ?? 1080
+        let pillY = pillPosition.topPadding + pillPosition.offset.height
+        let third = screenHeight / 3
+        if pillY < third { return -1 }        // top
+        if pillY > third * 2 { return 1 }     // bottom
+        return 0                               // center
     }
 
     private var expandAlignment: Alignment {
-        switch (expandsRight, expandsDown) {
-        case (true, true): return .topLeading
-        case (false, true): return .topTrailing
-        case (true, false): return .bottomLeading
-        case (false, false): return .bottomTrailing
+        let h: HorizontalAlignment = switch horizontalZone {
+        case -1: .leading     // pill is left → expand right
+        case 1:  .trailing    // pill is right → expand left
+        default: .center      // pill is center → expand from center
         }
+        let v: VerticalAlignment = switch verticalZone {
+        case -1: .top         // pill is top → expand down
+        case 1:  .bottom      // pill is bottom → expand up
+        default: .top         // pill is center → default expand down
+        }
+        return Alignment(horizontal: h, vertical: v)
     }
 
     var body: some View {
