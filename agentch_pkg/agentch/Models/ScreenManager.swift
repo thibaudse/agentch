@@ -30,7 +30,22 @@ final class ScreenManager: ObservableObject {
         }
     }
 
+    @Published var screenCount: Int = NSScreen.screens.count
+
     init() {
         selectedScreenIndex = storedIndex
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.screenCount = NSScreen.screens.count
+                // Clamp index if a screen was removed
+                if let self, self.selectedScreenIndex >= NSScreen.screens.count {
+                    self.selectedScreenIndex = 0
+                }
+            }
+        }
     }
 }
