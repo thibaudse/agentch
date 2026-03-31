@@ -9,8 +9,7 @@ final class PillPosition: ObservableObject {
     /// Set by PillGroupView's onHover — only start drag when mouse is over pill
     var isMouseOverPill = false
 
-    private var dragStart: CGPoint = .zero
-    private var offsetAtDragStart: CGSize = .zero
+    private var mouseIsDown = false
     private var localMonitor: Any?
 
     var topPadding: CGFloat {
@@ -39,11 +38,12 @@ final class PillPosition: ObservableObject {
         switch event.type {
         case .leftMouseDown:
             guard isMouseOverPill else { return event }
-            isDragging = true
+            mouseIsDown = true
             return event
 
         case .leftMouseDragged:
-            guard isDragging else { return event }
+            guard mouseIsDown else { return event }
+            if !isDragging { isDragging = true }
             guard let screen = NSScreen.main else { return event }
             let mouse = NSEvent.mouseLocation
             offset = clampOffset(CGSize(
@@ -53,6 +53,7 @@ final class PillPosition: ObservableObject {
             return event
 
         case .leftMouseUp:
+            mouseIsDown = false
             if isDragging {
                 isDragging = false
                 saveOffset()
