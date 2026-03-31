@@ -12,9 +12,11 @@ struct HookManager {
         "http://localhost:\(port)/events"
     }
 
+    /// Default hook: posts event only
     private static func hookCommand(port: UInt16) -> String {
         "TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' '); curl -s -X POST \"http://localhost:\(port)/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY\" -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true"
     }
+
 
     static let hookIdentifier = "agentch"
 

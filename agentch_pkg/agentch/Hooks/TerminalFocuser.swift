@@ -4,19 +4,25 @@ import ApplicationServices
 struct TerminalFocuser {
 
     /// Focus the terminal tab for a session.
-    /// Activates the terminal app, then searches tabs by session label (cwd-derived).
     static func focus(session: Session) {
         guard let claudePid = session.termPid else { return }
         guard let terminalPid = findTerminalPid(from: claudePid) else { return }
         guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
         guard let appName = app.localizedName else { return }
 
-        // Search tab titles for the session label (folder/branch name)
-        let searchTerm = escapeForAppleScript(session.label)
+        // Search tab titles for the stored tab title (stripped of status icons)
+        let searchTerm: String
+        if let tabTitle = session.tabTitle {
+            // Strip leading non-ASCII status icons (⠂, ✳, etc.)
+            searchTerm = String(tabTitle.drop(while: { !$0.isASCII }).trimmingCharacters(in: .whitespaces))
+        } else {
+            searchTerm = session.label
+        }
 
-        NSLog("[Focus] Activating %@, searching tabs for '%@'", appName, session.label)
+        NSLog("[Focus] Activating %@, searching for '%@'", appName, searchTerm)
 
         DispatchQueue.global(qos: .userInitiated).async {
+            let escaped = escapeForAppleScript(searchTerm)
             let script = """
             tell application "\(appName)" to activate
             delay 0.05
@@ -25,7 +31,7 @@ struct TerminalFocuser {
                     set tabGroup to first UI element of front window whose role is "AXTabGroup"
                     repeat with btn in (UI elements of tabGroup whose role is "AXRadioButton")
                         set tabName to name of btn
-                        if tabName contains "\(searchTerm)" then
+                        if tabName contains "\(escaped)" then
                             click btn
                             return
                         end if
@@ -35,6 +41,19 @@ struct TerminalFocuser {
             """
             runAppleScript(script)
         }
+    }
+
+    /// Capture the terminal's current window title.
+    /// Best called during Stop events when Claude has finished and the title is stable.
+    static func captureWindowTitle(terminalPid: Int) -> String? {
+        let appElement = AXUIElementCreateApplication(pid_t(terminalPid))
+        guard let windows = axAttr(appElement, kAXWindowsAttribute) as? [AXUIElement],
+              let window = windows.first,
+              let title = axAttr(window, kAXTitleAttribute) as? String,
+              !title.isEmpty else {
+            return nil
+        }
+        return title
     }
 
     // MARK: - Process tree

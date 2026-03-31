@@ -82,6 +82,12 @@ final class SessionManager: ObservableObject {
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             sessions[index].status = .waiting
             updateTermInfo(at: index, from: event)
+            // Capture tab title when Claude stops — title is stable at this moment
+            if let pid = sessions[index].termPid,
+               let termPid = TerminalFocuser.findTerminalPid(from: pid),
+               let title = TerminalFocuser.captureWindowTitle(terminalPid: termPid) {
+                sessions[index].tabTitle = title
+            }
         }
     }
 
