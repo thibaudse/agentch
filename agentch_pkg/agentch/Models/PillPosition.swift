@@ -95,7 +95,7 @@ final class PillPosition: ObservableObject {
         }
 
         let y: CGFloat = switch position.vertical {
-        case .top:    0
+        case .top:    padding
         case .center: (h - menuBar) / 2 - topPadding + menuBar
         case .bottom: h - topPadding - padding
         }
