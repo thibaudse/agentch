@@ -40,18 +40,15 @@ final class PillPosition: ObservableObject {
         case .leftMouseDown:
             guard isMouseOverPill else { return event }
             isDragging = true
-            dragStart = NSEvent.mouseLocation
-            offsetAtDragStart = offset
             return event
 
         case .leftMouseDragged:
             guard isDragging else { return event }
-            let current = NSEvent.mouseLocation
-            let dx = current.x - dragStart.x
-            let dy = -(current.y - dragStart.y)
+            guard let screen = NSScreen.main else { return event }
+            let mouse = NSEvent.mouseLocation
             offset = clampOffset(CGSize(
-                width: offsetAtDragStart.width + dx,
-                height: offsetAtDragStart.height + dy
+                width: mouse.x - screen.frame.width / 2,
+                height: screen.frame.height - mouse.y - topPadding
             ))
             return event
 

@@ -26,9 +26,7 @@ struct PillGroupView: View {
     }
 
     private var expandsRight: Bool {
-        let screenWidth = NSScreen.main?.frame.width ?? 1920
-        // Pill starts at center (screenWidth/2), offset moves it
-        return pillPosition.offset.width < 0
+        pillPosition.offset.width < 0
     }
 
     private var expandAlignment: Alignment {
@@ -55,7 +53,10 @@ struct PillGroupView: View {
                         if hovering { cancelPeek() }
                     }
                     .padding(-20)
-                    .frame(maxWidth: 0, maxHeight: 0, alignment: expandAlignment)
+                    .modifier(ExpansionAnchor(
+                        alignment: expandAlignment,
+                        active: !pillPosition.isDragging
+                    ))
                     .offset(pillPosition.offset)
                     .padding(.top, pillPosition.topPadding)
                     .transition(.blurReplace)
@@ -191,6 +192,20 @@ struct PillGroupView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+        }
+    }
+}
+
+/// Applies a 0x0 frame with alignment when active, passthrough when not.
+struct ExpansionAnchor: ViewModifier {
+    let alignment: Alignment
+    let active: Bool
+
+    func body(content: Content) -> some View {
+        if active {
+            content.frame(maxWidth: 0, maxHeight: 0, alignment: alignment)
+        } else {
+            content
         }
     }
 }
