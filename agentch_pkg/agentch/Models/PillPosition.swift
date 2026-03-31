@@ -83,33 +83,39 @@ final class PillPosition: ObservableObject {
 
     func moveTo(_ position: PillScreenPosition) {
         guard let screen = NSScreen.main else { return }
-        let margin: CGFloat = 50
+        let padding = screenPadding(screen)
         let w = screen.frame.width
         let h = screen.frame.height
+        let menuBar = screen.safeAreaInsets.top
 
         let x: CGFloat = switch position.horizontal {
-        case .leading:  -w / 2 + margin
+        case .leading:  -w / 2 + padding
         case .center:   0
-        case .trailing: w / 2 - margin
+        case .trailing: w / 2 - padding
         }
 
         let y: CGFloat = switch position.vertical {
         case .top:    0
-        case .center: h / 2 - topPadding
-        case .bottom: h - topPadding - margin
+        case .center: (h - menuBar) / 2 - topPadding + menuBar
+        case .bottom: h - topPadding - padding
         }
 
         offset = CGSize(width: x, height: y)
         saveOffset()
     }
 
+    /// Screen-relative padding (~2% of the shorter dimension, min 12pt)
+    private func screenPadding(_ screen: NSScreen) -> CGFloat {
+        max(min(screen.frame.width, screen.frame.height) * 0.02, 12)
+    }
+
     private func clampOffset(_ raw: CGSize) -> CGSize {
         guard let screen = NSScreen.main else { return raw }
-        let margin: CGFloat = 40
+        let padding = screenPadding(screen)
         let menuBar = screen.safeAreaInsets.top
-        let maxW = screen.frame.width / 2 - margin
-        let maxUp = -(topPadding - menuBar - margin)
-        let maxDown = screen.frame.height - topPadding - margin
+        let maxW = screen.frame.width / 2 - padding
+        let maxUp = -(topPadding - menuBar - padding)
+        let maxDown = screen.frame.height - topPadding - padding
 
         return CGSize(
             width: min(max(raw.width, -maxW), maxW),
