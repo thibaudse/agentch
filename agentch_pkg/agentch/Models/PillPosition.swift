@@ -44,12 +44,11 @@ final class PillPosition: ObservableObject {
             guard isDragging else { return event }
             let current = NSEvent.mouseLocation
             let dx = current.x - dragStart.x
-            // NSScreen y is bottom-up, SwiftUI offset y is top-down
             let dy = -(current.y - dragStart.y)
-            offset = CGSize(
+            offset = clampOffset(CGSize(
                 width: offsetAtDragStart.width + dx,
                 height: offsetAtDragStart.height + dy
-            )
+            ))
             return event
 
         case .leftMouseUp:
@@ -79,5 +78,20 @@ final class PillPosition: ObservableObject {
     func resetToDefault() {
         offset = .zero
         saveOffset()
+    }
+
+    /// Clamp offset so the pill stays within screen bounds.
+    private func clampOffset(_ raw: CGSize) -> CGSize {
+        guard let screen = NSScreen.main else { return raw }
+        let margin: CGFloat = 40
+        let menuBar = screen.safeAreaInsets.top
+        let maxW = screen.frame.width / 2 - margin
+        let maxUp = -(topPadding - menuBar - margin)
+        let maxDown = screen.frame.height - topPadding - margin
+
+        return CGSize(
+            width: min(max(raw.width, -maxW), maxW),
+            height: min(max(raw.height, maxUp), maxDown)
+        )
     }
 }

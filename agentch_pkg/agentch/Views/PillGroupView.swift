@@ -6,7 +6,6 @@ struct PillGroupView: View {
     @State private var isHovering = false
     @State private var isPeeking = false
     @State private var peekTask: Task<Void, Never>?
-    @State private var pillSize: CGSize = .zero
 
     private let mascotSize: CGFloat = 20
     private let hPadding: CGFloat = 10
@@ -20,16 +19,10 @@ struct PillGroupView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
+        ZStack(alignment: .top) {
             if !sessionManager.sessions.isEmpty {
                 pillBody
                     .fixedSize()
-                    .background(GeometryReader { pill in
-                        Color.clear.onAppear { pillSize = pill.size }
-                            .onChange(of: isExpanded) { _, _ in
-                                DispatchQueue.main.async { pillSize = pill.size }
-                            }
-                    })
                     .padding(20)
                     .contentShape(Rectangle())
                     .onHover { hovering in
@@ -39,30 +32,16 @@ struct PillGroupView: View {
                         if hovering { cancelPeek() }
                     }
                     .padding(-20)
-                    .position(pillPosition(in: geo.size))
+                    .offset(pillPosition.offset)
+                    .padding(.top, pillPosition.topPadding)
                     .transition(.blurReplace)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.white.opacity(0.0001))
         .onChange(of: sessionsSnapshot) { _, _ in
             peek()
         }
-    }
-
-    /// Compute the pill's center position, clamped so expanded content stays on screen.
-    private func pillPosition(in containerSize: CGSize) -> CGPoint {
-        let rawX = containerSize.width / 2 + pillPosition.offset.width
-        let rawY = pillPosition.topPadding + 20 + pillPosition.offset.height
-
-        let halfW = pillSize.width / 2
-        let halfH = pillSize.height / 2
-        let margin: CGFloat = 8
-        let menuBarHeight = NSScreen.main?.safeAreaInsets.top ?? 25
-
-        let clampedX = min(max(rawX, halfW + margin), containerSize.width - halfW - margin)
-        let clampedY = min(max(rawY, halfH + menuBarHeight + margin), containerSize.height - halfH - margin)
-
-        return CGPoint(x: clampedX, y: clampedY)
     }
 
     // MARK: - Peek
