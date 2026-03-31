@@ -36,6 +36,11 @@ agentch
 
 On first launch, agentch auto-installs Claude Code hooks and starts listening for sessions.
 
+**Auto-start on login:**
+```bash
+agentch --launchd
+```
+
 ## Requirements
 
 - macOS 26+ (Tahoe)

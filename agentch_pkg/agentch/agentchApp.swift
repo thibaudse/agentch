@@ -8,6 +8,19 @@ extension Notification.Name {
 struct agentchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        // Handle CLI flags before launching the app
+        let args = CommandLine.arguments
+        if args.contains("--launchd") {
+            LaunchdHelper.install()
+            exit(0)
+        }
+        if args.contains("--unlaunchd") {
+            LaunchdHelper.uninstall()
+            exit(0)
+        }
+    }
+
     var body: some Scene {
         MenuBarExtra("agentch", systemImage: "bubble.left.and.bubble.right.fill") {
             MenuBarView(sessionManager: appDelegate.sessionManager, screenManager: appDelegate.screenManager, pillPosition: appDelegate.pillPosition)
