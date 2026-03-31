@@ -6,6 +6,7 @@ struct PillGroupView: View {
     @State private var isHovering = false
     @State private var isPeeking = false
     @State private var peekTask: Task<Void, Never>?
+    @State private var pillSize: CGSize = .zero
 
     private let mascotSize: CGFloat = 20
     private let hPadding: CGFloat = 10
@@ -14,16 +15,21 @@ struct PillGroupView: View {
 
     private var isExpanded: Bool { isHovering || isPeeking }
 
-    /// Snapshot of sessions state — changes trigger a peek.
     private var sessionsSnapshot: String {
         sessionManager.sessions.map { "\($0.id):\($0.status.rawValue)" }.joined(separator: ",")
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
+        GeometryReader { geo in
             if !sessionManager.sessions.isEmpty {
                 pillBody
                     .fixedSize()
+                    .background(GeometryReader { pill in
+                        Color.clear.onAppear { pillSize = pill.size }
+                            .onChange(of: isExpanded) { _, _ in
+                                DispatchQueue.main.async { pillSize = pill.size }
+                            }
+                    })
                     .padding(20)
                     .contentShape(Rectangle())
                     .onHover { hovering in
@@ -33,19 +39,32 @@ struct PillGroupView: View {
                         if hovering { cancelPeek() }
                     }
                     .padding(-20)
-                    .offset(pillPosition.offset)
-                    .padding(.top, pillPosition.topPadding)
+                    .position(pillPosition(in: geo.size))
                     .transition(.blurReplace)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.white.opacity(0.0001))
         .onChange(of: sessionsSnapshot) { _, _ in
             peek()
         }
     }
 
-    // MARK: - Peek (auto-expand then collapse)
+    /// Compute the pill's center position, clamped so expanded content stays on screen.
+    private func pillPosition(in containerSize: CGSize) -> CGPoint {
+        let rawX = containerSize.width / 2 + pillPosition.offset.width
+        let rawY = pillPosition.topPadding + 20 + pillPosition.offset.height
+
+        let halfW = pillSize.width / 2
+        let halfH = pillSize.height / 2
+        let margin: CGFloat = 8
+
+        let clampedX = min(max(rawX, halfW + margin), containerSize.width - halfW - margin)
+        let clampedY = min(max(rawY, halfH + margin), containerSize.height - halfH - margin)
+
+        return CGPoint(x: clampedX, y: clampedY)
+    }
+
+    // MARK: - Peek
 
     private func peek() {
         cancelPeek()
@@ -73,7 +92,6 @@ struct PillGroupView: View {
 
     // MARK: - Pill body
 
-    /// Sessions sorted: waiting first, then thinking, then rest.
     private var sortedSessions: [Session] {
         sessionManager.sessions.sorted { a, b in
             a.status.sortOrder < b.status.sortOrder
@@ -143,9 +161,7 @@ struct PillGroupView: View {
     }
 
     private var compactBadge: String {
-        if waitingCount > 0 {
-            return "\(waitingCount)!"
-        }
+        if waitingCount > 0 { return "\(waitingCount)!" }
         return "\(sessionManager.sessions.count)"
     }
 
