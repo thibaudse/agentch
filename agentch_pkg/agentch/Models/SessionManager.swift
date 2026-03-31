@@ -68,9 +68,7 @@ final class SessionManager: ObservableObject {
 
         case .preToolUse:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
-            if sessions[index].status != .waiting {
-                sessions[index].status = .thinking
-            }
+            sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
         case .permissionRequest:
