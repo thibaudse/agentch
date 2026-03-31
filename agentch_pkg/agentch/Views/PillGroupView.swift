@@ -48,23 +48,12 @@ struct PillGroupView: View {
                     .padding(20)
                     .contentShape(Rectangle())
                     .onHover { hovering in
+                        pillPosition.isMouseOverPill = hovering
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                             isHovering = hovering
                         }
                         if hovering { cancelPeek() }
                     }
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                if !pillPosition.isDragging {
-                                    pillPosition.onDragStarted()
-                                }
-                                pillPosition.onDragChanged(value.translation)
-                            }
-                            .onEnded { _ in
-                                pillPosition.onDragEnded()
-                            }
-                    )
                     .padding(-20)
                     .frame(maxWidth: 0, maxHeight: 0, alignment: expandAlignment)
                     .offset(pillPosition.offset)

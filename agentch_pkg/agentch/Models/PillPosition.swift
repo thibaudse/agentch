@@ -6,6 +6,13 @@ final class PillPosition: ObservableObject {
     @Published var offset: CGSize = .zero
     @Published var isDragging = false
 
+    /// Set by PillGroupView's onHover — only start drag when mouse is over pill
+    var isMouseOverPill = false
+
+    private var dragStart: CGPoint = .zero
+    private var offsetAtDragStart: CGSize = .zero
+    private var localMonitor: Any?
+
     var topPadding: CGFloat {
         let screen = NSScreen.main ?? NSScreen.screens.first
         return max(screen?.safeAreaInsets.top ?? 8, 8) + 10
@@ -15,24 +22,50 @@ final class PillPosition: ObservableObject {
         loadOffset()
     }
 
-    func onDragChanged(_ translation: CGSize) {
-        isDragging = true
-        offset = clampOffset(CGSize(
-            width: dragStartOffset.width + translation.width,
-            height: dragStartOffset.height + translation.height
-        ))
+    func startMonitoring() {
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+            self?.handleMouse(event) ?? event
+        }
     }
 
-    func onDragEnded() {
-        isDragging = false
-        saveOffset()
+    func stopMonitoring() {
+        if let monitor = localMonitor {
+            NSEvent.removeMonitor(monitor)
+            localMonitor = nil
+        }
     }
 
-    func onDragStarted() {
-        dragStartOffset = offset
-    }
+    private func handleMouse(_ event: NSEvent) -> NSEvent? {
+        switch event.type {
+        case .leftMouseDown:
+            guard isMouseOverPill else { return event }
+            isDragging = true
+            dragStart = NSEvent.mouseLocation
+            offsetAtDragStart = offset
+            return event
 
-    private var dragStartOffset: CGSize = .zero
+        case .leftMouseDragged:
+            guard isDragging else { return event }
+            let current = NSEvent.mouseLocation
+            let dx = current.x - dragStart.x
+            let dy = -(current.y - dragStart.y)
+            offset = clampOffset(CGSize(
+                width: offsetAtDragStart.width + dx,
+                height: offsetAtDragStart.height + dy
+            ))
+            return event
+
+        case .leftMouseUp:
+            if isDragging {
+                isDragging = false
+                saveOffset()
+            }
+            return event
+
+        default:
+            return event
+        }
+    }
 
     private func loadOffset() {
         if let w = UserDefaults.standard.object(forKey: "pillOffsetW") as? CGFloat,
@@ -51,7 +84,6 @@ final class PillPosition: ObservableObject {
         saveOffset()
     }
 
-    /// Clamp offset so the pill stays within screen bounds.
     private func clampOffset(_ raw: CGSize) -> CGSize {
         guard let screen = NSScreen.main else { return raw }
         let margin: CGFloat = 40
