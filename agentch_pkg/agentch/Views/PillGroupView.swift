@@ -19,6 +19,7 @@ struct PillGroupView: View {
     }
 
     /// Vertical expansion direction: expand down if pill is in top half, up if bottom half.
+    /// Keep natural list order except when in bottom zone (reverse to grow upward)
     private var expandsDown: Bool {
         verticalZone != 1
     }
@@ -52,7 +53,7 @@ struct PillGroupView: View {
         let v: VerticalAlignment = switch verticalZone {
         case -1: .top         // pill is top → expand down
         case 1:  .bottom      // pill is bottom → expand up
-        default: .top         // pill is center → default expand down
+        default: .center      // pill is center → expand from center
         }
         return Alignment(horizontal: h, vertical: v)
     }
