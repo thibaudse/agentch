@@ -7,12 +7,8 @@ See at a glance which sessions are working, waiting for input, or need attention
 ## Install
 
 ```bash
-git clone https://github.com/thibaudse/agentch.git
-cd agentch
-make install
+curl -fsSL https://raw.githubusercontent.com/thibaudse/agentch/main/install.sh | bash
 ```
-
-Or download the binary from [Releases](https://github.com/thibaudse/agentch/releases).
 
 ## Usage
 
