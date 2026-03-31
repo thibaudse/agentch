@@ -6,7 +6,6 @@ final class PillPosition: ObservableObject {
     @Published var offset: CGSize = .zero
     @Published var isDragging = false
 
-    /// Set by PillGroupView's onHover — only start drag when mouse is over pill
     var isMouseOverPill = false
 
     private var mouseIsDown = false
@@ -82,6 +81,28 @@ final class PillPosition: ObservableObject {
         saveOffset()
     }
 
+    func moveTo(_ position: PillScreenPosition) {
+        guard let screen = NSScreen.main else { return }
+        let margin: CGFloat = 50
+        let w = screen.frame.width
+        let h = screen.frame.height
+
+        let x: CGFloat = switch position.horizontal {
+        case .leading:  -w / 2 + margin
+        case .center:   0
+        case .trailing: w / 2 - margin
+        }
+
+        let y: CGFloat = switch position.vertical {
+        case .top:    0
+        case .center: h / 2 - topPadding
+        case .bottom: h - topPadding - margin
+        }
+
+        offset = CGSize(width: x, height: y)
+        saveOffset()
+    }
+
     private func clampOffset(_ raw: CGSize) -> CGSize {
         guard let screen = NSScreen.main else { return raw }
         let margin: CGFloat = 40
@@ -95,4 +116,24 @@ final class PillPosition: ObservableObject {
             height: min(max(raw.height, maxUp), maxDown)
         )
     }
+}
+
+struct PillScreenPosition {
+    enum H { case leading, center, trailing }
+    enum V { case top, center, bottom }
+    let horizontal: H
+    let vertical: V
+    let label: String
+
+    static let all: [PillScreenPosition] = [
+        .init(horizontal: .leading,  vertical: .top,    label: "↖ Top Left"),
+        .init(horizontal: .center,   vertical: .top,    label: "↑ Top Center"),
+        .init(horizontal: .trailing, vertical: .top,    label: "↗ Top Right"),
+        .init(horizontal: .leading,  vertical: .center, label: "← Middle Left"),
+        .init(horizontal: .center,   vertical: .center, label: "● Center"),
+        .init(horizontal: .trailing, vertical: .center, label: "→ Middle Right"),
+        .init(horizontal: .leading,  vertical: .bottom, label: "↙ Bottom Left"),
+        .init(horizontal: .center,   vertical: .bottom, label: "↓ Bottom Center"),
+        .init(horizontal: .trailing, vertical: .bottom, label: "↘ Bottom Right"),
+    ]
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject var sessionManager: SessionManager
     @ObservedObject var screenManager: ScreenManager
+    @ObservedObject var pillPosition: PillPosition
     @AppStorage("httpPort") var httpPort: Int = 27182
     @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
     @State private var hooksInstalled: Bool = false
@@ -39,6 +40,16 @@ struct MenuBarView: View {
         }
 
         Divider()
+
+        Menu("Position") {
+            ForEach(PillScreenPosition.all, id: \.label) { pos in
+                Button(pos.label) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        pillPosition.moveTo(pos)
+                    }
+                }
+            }
+        }
 
         Menu("Display: \(screenManager.screenNames.first(where: { $0.index == screenManager.selectedScreenIndex })?.name ?? "Unknown")") {
             ForEach(screenManager.screenNames, id: \.index) { screen in
