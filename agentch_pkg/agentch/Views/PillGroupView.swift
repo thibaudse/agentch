@@ -12,7 +12,7 @@ struct PillGroupView: View {
     private let vPadding: CGFloat = 6
     private let peekDuration: TimeInterval = 2.5
 
-    private var isExpanded: Bool { isHovering || isPeeking }
+    private var isExpanded: Bool { (isHovering || isPeeking) && !pillPosition.isDragging }
 
     private var sessionsSnapshot: String {
         sessionManager.sessions.map { "\($0.id):\($0.status.rawValue)" }.joined(separator: ",")

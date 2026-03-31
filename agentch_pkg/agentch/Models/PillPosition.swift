@@ -4,10 +4,10 @@ import SwiftUI
 @MainActor
 final class PillPosition: ObservableObject {
     @Published var offset: CGSize = .zero
+    @Published var isDragging = false
 
     private var dragStart: CGPoint = .zero
     private var offsetAtDragStart: CGSize = .zero
-    private var isDragging = false
     private var localMonitor: Any?
 
     var topPadding: CGFloat {
