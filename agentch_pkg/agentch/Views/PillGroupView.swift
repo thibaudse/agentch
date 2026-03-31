@@ -18,6 +18,13 @@ struct PillGroupView: View {
         sessionManager.sessions.map { "\($0.id):\($0.status.rawValue)" }.joined(separator: ",")
     }
 
+    /// Vertical expansion direction: expand down if pill is in top half, up if bottom half.
+    private var expandsDown: Bool {
+        let screenHeight = NSScreen.main?.frame.height ?? 1080
+        let pillY = pillPosition.topPadding + pillPosition.offset.height
+        return pillY < screenHeight / 2
+    }
+
     var body: some View {
         ZStack(alignment: .top) {
             if !sessionManager.sessions.isEmpty {
@@ -84,9 +91,11 @@ struct PillGroupView: View {
 
     @ViewBuilder
     private var pillBody: some View {
+        let sessions = expandsDown ? sortedSessions : sortedSessions.reversed()
+
         VStack(alignment: .leading, spacing: 5) {
-            ForEach(Array(sortedSessions.enumerated()), id: \.element.id) { index, session in
-                let isFirst = index == 0
+            ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
+                let isFirst = expandsDown ? index == 0 : index == sessions.count - 1
 
                 if isFirst || isExpanded {
                     sessionRow(session: session, isFirst: isFirst)
