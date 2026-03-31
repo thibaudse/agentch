@@ -36,21 +36,18 @@ final class PillPosition: ObservableObject {
         switch event.type {
         case .leftMouseDown:
             isDragging = true
+            dragStart = NSEvent.mouseLocation
+            offsetAtDragStart = offset
             return event
 
         case .leftMouseDragged:
             guard isDragging else { return event }
-            guard let screen = NSScreen.main else { return event }
-            let mouse = NSEvent.mouseLocation
-            // Pill default position is top-center of screen
-            // offset.width = 0 means centered, offset.height = 0 means at topPadding
-            // Mouse is in screen coords (bottom-left origin)
-            // Convert to SwiftUI coords (top-left origin)
-            let mouseY = screen.frame.height - (mouse.y - screen.frame.origin.y)
-            let mouseX = mouse.x - screen.frame.origin.x
+            let current = NSEvent.mouseLocation
+            let dx = current.x - dragStart.x
+            let dy = -(current.y - dragStart.y)
             offset = clampOffset(CGSize(
-                width: mouseX - screen.frame.width / 2,
-                height: mouseY - topPadding
+                width: offsetAtDragStart.width + dx,
+                height: offsetAtDragStart.height + dy
             ))
             return event
 
