@@ -79,12 +79,16 @@ final class PillPosition: ObservableObject {
     }
 
     func resetToDefault() {
-        offset = .zero
-        saveOffset()
+        moveTo(PillScreenPosition.all[1]) // Top Center
     }
 
     func moveTo(_ position: PillScreenPosition) {
-        let screen = self.screen
+        offset = offsetFor(position)
+        saveOffset()
+    }
+
+    /// Single source of truth for computing offset from a screen position.
+    func offsetFor(_ position: PillScreenPosition) -> CGSize {
         let padding = screenPadding(screen)
         let w = screen.frame.width
         let h = screen.frame.height
@@ -102,8 +106,7 @@ final class PillPosition: ObservableObject {
         case .bottom: h - topPadding - padding
         }
 
-        offset = CGSize(width: x, height: y)
-        saveOffset()
+        return CGSize(width: x, height: y)
     }
 
     /// Screen-relative padding (~2% of the shorter dimension, min 12pt)
