@@ -45,8 +45,6 @@ struct PillGroupView: View {
             if !sessionManager.sessions.isEmpty {
                 pillBody
                     .fixedSize()
-                    // Anchor the pill so it grows away from the nearest edge
-                    .frame(maxWidth: 0, maxHeight: 0, alignment: expandAlignment)
                     .padding(20)
                     .contentShape(Rectangle())
                     .onHover { hovering in
@@ -56,6 +54,8 @@ struct PillGroupView: View {
                         if hovering { cancelPeek() }
                     }
                     .padding(-20)
+                    // Anchor: collapse to 0x0 so the pill grows from its edge
+                    .frame(maxWidth: 0, maxHeight: 0, alignment: expandAlignment)
                     .offset(pillPosition.offset)
                     .padding(.top, pillPosition.topPadding)
                     .transition(.blurReplace)
