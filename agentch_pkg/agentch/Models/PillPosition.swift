@@ -6,10 +6,6 @@ final class PillPosition: ObservableObject {
     @Published var offset: CGSize = .zero
     @Published var isDragging = false
 
-    private var dragStart: CGPoint = .zero
-    private var offsetAtDragStart: CGSize = .zero
-    private var localMonitor: Any?
-
     var topPadding: CGFloat {
         let screen = NSScreen.main ?? NSScreen.screens.first
         return max(screen?.safeAreaInsets.top ?? 8, 8) + 10
@@ -19,49 +15,24 @@ final class PillPosition: ObservableObject {
         loadOffset()
     }
 
-    func startMonitoring() {
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
-            self?.handleMouse(event) ?? event
-        }
+    func onDragChanged(_ translation: CGSize) {
+        isDragging = true
+        offset = clampOffset(CGSize(
+            width: dragStartOffset.width + translation.width,
+            height: dragStartOffset.height + translation.height
+        ))
     }
 
-    func stopMonitoring() {
-        if let monitor = localMonitor {
-            NSEvent.removeMonitor(monitor)
-            localMonitor = nil
-        }
+    func onDragEnded() {
+        isDragging = false
+        saveOffset()
     }
 
-    private func handleMouse(_ event: NSEvent) -> NSEvent? {
-        switch event.type {
-        case .leftMouseDown:
-            isDragging = true
-            dragStart = NSEvent.mouseLocation
-            offsetAtDragStart = offset
-            return event
-
-        case .leftMouseDragged:
-            guard isDragging else { return event }
-            let current = NSEvent.mouseLocation
-            let dx = current.x - dragStart.x
-            let dy = -(current.y - dragStart.y)
-            offset = clampOffset(CGSize(
-                width: offsetAtDragStart.width + dx,
-                height: offsetAtDragStart.height + dy
-            ))
-            return event
-
-        case .leftMouseUp:
-            if isDragging {
-                isDragging = false
-                saveOffset()
-            }
-            return event
-
-        default:
-            return event
-        }
+    func onDragStarted() {
+        dragStartOffset = offset
     }
+
+    private var dragStartOffset: CGSize = .zero
 
     private func loadOffset() {
         if let w = UserDefaults.standard.object(forKey: "pillOffsetW") as? CGFloat,

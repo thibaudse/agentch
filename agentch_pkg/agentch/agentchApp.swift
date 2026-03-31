@@ -37,7 +37,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
     func applicationWillTerminate(_ notification: Notification) {
         eventServer?.stop()
-        pillPosition.stopMonitoring()
     }
 
     private func setupPanel() {
@@ -52,8 +51,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         panel.orderFrontRegardless()
         self.panel = panel
-
-        pillPosition.startMonitoring()
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,

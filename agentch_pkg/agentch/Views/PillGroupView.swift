@@ -53,8 +53,19 @@ struct PillGroupView: View {
                         }
                         if hovering { cancelPeek() }
                     }
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                if !pillPosition.isDragging {
+                                    pillPosition.onDragStarted()
+                                }
+                                pillPosition.onDragChanged(value.translation)
+                            }
+                            .onEnded { _ in
+                                pillPosition.onDragEnded()
+                            }
+                    )
                     .padding(-20)
-                    // Anchor: collapse to 0x0 so the pill grows from its edge
                     .frame(maxWidth: 0, maxHeight: 0, alignment: expandAlignment)
                     .offset(pillPosition.offset)
                     .padding(.top, pillPosition.topPadding)
