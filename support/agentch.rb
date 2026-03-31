@@ -1,7 +1,7 @@
 class Agentch < Formula
   desc "Floating glass pill showing active AI agent sessions on macOS"
-  homepage "https://github.com/thibaudMusic/agentch"
-  url "https://github.com/thibaudMusic/agentch/archive/refs/tags/v0.1.0.tar.gz"
+  homepage "https://github.com/thibaudse/agentch"
+  url "https://github.com/thibaudse/agentch/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "REPLACE_WITH_SHA256"
   license "MIT"
 

@@ -17,24 +17,24 @@ A floating glass pill for macOS that shows your active AI agent sessions. See at
 ### Homebrew (recommended)
 
 ```bash
-brew install thibaudMusic/tap/agentch
+brew install thibaudse/tap/agentch
 brew services start agentch
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/thibaudMusic/agentch.git
+git clone https://github.com/thibaudse/agentch.git
 cd agentch
 make install
 ```
 
 ### Download binary
 
-Grab the latest release from [GitHub Releases](https://github.com/thibaudMusic/agentch/releases).
+Grab the latest release from [GitHub Releases](https://github.com/thibaudse/agentch/releases).
 
 ```bash
-curl -L https://github.com/thibaudMusic/agentch/releases/latest/download/agentch-macos-arm64.tar.gz | tar xz
+curl -L https://github.com/thibaudse/agentch/releases/latest/download/agentch-macos-arm64.tar.gz | tar xz
 sudo mv agentch /usr/local/bin/
 ```
 
