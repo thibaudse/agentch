@@ -85,7 +85,7 @@ final class SessionManager: ObservableObject {
     }
 
     private func createSession(from event: SessionEvent) {
-        let agentType = AgentType(rawValue: event.agentType) ?? .unknown
+        let agentType = AgentType(rawValue: event.agentType) ?? .claude
         let folderName = URL(fileURLWithPath: event.cwd).lastPathComponent
 
         let session = Session(
