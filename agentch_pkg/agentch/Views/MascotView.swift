@@ -25,7 +25,7 @@ struct MascotView: View {
 
             if status == .waiting {
                 SleepingZzz()
-                    .offset(x: size * 0.3, y: -size * 0.05)
+                    .offset(x: size * 0.15, y: size * 0.05)
                     .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
             }
         }
@@ -123,15 +123,24 @@ struct ThinkingBubble: View {
 struct SleepingZzz: View {
     @State private var phase: CGFloat = 0
 
+    private let darkBlue = Color(red: 0.15, green: 0.15, blue: 0.4)
+    private let yellow = Color(red: 1.0, green: 0.85, blue: 0.2)
+
     var body: some View {
         ZStack {
             ForEach(0..<3, id: \.self) { i in
                 Text("z")
-                    .font(.system(size: CGFloat(4 + i), weight: .bold, design: .rounded))
-                    .foregroundStyle(.orange.opacity(0.7 - Double(i) * 0.15))
+                    .font(.system(size: CGFloat(3 + i), weight: .black, design: .rounded))
+                    .foregroundStyle(darkBlue)
+                    .overlay(
+                        Text("z")
+                            .font(.system(size: CGFloat(3 + i), weight: .black, design: .rounded))
+                            .foregroundStyle(yellow)
+                            .opacity(0.7)
+                    )
                     .offset(
-                        x: CGFloat(i) * 3,
-                        y: -CGFloat(i) * 4 - phase * 2
+                        x: CGFloat(i) * 2.5,
+                        y: -CGFloat(i) * 3.5 - phase * 2
                     )
                     .opacity(1.0 - phase * 0.3)
             }
