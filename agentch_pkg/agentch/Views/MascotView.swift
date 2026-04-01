@@ -7,29 +7,24 @@ struct MascotView: View {
 
     @State private var animationPhase: CGFloat = 0
 
-    private let bubbleOverflow: CGFloat = 6
-
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        HStack(spacing: 1) {
             mascotShape
                 .opacity(status == .idle ? 0.5 : 1.0)
                 .scaleEffect(thinkingScale)
                 .offset(y: thinkingBounce)
-                .padding(bubbleOverflow)
+                .frame(width: size, height: size)
 
             if status == .thinking {
                 ThinkingBubble()
-                    .offset(x: size * 0.35)
-                    .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
+                    .transition(.scale(scale: 0, anchor: .leading).combined(with: .opacity))
             }
 
             if status == .waiting {
                 SleepingZzz()
-                    .offset(x: size * 0.05, y: size * 0.1)
-                    .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
+                    .transition(.scale(scale: 0, anchor: .leading).combined(with: .opacity))
             }
         }
-        .frame(width: size + bubbleOverflow * 2, height: size + bubbleOverflow * 2)
         .onAppear {
             if status == .thinking {
                 startThinkingAnimation()
