@@ -132,10 +132,13 @@ struct HookManager {
                     "command": hookCommand(port: port),
                     "timeout": 5,
                 ]
-                let matcherGroup: [String: Any] = [
-                    "matcher": "",
+                var matcherGroup: [String: Any] = [
                     "hooks": [ourHook]
                 ]
+                // Claude requires "matcher" key; Codex works without it
+                if agent == .claude {
+                    matcherGroup["matcher"] = ""
+                }
                 matcherGroups.append(matcherGroup)
             }
 
