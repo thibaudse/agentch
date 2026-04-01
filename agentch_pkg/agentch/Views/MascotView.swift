@@ -25,7 +25,7 @@ struct MascotView: View {
 
             if status == .waiting {
                 SleepingZzz()
-                    .offset(x: size * 0.15, y: size * 0.05)
+                    .offset(x: size * 0.05, y: size * 0.1)
                     .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
             }
         }
@@ -129,20 +129,23 @@ struct SleepingZzz: View {
     var body: some View {
         ZStack {
             ForEach(0..<3, id: \.self) { i in
-                Text("z")
-                    .font(.system(size: CGFloat(3 + i), weight: .black, design: .rounded))
-                    .foregroundStyle(darkBlue)
-                    .overlay(
-                        Text("z")
-                            .font(.system(size: CGFloat(3 + i), weight: .black, design: .rounded))
-                            .foregroundStyle(yellow)
-                            .opacity(0.7)
-                    )
-                    .offset(
-                        x: CGFloat(i) * 2.5,
-                        y: -CGFloat(i) * 3.5 - phase * 2
-                    )
-                    .opacity(1.0 - phase * 0.3)
+                ZStack {
+                    // Yellow stroke (rendered as shadow on all sides)
+                    Text("z")
+                        .font(.system(size: CGFloat(3 + i), weight: .black, design: .rounded))
+                        .foregroundStyle(yellow)
+                        .shadow(color: yellow, radius: 0.3)
+                    // Dark blue fill on top
+                    Text("z")
+                        .font(.system(size: CGFloat(3 + i), weight: .black, design: .rounded))
+                        .foregroundStyle(darkBlue)
+                        .padding(0.5)
+                }
+                .offset(
+                    x: CGFloat(i) * 2,
+                    y: -CGFloat(i) * 3 - phase * 1.5
+                )
+                .opacity(1.0 - phase * 0.3)
             }
         }
         .onAppear {
