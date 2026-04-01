@@ -73,7 +73,7 @@ struct PillGroupView: View {
                     .contentShape(Rectangle())
                     .onHover { hovering in
                         pillPosition.isMouseOverPill = hovering
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
                             isHovering = hovering
                         }
                         if hovering { cancelPeek() }
@@ -99,13 +99,13 @@ struct PillGroupView: View {
 
     private func peek() {
         cancelPeek()
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
             isPeeking = true
         }
         peekTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(peekDuration))
             guard !Task.isCancelled else { return }
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
                 isPeeking = false
             }
         }
@@ -115,7 +115,7 @@ struct PillGroupView: View {
         peekTask?.cancel()
         peekTask = nil
         if isPeeking {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
                 isPeeking = false
             }
         }
