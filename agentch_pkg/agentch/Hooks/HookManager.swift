@@ -55,12 +55,13 @@ struct HookManager {
     }
 
     private static func hookCommand(port: UInt16) -> String {
-        "AGENTCH_PORT=\(port) bash \(hookScriptPath)"
+        "AGENTCH_PORT=\(port) /bin/bash \(hookScriptPath)"
     }
 
     static func installScript() {
         let scriptContent = """
         #!/bin/bash
+        export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:$PATH"
         PORT="${AGENTCH_PORT:-27182}"
         INPUT=$(cat)
         SID=$(echo "$INPUT" | grep -o '"session_id":"[^"]*"' | head -1 | cut -d'"' -f4)
@@ -69,20 +70,20 @@ struct HookManager {
 
         # Walk up to find terminal app PID
         TPID=$PPID
-        for i in $(seq 1 10); do
+        for i in 1 2 3 4 5 6 7 8 9 10; do
             PARENT=$(ps -o ppid= -p $TPID 2>/dev/null | tr -d ' ')
             [ -z "$PARENT" ] || [ "$PARENT" -le 1 ] && break
             TPID=$PARENT
-            osascript -e "tell application \\"System Events\\" to return (count of windows of first process whose unix id is $TPID)" 2>/dev/null | grep -q '[1-9]' && break
+            /usr/bin/osascript -e "tell application \\"System Events\\" to return (count of windows of first process whose unix id is $TPID)" 2>/dev/null | grep -q '[1-9]' && break
         done
 
         # Save terminal window title for tab matching
         mkdir -p /tmp/agentch
         [ -n "$TPID" ] && [ "$TPID" -gt 1 ] && \\
-            osascript -e "tell application \\"System Events\\" to return name of front window of first process whose unix id is $TPID" \\
+            /usr/bin/osascript -e "tell application \\"System Events\\" to return name of front window of first process whose unix id is $TPID" \\
             > "/tmp/agentch/$SID" 2>/dev/null
 
-        echo "$INPUT" | curl -s -X POST "http://localhost:$PORT/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
+        echo "$INPUT" | /usr/bin/curl -s -X POST "http://localhost:$PORT/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
             -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true
         """
 

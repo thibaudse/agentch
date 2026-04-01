@@ -64,6 +64,31 @@ struct SessionEvent: Sendable {
 @MainActor
 final class SessionManager: ObservableObject {
     @Published var sessions: [Session] = []
+    private var cleanupTask: Task<Void, Never>?
+
+    /// Start periodic cleanup of dead sessions (process no longer running).
+    func startCleanup() {
+        cleanupTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(5))
+                guard let self else { return }
+                self.removeDeadSessions()
+            }
+        }
+    }
+
+    private func removeDeadSessions() {
+        let dead = sessions.filter { session in
+            guard let pid = session.termPid else { return false }
+            // Check if the process is still alive
+            return kill(pid_t(pid), 0) != 0
+        }
+        if !dead.isEmpty {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
+                sessions.removeAll { session in dead.contains(where: { $0.id == session.id }) }
+            }
+        }
+    }
 
     func handleEvent(_ event: SessionEvent) {
         // Auto-create session if we receive an event for an unknown session

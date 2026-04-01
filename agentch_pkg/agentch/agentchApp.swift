@@ -46,6 +46,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         autoInstallHooksIfNeeded()
         observeHooksToggle()
         observeScreenChange()
+        sessionManager.startCleanup()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
