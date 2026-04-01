@@ -6,8 +6,6 @@ struct PillGroupView: View {
     @State private var isHovering = false
     @State private var isPeeking = false
     @State private var peekTask: Task<Void, Never>?
-    @State private var pillHeight: CGFloat = 30
-
     private let mascotSize: CGFloat = 16
     private let hPadding: CGFloat = 10
     private let vPadding: CGFloat = 6
@@ -19,7 +17,8 @@ struct PillGroupView: View {
         if isExpanded && sessionManager.sessions.count > 1 {
             return 24
         }
-        return pillHeight / 2
+        // Large value acts as capsule (clamped by SwiftUI to half the shorter side)
+        return 999
     }
 
     private var sessionsSnapshot: String {
@@ -151,11 +150,6 @@ struct PillGroupView: View {
         }
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
-        .onGeometryChange(for: CGFloat.self) { geo in
-            geo.size.height
-        } action: { height in
-            pillHeight = height
-        }
         .background(pillBackground)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
