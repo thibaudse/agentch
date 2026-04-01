@@ -19,6 +19,7 @@ struct MascotView: View {
 
             if status == .thinking {
                 ThinkingBubble()
+                    .offset(x: size * 0.2)
                     .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
             }
         }
