@@ -144,7 +144,7 @@ struct PillGroupView: View {
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
         .background(pillBackground)
-        .clipShape(.rect(cornerRadius: 999, style: .continuous))
+        .clipShape(.rect(cornerRadius: 20, style: .continuous))
     }
 
     @ViewBuilder
@@ -203,7 +203,7 @@ struct PillGroupView: View {
 
     @ViewBuilder
     private var pillBackground: some View {
-        let shape = RoundedRectangle(cornerRadius: 999, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         if #available(macOS 26.0, *) {
             shape
                 .fill(.clear)
