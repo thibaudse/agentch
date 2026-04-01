@@ -12,6 +12,8 @@ final class PillPosition: ObservableObject {
     var screen: NSScreen = NSScreen.main ?? NSScreen.screens.first!
 
     private var mouseIsDown = false
+    private var mouseDownLocation: CGPoint = .zero
+    private let minDragDistance: CGFloat = 5
     private var localMonitor: Any?
 
     var topPadding: CGFloat {
@@ -40,13 +42,20 @@ final class PillPosition: ObservableObject {
         case .leftMouseDown:
             guard isMouseOverPill else { return event }
             mouseIsDown = true
+            mouseDownLocation = NSEvent.mouseLocation
             return event
 
         case .leftMouseDragged:
             guard mouseIsDown else { return event }
-            if !isDragging { isDragging = true }
-            let screen = self.screen
             let mouse = NSEvent.mouseLocation
+            if !isDragging {
+                let dx = mouse.x - mouseDownLocation.x
+                let dy = mouse.y - mouseDownLocation.y
+                let distance = sqrt(dx * dx + dy * dy)
+                guard distance >= minDragDistance else { return event }
+                isDragging = true
+            }
+            let screen = self.screen
             offset = clampOffset(CGSize(
                 width: mouse.x - screen.frame.width / 2,
                 height: screen.frame.height - mouse.y - topPadding
