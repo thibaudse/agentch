@@ -190,9 +190,13 @@ struct ClawdMascot: View {
 
     private let bodyColor = Color(red: 0.855, green: 0.467, blue: 0.345)
 
+    private let legColor = Color(red: 0.75, green: 0.38, blue: 0.27)
+
     var body: some View {
         ZStack {
             if status == .waiting {
+                ClawdSittingLegsShape()
+                    .fill(legColor)
                 ClawdSittingBodyShape()
                     .fill(bodyColor)
                 ClawdSittingEyesShape()
@@ -216,8 +220,26 @@ struct ClawdMascot: View {
     }
 }
 
-/// Clawd sitting: legs bent forward, body lower.
-/// Based on the standing shape but legs go horizontal instead of down.
+/// Legs for sitting Clawd — extend forward, drawn behind body with darker shade.
+struct ClawdSittingLegsShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let sx = rect.width / 490
+        let sy = rect.height / 385
+        let t = CGAffineTransform(scaleX: sx, y: sy)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+
+        var p = Path()
+        // Left pair of legs — extend to the left from body bottom
+        p.addRect(CGRect(x: -50, y: 245, width: 140, height: 45))
+        p.addRect(CGRect(x: -50, y: 300, width: 140, height: 45))
+        // Right pair of legs — extend to the right from body bottom
+        p.addRect(CGRect(x: 400, y: 245, width: 140, height: 45))
+        p.addRect(CGRect(x: 400, y: 300, width: 140, height: 45))
+        return p.applying(t)
+    }
+}
+
+/// Body for sitting Clawd — same as standing but without the leg portions.
 struct ClawdSittingBodyShape: Shape {
     func path(in rect: CGRect) -> Path {
         let sx = rect.width / 490
@@ -226,40 +248,20 @@ struct ClawdSittingBodyShape: Shape {
             .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
 
         var p = Path()
-        // Body (same top portion) but shifted down, legs go forward
-        // Start from bottom-left, go up for the body, then legs extend right
-        p.move(to: CGPoint(x: 45, y: 288.5))     // bottom of body left
+        // Same body as standing, but legs stop at the body bottom (288.5)
+        // and a flat bottom sits on the "ground"
+        p.move(to: CGPoint(x: 45, y: 350))
         p.addLine(to: CGPoint(x: 45, y: 192))
-        p.addLine(to: CGPoint(x: 0, y: 192))      // left arm
+        p.addLine(to: CGPoint(x: 0, y: 192))
         p.addLine(to: CGPoint(x: 0, y: 96))
         p.addLine(to: CGPoint(x: 45, y: 96))
-        p.addLine(to: CGPoint(x: 45, y: 0))        // top
+        p.addLine(to: CGPoint(x: 45, y: 0))
         p.addLine(to: CGPoint(x: 445, y: 0))
         p.addLine(to: CGPoint(x: 445, y: 96))
-        p.addLine(to: CGPoint(x: 490, y: 96))      // right arm
+        p.addLine(to: CGPoint(x: 490, y: 96))
         p.addLine(to: CGPoint(x: 490, y: 192))
         p.addLine(to: CGPoint(x: 445, y: 192))
-        p.addLine(to: CGPoint(x: 445, y: 288.5))   // bottom of body right
-
-        // Right legs: extend forward (to the right) instead of down
-        p.addLine(to: CGPoint(x: 445, y: 310))
-        p.addLine(to: CGPoint(x: 490, y: 310))     // foot
-        p.addLine(to: CGPoint(x: 490, y: 355))
-        p.addLine(to: CGPoint(x: 445, y: 355))
-        p.addLine(to: CGPoint(x: 445, y: 375))
-        p.addLine(to: CGPoint(x: 490, y: 375))     // foot 2
-        p.addLine(to: CGPoint(x: 490, y: 385))     // bottom
-        p.addLine(to: CGPoint(x: 0, y: 385))       // ground line
-
-        // Left legs: extend forward (to the left)
-        p.addLine(to: CGPoint(x: 0, y: 375))
-        p.addLine(to: CGPoint(x: 45, y: 375))
-        p.addLine(to: CGPoint(x: 45, y: 355))
-        p.addLine(to: CGPoint(x: 0, y: 355))
-        p.addLine(to: CGPoint(x: 0, y: 310))       // foot
-        p.addLine(to: CGPoint(x: 45, y: 310))
-        p.addLine(to: CGPoint(x: 45, y: 288.5))
-
+        p.addLine(to: CGPoint(x: 445, y: 350))
         p.closeSubpath()
         return p.applying(t)
     }
@@ -273,7 +275,6 @@ struct ClawdSittingEyesShape: Shape {
         let t = CGAffineTransform(scaleX: sx, y: sy)
             .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
 
-        // Half-closed eyes (thin slits)
         let eyeHeight: CGFloat = 15
         let eyeY: CGFloat = 120
 
