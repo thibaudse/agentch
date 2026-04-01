@@ -15,11 +15,19 @@ struct MascotView: View {
                 .opacity(status == .idle ? 0.5 : 1.0)
                 .scaleEffect(thinkingScale)
                 .offset(y: thinkingBounce)
+                .rotationEffect(status == .waiting ? .degrees(90) : .degrees(0), anchor: .center)
+                .offset(y: status == .waiting ? size * 0.15 : 0)
                 .padding(bubbleOverflow)
 
             if status == .thinking {
                 ThinkingBubble()
                     .offset(x: size * 0.35)
+                    .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
+            }
+
+            if status == .waiting {
+                SleepingZzz()
+                    .offset(x: size * 0.3, y: -size * 0.05)
                     .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
             }
         }
@@ -108,6 +116,31 @@ struct ThinkingBubble: View {
         .onAppear {
             Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
                 dotPhase = (dotPhase + 1) % 3
+            }
+        }
+    }
+}
+
+/// Animated Zzz floating up when sleeping/waiting.
+struct SleepingZzz: View {
+    @State private var phase: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<3, id: \.self) { i in
+                Text("z")
+                    .font(.system(size: CGFloat(4 + i), weight: .bold, design: .rounded))
+                    .foregroundStyle(.orange.opacity(0.7 - Double(i) * 0.15))
+                    .offset(
+                        x: CGFloat(i) * 3,
+                        y: -CGFloat(i) * 4 - phase * 2
+                    )
+                    .opacity(1.0 - phase * 0.3)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                phase = 1
             }
         }
     }
