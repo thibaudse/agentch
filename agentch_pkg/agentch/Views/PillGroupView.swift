@@ -13,12 +13,11 @@ struct PillGroupView: View {
 
     private var isExpanded: Bool { (isHovering || isPeeking) && !pillPosition.isDragging }
 
+    /// Fixed corner radius = half the collapsed pill height. Never changes.
     private var cornerRadius: CGFloat {
-        if isExpanded && sessionManager.sessions.count > 1 {
-            return 24
-        }
-        // Large value acts as capsule (clamped by SwiftUI to half the shorter side)
-        return 999
+        // Collapsed height: mascot (16 + 12 overflow) + vPadding*2 = 28 + 12 = ~20
+        // Approximate: mascotSize + vPadding * 2
+        (mascotSize + vPadding * 2) / 2
     }
 
     private var sessionsSnapshot: String {
