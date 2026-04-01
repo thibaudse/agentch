@@ -15,8 +15,6 @@ struct MascotView: View {
                 .opacity(status == .idle ? 0.5 : 1.0)
                 .scaleEffect(thinkingScale)
                 .offset(y: thinkingBounce)
-                .rotationEffect(status == .waiting ? .degrees(90) : .degrees(0), anchor: .center)
-                .offset(y: status == .waiting ? size * 0.15 : 0)
                 .padding(bubbleOverflow)
 
             if status == .thinking {
@@ -194,22 +192,95 @@ struct ClawdMascot: View {
 
     var body: some View {
         ZStack {
-            ClawdBodyShape()
-                .fill(status == .error ? .red : bodyColor)
-
-            ClawdEyesShape(animationPhase: eyePhase)
-                .fill(.black)
+            if status == .waiting {
+                ClawdSittingBodyShape()
+                    .fill(bodyColor)
+                ClawdSittingEyesShape()
+                    .fill(.black)
+            } else {
+                ClawdBodyShape()
+                    .fill(status == .error ? .red : bodyColor)
+                ClawdEyesShape(animationPhase: eyePhase)
+                    .fill(.black)
+            }
         }
         .aspectRatio(490.0 / 385.0, contentMode: .fit)
     }
 
-    /// Thinking: squint (blink). Waiting: wide open (negative phase = taller eyes). Idle/error: normal.
     private var eyePhase: CGFloat {
         switch status {
         case .thinking: return animationPhase
-        case .waiting: return -0.3
+        case .waiting: return 0
         case .idle, .error: return 0
         }
+    }
+}
+
+/// Clawd sitting: legs bent forward, body lower.
+/// Based on the standing shape but legs go horizontal instead of down.
+struct ClawdSittingBodyShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let sx = rect.width / 490
+        let sy = rect.height / 385
+        let t = CGAffineTransform(scaleX: sx, y: sy)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+
+        var p = Path()
+        // Body (same top portion) but shifted down, legs go forward
+        // Start from bottom-left, go up for the body, then legs extend right
+        p.move(to: CGPoint(x: 45, y: 288.5))     // bottom of body left
+        p.addLine(to: CGPoint(x: 45, y: 192))
+        p.addLine(to: CGPoint(x: 0, y: 192))      // left arm
+        p.addLine(to: CGPoint(x: 0, y: 96))
+        p.addLine(to: CGPoint(x: 45, y: 96))
+        p.addLine(to: CGPoint(x: 45, y: 0))        // top
+        p.addLine(to: CGPoint(x: 445, y: 0))
+        p.addLine(to: CGPoint(x: 445, y: 96))
+        p.addLine(to: CGPoint(x: 490, y: 96))      // right arm
+        p.addLine(to: CGPoint(x: 490, y: 192))
+        p.addLine(to: CGPoint(x: 445, y: 192))
+        p.addLine(to: CGPoint(x: 445, y: 288.5))   // bottom of body right
+
+        // Right legs: extend forward (to the right) instead of down
+        p.addLine(to: CGPoint(x: 445, y: 310))
+        p.addLine(to: CGPoint(x: 490, y: 310))     // foot
+        p.addLine(to: CGPoint(x: 490, y: 355))
+        p.addLine(to: CGPoint(x: 445, y: 355))
+        p.addLine(to: CGPoint(x: 445, y: 375))
+        p.addLine(to: CGPoint(x: 490, y: 375))     // foot 2
+        p.addLine(to: CGPoint(x: 490, y: 385))     // bottom
+        p.addLine(to: CGPoint(x: 0, y: 385))       // ground line
+
+        // Left legs: extend forward (to the left)
+        p.addLine(to: CGPoint(x: 0, y: 375))
+        p.addLine(to: CGPoint(x: 45, y: 375))
+        p.addLine(to: CGPoint(x: 45, y: 355))
+        p.addLine(to: CGPoint(x: 0, y: 355))
+        p.addLine(to: CGPoint(x: 0, y: 310))       // foot
+        p.addLine(to: CGPoint(x: 45, y: 310))
+        p.addLine(to: CGPoint(x: 45, y: 288.5))
+
+        p.closeSubpath()
+        return p.applying(t)
+    }
+}
+
+/// Eyes for sitting Clawd — half-closed/sleepy.
+struct ClawdSittingEyesShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let sx = rect.width / 490
+        let sy = rect.height / 385
+        let t = CGAffineTransform(scaleX: sx, y: sy)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+
+        // Half-closed eyes (thin slits)
+        let eyeHeight: CGFloat = 15
+        let eyeY: CGFloat = 120
+
+        var p = Path()
+        p.addRect(CGRect(x: 89, y: eyeY, width: 45.5, height: eyeHeight))
+        p.addRect(CGRect(x: 355, y: eyeY, width: 45.5, height: eyeHeight))
+        return p.applying(t)
     }
 }
 
