@@ -13,12 +13,6 @@ struct PillGroupView: View {
 
     private var isExpanded: Bool { (isHovering || isPeeking) && !pillPosition.isDragging }
 
-    /// Fixed corner radius = half the collapsed pill height. Never changes.
-    private var cornerRadius: CGFloat {
-        // Collapsed height: mascot (16 + 12 overflow) + vPadding*2 = 28 + 12 = ~20
-        // Approximate: mascotSize + vPadding * 2
-        (mascotSize + vPadding * 2) / 2
-    }
 
     private var sessionsSnapshot: String {
         sessionManager.sessions.map { "\($0.id):\($0.status.rawValue)" }.joined(separator: ",")
@@ -150,7 +144,7 @@ struct PillGroupView: View {
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
         .background(pillBackground)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .clipShape(.rect(cornerRadius: 999, style: .continuous))
     }
 
     @ViewBuilder
@@ -209,13 +203,14 @@ struct PillGroupView: View {
 
     @ViewBuilder
     private var pillBackground: some View {
+        let shape = RoundedRectangle(cornerRadius: 999, style: .continuous)
         if #available(macOS 26.0, *) {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            shape
                 .fill(.clear)
-                .glassEffect(.clear.interactive(), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .glassEffect(.clear.interactive(), in: shape)
                 .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         } else {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            shape
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         }
