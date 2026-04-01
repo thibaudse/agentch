@@ -203,7 +203,12 @@ struct HookManager {
     static func installAll(port: UInt16) {
         installScript()
         for agent in AgentHookConfig.all {
-            try? install(port: port, agent: agent)
+            do {
+                try install(port: port, agent: agent)
+                NSLog("[agentch] Installed hooks for %@", agent.label)
+            } catch {
+                NSLog("[agentch] Failed to install hooks for %@: %@", agent.label, error.localizedDescription)
+            }
         }
     }
 
