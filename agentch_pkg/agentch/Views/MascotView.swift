@@ -8,22 +8,27 @@ struct MascotView: View {
     @State private var animationPhase: CGFloat = 0
 
     var body: some View {
-        HStack(spacing: 1) {
+        VStack(spacing: 0) {
+            HStack(alignment: .top, spacing: 1) {
+                Spacer(minLength: 0)
+
+                if status == .thinking {
+                    ThinkingBubble()
+                        .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
+                }
+
+                if status == .waiting {
+                    SleepingZzz()
+                        .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
+                }
+            }
+            .frame(height: status == .thinking || status == .waiting ? nil : 0)
+
             mascotShape
                 .opacity(status == .idle ? 0.5 : 1.0)
                 .scaleEffect(thinkingScale)
                 .offset(y: thinkingBounce)
                 .frame(width: size, height: size)
-
-            if status == .thinking {
-                ThinkingBubble()
-                    .transition(.scale(scale: 0, anchor: .leading).combined(with: .opacity))
-            }
-
-            if status == .waiting {
-                SleepingZzz()
-                    .transition(.scale(scale: 0, anchor: .leading).combined(with: .opacity))
-            }
         }
         .onAppear {
             if status == .thinking {
