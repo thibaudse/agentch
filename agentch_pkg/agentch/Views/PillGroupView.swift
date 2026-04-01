@@ -6,6 +6,7 @@ struct PillGroupView: View {
     @State private var isHovering = false
     @State private var isPeeking = false
     @State private var peekTask: Task<Void, Never>?
+    @State private var pillHeight: CGFloat = 30
 
     private let mascotSize: CGFloat = 16
     private let hPadding: CGFloat = 10
@@ -13,6 +14,10 @@ struct PillGroupView: View {
     private let peekDuration: TimeInterval = 2.5
 
     private var isExpanded: Bool { (isHovering || isPeeking) && !pillPosition.isDragging }
+
+    private var cornerRadius: CGFloat {
+        isExpanded ? 16 : pillHeight / 2
+    }
 
     private var sessionsSnapshot: String {
         sessionManager.sessions.map { "\($0.id):\($0.status.rawValue)" }.joined(separator: ",")
@@ -143,8 +148,12 @@ struct PillGroupView: View {
         }
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
+        .background(GeometryReader { geo in
+            Color.clear.preference(key: PillHeightKey.self, value: geo.size.height)
+        })
+        .onPreferenceChange(PillHeightKey.self) { pillHeight = $0 }
         .background(pillBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 
     @ViewBuilder
@@ -204,15 +213,22 @@ struct PillGroupView: View {
     @ViewBuilder
     private var pillBackground: some View {
         if #available(macOS 26.0, *) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.clear)
-                .glassEffect(.clear.interactive(), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .glassEffect(.clear.interactive(), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         } else {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         }
+    }
+}
+
+struct PillHeightKey: PreferenceKey {
+    nonisolated(unsafe) static var defaultValue: CGFloat = 30
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
