@@ -7,14 +7,22 @@ struct MascotView: View {
 
     @State private var animationPhase: CGFloat = 0
 
+    private let bubbleOverflow: CGFloat = 8
+
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topTrailing) {
             mascotShape
                 .opacity(status == .idle ? 0.5 : 1.0)
                 .scaleEffect(thinkingScale)
                 .offset(y: thinkingBounce)
+                .padding(bubbleOverflow)
+
+            if status == .thinking {
+                ThinkingBubble()
+                    .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
+            }
         }
-        .frame(width: size, height: size)
+        .frame(width: size + bubbleOverflow * 2, height: size + bubbleOverflow * 2)
         .onAppear {
             if status == .thinking {
                 startThinkingAnimation()
@@ -62,6 +70,46 @@ struct MascotView: View {
                 .aspectRatio(contentMode: .fit)
                 .foregroundStyle(.gray)
                 .padding(4)
+        }
+    }
+}
+
+/// Cloud-style thought bubble with animated dots.
+struct ThinkingBubble: View {
+    @State private var dotPhase: Int = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Cloud bubble
+            HStack(spacing: 2) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(.primary)
+                        .frame(width: 3, height: 3)
+                        .opacity(dotPhase == i ? 1.0 : 0.3)
+                }
+            }
+            .padding(.horizontal, 5)
+            .padding(.vertical, 4)
+            .background(
+                Capsule().fill(.primary.opacity(0.15))
+            )
+
+            // Trailing thought circles
+            HStack(spacing: 2) {
+                Spacer().frame(width: 2)
+                Circle()
+                    .fill(.primary.opacity(0.12))
+                    .frame(width: 4, height: 4)
+                Circle()
+                    .fill(.primary.opacity(0.08))
+                    .frame(width: 2.5, height: 2.5)
+            }
+        }
+        .onAppear {
+            Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
+                dotPhase = (dotPhase + 1) % 3
+            }
         }
     }
 }
