@@ -133,8 +133,8 @@ struct SleepingZzz: View {
                     // Yellow stroke (rendered as shadow on all sides)
                     Text("z")
                         .font(.system(size: CGFloat(3 + i), weight: .black, design: .rounded))
-                        .foregroundStyle(yellow)
-                        .shadow(color: yellow, radius: 0.3)
+                        .foregroundStyle(yellow.opacity(0.4))
+                        .shadow(color: yellow.opacity(0.3), radius: 0.2)
                     // Dark blue fill on top
                     Text("z")
                         .font(.system(size: CGFloat(3 + i), weight: .black, design: .rounded))
