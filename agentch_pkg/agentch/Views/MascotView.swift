@@ -7,7 +7,7 @@ struct MascotView: View {
 
     @State private var animationPhase: CGFloat = 0
 
-    private let bubbleOverflow: CGFloat = 8
+    private let bubbleOverflow: CGFloat = 6
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -19,7 +19,7 @@ struct MascotView: View {
 
             if status == .thinking {
                 ThinkingBubble()
-                    .offset(x: size * 0.2)
+                    .offset(x: size * 0.35)
                     .transition(.scale(scale: 0, anchor: .bottomLeading).combined(with: .opacity))
             }
         }
@@ -81,30 +81,28 @@ struct ThinkingBubble: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Cloud bubble
-            HStack(spacing: 2) {
+            HStack(spacing: 1.5) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .fill(.primary)
-                        .frame(width: 3, height: 3)
+                        .frame(width: 2, height: 2)
                         .opacity(dotPhase == i ? 1.0 : 0.3)
                 }
             }
-            .padding(.horizontal, 5)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 3.5)
+            .padding(.vertical, 2.5)
             .background(
                 Capsule().fill(.primary.opacity(0.15))
             )
 
-            // Trailing thought circles
-            HStack(spacing: 2) {
-                Spacer().frame(width: 2)
+            HStack(spacing: 1.5) {
+                Spacer().frame(width: 1.5)
                 Circle()
                     .fill(.primary.opacity(0.12))
-                    .frame(width: 4, height: 4)
+                    .frame(width: 3, height: 3)
                 Circle()
                     .fill(.primary.opacity(0.08))
-                    .frame(width: 2.5, height: 2.5)
+                    .frame(width: 2, height: 2)
             }
         }
         .onAppear {

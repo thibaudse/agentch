@@ -7,7 +7,7 @@ struct PillGroupView: View {
     @State private var isPeeking = false
     @State private var peekTask: Task<Void, Never>?
 
-    private let mascotSize: CGFloat = 20
+    private let mascotSize: CGFloat = 16
     private let hPadding: CGFloat = 10
     private let vPadding: CGFloat = 6
     private let peekDuration: TimeInterval = 2.5
