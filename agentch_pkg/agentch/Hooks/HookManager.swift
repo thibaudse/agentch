@@ -1,20 +1,55 @@
 import Foundation
 
-struct HookManager {
-    static let hookEvents = ["SessionStart", "SessionEnd", "PreToolUse", "PostToolUse", "Stop", "UserPromptSubmit", "PermissionRequest"]
+/// Supported agent types and their hook configurations.
+enum AgentHookConfig {
+    case claude
+    case codex
 
-    static var settingsPath: String {
+    var settingsPath: String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
-        return "\(home)/.claude/settings.json"
+        switch self {
+        case .claude: return "\(home)/.claude/settings.json"
+        case .codex:  return "\(home)/.codex/hooks.json"
+        }
     }
 
-    private static func agentChURL(port: UInt16) -> String {
-        "http://localhost:\(port)/events"
+    var hookEvents: [String] {
+        switch self {
+        case .claude:
+            return ["SessionStart", "SessionEnd", "PreToolUse", "PostToolUse",
+                    "Stop", "UserPromptSubmit", "PermissionRequest"]
+        case .codex:
+            return ["SessionStart", "PreToolUse", "PostToolUse",
+                    "Stop", "UserPromptSubmit"]
+        }
     }
 
-    /// Path to the hook helper script (installed alongside the binary)
+    /// Events required to check if hooks are "installed"
+    var requiredEvents: [String] {
+        switch self {
+        case .claude:
+            return ["SessionStart", "SessionEnd", "PreToolUse", "PostToolUse",
+                    "Stop", "UserPromptSubmit", "PermissionRequest"]
+        case .codex:
+            return ["SessionStart", "PreToolUse", "PostToolUse",
+                    "Stop", "UserPromptSubmit"]
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .claude: return "Claude"
+        case .codex:  return "Codex"
+        }
+    }
+
+    static let all: [AgentHookConfig] = [.claude, .codex]
+}
+
+struct HookManager {
+    static let hookIdentifier = "agentch"
+
     static var hookScriptPath: String {
-        // Use a well-known location
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         return "\(home)/.agentch/hook.sh"
     }
@@ -23,7 +58,6 @@ struct HookManager {
         "AGENTCH_PORT=\(port) bash \(hookScriptPath)"
     }
 
-    /// Install the hook helper script to ~/.agentch/hook.sh
     static func installScript() {
         let scriptContent = """
         #!/bin/bash
@@ -55,44 +89,36 @@ struct HookManager {
         let dir = (hookScriptPath as NSString).deletingLastPathComponent
         try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         try? scriptContent.write(toFile: hookScriptPath, atomically: true, encoding: .utf8)
-        // Make executable
         try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hookScriptPath)
     }
 
+    // MARK: - Read/Write settings
 
-    static let hookIdentifier = "agentch"
-
-    // MARK: - Read/Write settings.json
-
-    static func readSettings() throws -> [String: Any] {
-        let url = URL(fileURLWithPath: settingsPath)
-        guard FileManager.default.fileExists(atPath: settingsPath) else {
-            return [:]
-        }
-        let data = try Data(contentsOf: url)
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return [:]
-        }
+    static func readSettings(for agent: AgentHookConfig) throws -> [String: Any] {
+        let path = agent.settingsPath
+        guard FileManager.default.fileExists(atPath: path) else { return [:] }
+        let data = try Data(contentsOf: URL(fileURLWithPath: path))
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         return json
     }
 
-    static func writeSettings(_ settings: [String: Any]) throws {
-        let url = URL(fileURLWithPath: settingsPath)
+    static func writeSettings(_ settings: [String: Any], for agent: AgentHookConfig) throws {
+        let path = agent.settingsPath
         try FileManager.default.createDirectory(
-            at: url.deletingLastPathComponent(),
+            at: URL(fileURLWithPath: path).deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
         let data = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted, .sortedKeys])
-        try data.write(to: url, options: .atomic)
+        try data.write(to: URL(fileURLWithPath: path), options: .atomic)
     }
 
     // MARK: - Install/Uninstall
 
-    static func mergeHooks(into settings: [String: Any], port: UInt16) throws -> [String: Any] {
+    static func mergeHooks(into settings: [String: Any], port: UInt16, agent: AgentHookConfig) throws -> [String: Any] {
         var result = settings
-        var hooks = (settings["hooks"] as? [String: Any]) ?? [:]
+        var hooks = (result["hooks"] as? [String: Any]) ?? [:]
 
-        for event in hookEvents {
+        for event in agent.hookEvents {
             var matcherGroups = (hooks[event] as? [[String: Any]]) ?? []
 
             let alreadyExists = matcherGroups.contains { group in
@@ -101,13 +127,10 @@ struct HookManager {
             }
 
             if !alreadyExists {
-                let command = hookCommand(port: port)
-
                 let ourHook: [String: Any] = [
                     "type": "command",
-                    "command": command,
+                    "command": hookCommand(port: port),
                     "timeout": 5,
-                    "async": true,
                 ]
                 let matcherGroup: [String: Any] = [
                     "matcher": "",
@@ -123,24 +146,17 @@ struct HookManager {
         return result
     }
 
-    static func removeHooks(from settings: [String: Any], port: UInt16) -> [String: Any] {
+    static func removeHooks(from settings: [String: Any], agent: AgentHookConfig) -> [String: Any] {
         var result = settings
-        guard var hooks = settings["hooks"] as? [String: Any] else { return result }
-        let url = agentChURL(port: port)
+        guard var hooks = result["hooks"] as? [String: Any] else { return result }
 
-        for event in hookEvents {
+        for event in agent.hookEvents {
             guard var matcherGroups = hooks[event] as? [[String: Any]] else { continue }
 
             matcherGroups = matcherGroups.compactMap { group in
-                if group["hooks"] == nil && (group["url"] as? String) == url {
-                    return nil
-                }
                 var group = group
                 guard var groupHooks = group["hooks"] as? [[String: Any]] else { return group }
-                groupHooks.removeAll {
-                    ($0["url"] as? String) == url ||
-                    ($0["command"] as? String)?.contains(hookIdentifier) == true
-                }
+                groupHooks.removeAll { ($0["command"] as? String)?.contains(hookIdentifier) == true }
                 if groupHooks.isEmpty { return nil }
                 group["hooks"] = groupHooks
                 return group
@@ -153,9 +169,9 @@ struct HookManager {
         return result
     }
 
-    static func isInstalled(in settings: [String: Any], port: UInt16) -> Bool {
+    static func isInstalled(in settings: [String: Any], port: UInt16, agent: AgentHookConfig) -> Bool {
         guard let hooks = settings["hooks"] as? [String: Any] else { return false }
-        return hookEvents.allSatisfy { event in
+        return agent.requiredEvents.allSatisfy { event in
             guard let matcherGroups = hooks[event] as? [[String: Any]] else { return false }
             return matcherGroups.contains { group in
                 guard let groupHooks = group["hooks"] as? [[String: Any]] else { return false }
@@ -166,20 +182,44 @@ struct HookManager {
 
     // MARK: - High-level operations
 
-    static func install(port: UInt16) throws {
-        let settings = try readSettings()
-        let updated = try mergeHooks(into: settings, port: port)
-        try writeSettings(updated)
+    static func install(port: UInt16, agent: AgentHookConfig) throws {
+        let settings = try readSettings(for: agent)
+        let updated = try mergeHooks(into: settings, port: port, agent: agent)
+        try writeSettings(updated, for: agent)
     }
 
-    static func uninstall(port: UInt16) throws {
-        let settings = try readSettings()
-        let updated = removeHooks(from: settings, port: port)
-        try writeSettings(updated)
+    static func uninstall(agent: AgentHookConfig) throws {
+        let settings = try readSettings(for: agent)
+        let updated = removeHooks(from: settings, agent: agent)
+        try writeSettings(updated, for: agent)
     }
 
-    static func checkInstalled(port: UInt16) -> Bool {
-        guard let settings = try? readSettings() else { return false }
-        return isInstalled(in: settings, port: port)
+    static func checkInstalled(port: UInt16, agent: AgentHookConfig) -> Bool {
+        guard let settings = try? readSettings(for: agent) else { return false }
+        return isInstalled(in: settings, port: port, agent: agent)
+    }
+
+    /// Install hooks for all supported agents.
+    static func installAll(port: UInt16) {
+        installScript()
+        for agent in AgentHookConfig.all {
+            try? install(port: port, agent: agent)
+        }
+    }
+
+    /// Uninstall hooks for all supported agents.
+    static func uninstallAll() {
+        for agent in AgentHookConfig.all {
+            try? uninstall(agent: agent)
+        }
+    }
+
+    /// Check if hooks are installed for all supported agents.
+    static func checkAllInstalled(port: UInt16) -> [AgentHookConfig: Bool] {
+        var result: [AgentHookConfig: Bool] = [:]
+        for agent in AgentHookConfig.all {
+            result[agent] = checkInstalled(port: port, agent: agent)
+        }
+        return result
     }
 }

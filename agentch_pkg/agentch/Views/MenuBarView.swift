@@ -6,7 +6,6 @@ struct MenuBarView: View {
     @ObservedObject var pillPosition: PillPosition
     @AppStorage("httpPort") var httpPort: Int = 27182
     @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
-    @State private var hooksInstalled: Bool = false
 
     var body: some View {
         if sessionManager.sessions.isEmpty {
@@ -23,19 +22,35 @@ struct MenuBarView: View {
 
         Divider()
 
-        Text("Hooks: \(hookStatusText)")
+        Menu("Hooks") {
+            ForEach(AgentHookConfig.all, id: \.label) { agent in
+                let installed = HookManager.checkInstalled(port: UInt16(httpPort), agent: agent)
+                Button("\(agent.label): \(installed ? "Installed" : "Not Installed")") {
+                    if installed {
+                        try? HookManager.uninstall(agent: agent)
+                    } else {
+                        try? HookManager.install(port: UInt16(httpPort), agent: agent)
+                    }
+                }
+            }
+            Divider()
+            Button("Install All") {
+                HookManager.installAll(port: UInt16(httpPort))
+            }
+            Button("Uninstall All") {
+                HookManager.uninstallAll()
+            }
+        }
 
-        if hooksInstalled {
-            Button(hooksDisabled ? "Enable Hooks" : "Disable Hooks") {
+        if !hooksDisabled {
+            Button("Disable Hooks") {
                 hooksDisabled.toggle()
                 NotificationCenter.default.post(name: .agentChHooksToggled, object: nil)
             }
-            Button("Uninstall Hooks") {
-                uninstallHooks()
-            }
         } else {
-            Button("Install Hooks") {
-                installHooks()
+            Button("Enable Hooks") {
+                hooksDisabled.toggle()
+                NotificationCenter.default.post(name: .agentChHooksToggled, object: nil)
             }
         }
 
@@ -69,14 +84,6 @@ struct MenuBarView: View {
             NSApplication.shared.terminate(nil)
         }
         .keyboardShortcut("q")
-        .onAppear {
-            hooksInstalled = HookManager.checkInstalled(port: UInt16(httpPort))
-        }
-    }
-
-    private var hookStatusText: String {
-        if !hooksInstalled { return "Not Installed" }
-        return hooksDisabled ? "Installed & Disabled" : "Installed & Enabled"
     }
 
     private func statusEmoji(_ status: SessionStatus) -> String {
@@ -97,21 +104,5 @@ struct MenuBarView: View {
         }
     }
 
-    private func installHooks() {
-        do {
-            try HookManager.install(port: UInt16(httpPort))
-            hooksInstalled = true
-        } catch {
-            print("Failed to install hooks: \(error)")
-        }
-    }
-
-    private func uninstallHooks() {
-        do {
-            try HookManager.uninstall(port: UInt16(httpPort))
-            hooksInstalled = false
-        } catch {
-            print("Failed to uninstall hooks: \(error)")
-        }
-    }
+    // Removed — hooks managed per-agent via HookManager.install/uninstall(agent:)
 }

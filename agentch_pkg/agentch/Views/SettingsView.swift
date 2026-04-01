@@ -31,8 +31,8 @@ struct SettingsView: View {
             }
 
             Section("Hooks") {
-                Button("Reinstall Hooks") {
-                    try? HookManager.install(port: UInt16(httpPort))
+                Button("Reinstall All Hooks") {
+                    HookManager.installAll(port: UInt16(httpPort))
                 }
             }
         }

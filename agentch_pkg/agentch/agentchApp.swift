@@ -142,10 +142,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private func autoInstallHooksIfNeeded() {
-        HookManager.installScript()
-        let port = UInt16(httpPort)
-        if !HookManager.checkInstalled(port: port) {
-            try? HookManager.install(port: port)
-        }
+        HookManager.installAll(port: UInt16(httpPort))
     }
 }

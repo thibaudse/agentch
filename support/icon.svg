@@ -1,0 +1,109 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Glass pill gradient -->
+    <linearGradient id="pillBase" x1="112" y1="212" x2="912" y2="812">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.15"/>
+    </linearGradient>
+
+    <!-- Glass border -->
+    <linearGradient id="pillBorder" x1="112" y1="212" x2="912" y2="812">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+      <stop offset="50%" stop-color="#ffffff" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.4"/>
+    </linearGradient>
+
+    <!-- Top specular highlight -->
+    <linearGradient id="specular" x1="512" y1="212" x2="512" y2="512">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Terminal screen -->
+    <linearGradient id="screenGrad" x1="300" y1="320" x2="724" y2="700">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
+    </linearGradient>
+
+    <!-- Background blur circle for depth -->
+    <radialGradient id="bgGlow" cx="512" cy="512" r="500">
+      <stop offset="0%" stop-color="#DA7758" stop-opacity="0.3"/>
+      <stop offset="60%" stop-color="#7c3aed" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#1e1e2e" stop-opacity="0.8"/>
+    </radialGradient>
+
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="12" stdDeviation="30" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+
+    <filter id="innerShadow">
+      <feComponentTransfer in="SourceAlpha">
+        <feFuncA type="table" tableValues="1 0"/>
+      </feComponentTransfer>
+      <feGaussianBlur stdDeviation="8"/>
+      <feOffset dx="0" dy="4"/>
+      <feFlood flood-color="#000" flood-opacity="0.3"/>
+      <feComposite operator="in" in2="SourceAlpha"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Clip for specular to stay inside pill -->
+    <clipPath id="pillClip">
+      <rect x="112" y="212" width="800" height="600" rx="300" ry="300"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="220" fill="#1e1e2e"/>
+  <rect width="1024" height="1024" rx="220" fill="url(#bgGlow)"/>
+
+  <!-- Pill shadow -->
+  <rect x="112" y="212" width="800" height="600" rx="300" ry="300" fill="black" opacity="0.3" filter="url(#shadow)"/>
+
+  <!-- Glass pill body -->
+  <rect x="112" y="212" width="800" height="600" rx="300" ry="300" fill="url(#pillBase)"/>
+
+  <!-- Glass border -->
+  <rect x="112" y="212" width="800" height="600" rx="300" ry="300" fill="none" stroke="url(#pillBorder)" stroke-width="2"/>
+
+  <!-- Specular highlight on top of pill -->
+  <g clip-path="url(#pillClip)">
+    <ellipse cx="512" cy="260" rx="340" ry="120" fill="url(#specular)"/>
+  </g>
+
+  <!-- Terminal screen -->
+  <rect x="262" y="320" width="500" height="370" rx="20" fill="url(#screenGrad)" filter="url(#innerShadow)"/>
+  <rect x="262" y="320" width="500" height="370" rx="20" fill="none" stroke="white" stroke-opacity="0.08" stroke-width="1.5"/>
+
+  <!-- Terminal content -->
+  <g filter="url(#glow)">
+    <!-- Window dots -->
+    <circle cx="300" cy="358" r="8" fill="#FF5F57"/>
+    <circle cx="328" cy="358" r="8" fill="#FEBC2E"/>
+    <circle cx="356" cy="358" r="8" fill="#28C840"/>
+
+    <!-- > chevron prompt -->
+    <path d="M320 450 L400 510 L320 570" stroke="#28C840" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+
+    <!-- Cursor block -->
+    <rect x="440" y="545" width="100" height="26" rx="3" fill="#28C840" opacity="0.85">
+      <animate attributeName="opacity" values="0.85;0.2;0.85" dur="1.2s" repeatCount="indefinite"/>
+    </rect>
+
+    <!-- Faint text lines -->
+    <rect x="440" y="460" width="180" height="10" rx="5" fill="#28C840" opacity="0.2"/>
+    <rect x="440" y="490" width="120" height="10" rx="5" fill="#28C840" opacity="0.12"/>
+  </g>
+</svg>

@@ -27,7 +27,15 @@ struct SessionEvent: Sendable {
             return nil
         }
         let cwd = json["cwd"] as? String ?? ""
-        let agentType = json["agent_type"] as? String ?? "claude"
+        // Detect agent type from process name if not provided
+        let agentType: String
+        if let provided = json["agent_type"] as? String, !provided.isEmpty {
+            agentType = provided
+        } else if let pid = queryParams["pid"].flatMap(Int.init) {
+            agentType = detectAgentType(pid: pid)
+        } else {
+            agentType = "claude"
+        }
         let termProgram = queryParams["term"]?.isEmpty == true ? nil : queryParams["term"]
         let termPid = queryParams["pid"].flatMap(Int.init)
         let tty = queryParams["tty"]?.isEmpty == true ? nil : queryParams["tty"]
@@ -35,6 +43,21 @@ struct SessionEvent: Sendable {
             event: event, sessionId: sessionId, cwd: cwd, agentType: agentType,
             termProgram: termProgram, termPid: termPid, tty: tty
         )
+    }
+
+    /// Detect agent type from the process name at the given PID.
+    private static func detectAgentType(pid: Int) -> String {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, Int32(pid)]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0 else { return "claude" }
+        let name = withUnsafePointer(to: &info.kp_proc.p_comm) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 16) {
+                String(cString: $0)
+            }
+        }
+        if name.lowercased().contains("codex") { return "codex" }
+        return "claude"
     }
 }
 
