@@ -16,7 +16,10 @@ struct PillGroupView: View {
     private var isExpanded: Bool { (isHovering || isPeeking) && !pillPosition.isDragging }
 
     private var cornerRadius: CGFloat {
-        pillHeight / 2
+        if isExpanded && sessionManager.sessions.count > 1 {
+            return 24
+        }
+        return pillHeight / 2
     }
 
     private var sessionsSnapshot: String {
