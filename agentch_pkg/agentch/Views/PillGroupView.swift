@@ -16,7 +16,7 @@ struct PillGroupView: View {
     private var isExpanded: Bool { (isHovering || isPeeking) && !pillPosition.isDragging }
 
     private var cornerRadius: CGFloat {
-        isExpanded ? 16 : pillHeight / 2
+        pillHeight / 2
     }
 
     private var sessionsSnapshot: String {
@@ -148,10 +148,11 @@ struct PillGroupView: View {
         }
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
-        .background(GeometryReader { geo in
-            Color.clear.preference(key: PillHeightKey.self, value: geo.size.height)
-        })
-        .onPreferenceChange(PillHeightKey.self) { pillHeight = $0 }
+        .onGeometryChange(for: CGFloat.self) { geo in
+            geo.size.height
+        } action: { height in
+            pillHeight = height
+        }
         .background(pillBackground)
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
@@ -222,13 +223,6 @@ struct PillGroupView: View {
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         }
-    }
-}
-
-struct PillHeightKey: PreferenceKey {
-    nonisolated(unsafe) static var defaultValue: CGFloat = 30
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 
