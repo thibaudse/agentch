@@ -6,6 +6,7 @@ struct MenuBarView: View {
     @ObservedObject var pillPosition: PillPosition
     @AppStorage("httpPort") var httpPort: Int = 27182
     @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
+    @AppStorage("notificationSound") var selectedSound: String = "Blow"
 
     var body: some View {
         if sessionManager.sessions.isEmpty {
@@ -56,13 +57,13 @@ struct MenuBarView: View {
 
         Divider()
 
-        Menu("Sound: \(SoundPlayer.selectedSound)") {
+        Menu("Sound: \(selectedSound)") {
             ForEach(SoundPlayer.availableSounds, id: \.self) { sound in
                 Button {
-                    SoundPlayer.selectedSound = sound
+                    selectedSound = sound
                     SoundPlayer.preview(sound)
                 } label: {
-                    if sound == SoundPlayer.selectedSound {
+                    if sound == selectedSound {
                         Text("✓ \(sound)")
                     } else {
                         Text("  \(sound)")
