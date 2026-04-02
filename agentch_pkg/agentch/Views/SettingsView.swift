@@ -15,46 +15,139 @@ struct SettingsView: View {
     @State private var hookRefreshToken = UUID()
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                generalSection
-                appearanceSection
-                soundSection
-                positionSection
-                hooksSection
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Hero header
+                    heroHeader
+                        .padding(.bottom, 24)
 
-                Text("AgentCh v1.0")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 4)
+                    Group {
+                        sectionHeader("General", icon: "gearshape.fill", color: .gray)
+                        generalSection
+                            .padding(.bottom, 20)
+
+                        sectionHeader("Appearance", icon: "paintbrush.fill", color: .purple)
+                        appearanceSection
+                            .padding(.bottom, 20)
+
+                        sectionHeader("Sound", icon: "speaker.wave.2.fill", color: .pink)
+                        soundSection
+                            .padding(.bottom, 20)
+
+                        sectionHeader("Position", icon: "rectangle.inset.filled", color: .blue)
+                        positionSection
+                            .padding(.bottom, 20)
+
+                        sectionHeader("Hooks", icon: "link", color: .orange)
+                        hooksSection
+                    }
+
+                    Text("v1.0")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.15))
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 28)
+                        .padding(.bottom, 16)
+                }
+                .padding(.horizontal, 28)
             }
-            .padding(20)
         }
-        .frame(width: 450, height: 580)
+        .frame(width: 520, height: 680)
+        .background {
+            if #available(macOS 26.0, *) {
+                Rectangle()
+                    .fill(.clear)
+                    .glassEffect(.regular.tint(.clear), in: .rect)
+            } else {
+                Rectangle().fill(.ultraThickMaterial)
+            }
+        }
+    }
+
+    // MARK: - Hero Header
+
+    @ViewBuilder
+    private var heroHeader: some View {
+        VStack(spacing: 8) {
+            ClawdMascot(status: .idle, animationPhase: 0)
+                .frame(width: 40, height: 40)
+
+            Text("AgentCh")
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+
+            Text("Visual feedback for your AI agents")
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.35))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
+    }
+
+    // MARK: - Section Header
+
+    private func sectionHeader(_ title: String, icon: String, color: Color) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 18, height: 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .fill(color.opacity(0.15))
+                )
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.4))
+                .tracking(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.bottom, 10)
     }
 
     // MARK: - General
 
     @ViewBuilder
     private var generalSection: some View {
-        SettingsSection(icon: "gearshape", title: "General") {
-            SettingsRow("Launch at Login") {
-                Toggle("", isOn: $launchAtLogin)
-                    .labelsHidden()
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        updateLaunchAtLogin(newValue)
+        VStack(spacing: 2) {
+            SettingsCard {
+                HStack {
+                    Text("Launch at Login")
+                        .font(.system(size: 13))
+                    Spacer()
+                    Toggle("", isOn: $launchAtLogin)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .onChange(of: launchAtLogin) { _, newValue in
+                            updateLaunchAtLogin(newValue)
+                        }
+                }
+            }
+            SettingsCard {
+                HStack {
+                    Text("HTTP Port")
+                        .font(.system(size: 13))
+                    Spacer()
+                    HStack(spacing: 6) {
+                        TextField("", value: $httpPort, format: .number)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 13, design: .monospaced))
+                            .frame(width: 56)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                    .fill(.white.opacity(0.06))
+                            )
+                        Text("restart needed")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.white.opacity(0.2))
                     }
+                }
             }
-            SettingsRow("HTTP Port") {
-                TextField("", value: $httpPort, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 80)
-            }
-            Text("Requires restart")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
@@ -62,33 +155,52 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var appearanceSection: some View {
-        SettingsSection(icon: "paintbrush", title: "Appearance") {
-            SettingsRow("Pill Size") {
-                HStack(spacing: 12) {
+        VStack(spacing: 2) {
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Pill Size")
+                            .font(.system(size: 13))
+                        Spacer()
+                        Text(String(format: "%.0f%%", pillScale * 100))
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.purple)
+                    }
                     Slider(value: $pillScale, in: 0.5...2.0, step: 0.1)
-                        .frame(width: 120)
-                    Text(String(format: "%.1fx", pillScale))
-                        .font(.system(.body, design: .monospaced))
-                        .frame(width: 36, alignment: .trailing)
+                        .tint(.purple)
+                    // Mini pill preview
+                    HStack {
+                        Spacer()
+                        HStack(spacing: 6 * CGFloat(pillScale)) {
+                            StatusDot(status: .idle, scale: CGFloat(pillScale))
+                            MascotView(agentType: .claude, status: .idle, size: 16 * CGFloat(pillScale))
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 12)
+                        .background(
+                            Capsule()
+                                .fill(.white.opacity(0.04))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(.white.opacity(0.06), lineWidth: 1)
+                                )
+                        )
+                        Spacer()
+                    }
                 }
             }
-            // Mini pill preview
-            HStack(spacing: 6 * CGFloat(pillScale)) {
-                StatusDot(status: .thinking, scale: CGFloat(pillScale))
-                MascotView(agentType: .claude, status: .thinking, size: 16 * CGFloat(pillScale))
-            }
-            .frame(height: 30)
-            .frame(maxWidth: .infinity)
-
-            Divider()
-
-            SettingsRow("Collapse Duration") {
-                HStack(spacing: 12) {
+            SettingsCard {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Auto-Collapse")
+                            .font(.system(size: 13))
+                        Spacer()
+                        Text(String(format: "%.1fs", peekDuration))
+                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.purple)
+                    }
                     Slider(value: $peekDuration, in: 1...10, step: 0.5)
-                        .frame(width: 120)
-                    Text(String(format: "%.1fs", peekDuration))
-                        .font(.system(.body, design: .monospaced))
-                        .frame(width: 36, alignment: .trailing)
+                        .tint(.purple)
                 }
             }
         }
@@ -98,23 +210,34 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var soundSection: some View {
-        SettingsSection(icon: "speaker.wave.2", title: "Sound") {
-            SettingsRow("Enable Sound") {
-                Toggle("", isOn: $soundEnabled)
-                    .labelsHidden()
+        VStack(spacing: 2) {
+            SettingsCard {
+                HStack {
+                    Text("Notification Sound")
+                        .font(.system(size: 13))
+                    Spacer()
+                    Toggle("", isOn: $soundEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                }
             }
-
             if soundEnabled {
-                SettingsRow("Notification Sound") {
-                    Picker("", selection: $selectedSound) {
-                        ForEach(SoundPlayer.availableSounds, id: \.self) { sound in
-                            Text(sound).tag(sound)
+                SettingsCard {
+                    HStack {
+                        Text("Sound")
+                            .font(.system(size: 13))
+                        Spacer()
+                        Picker("", selection: $selectedSound) {
+                            ForEach(SoundPlayer.availableSounds, id: \.self) { sound in
+                                Text(sound).tag(sound)
+                            }
                         }
-                    }
-                    .labelsHidden()
-                    .frame(width: 140)
-                    .onChange(of: selectedSound) { _, newValue in
-                        SoundPlayer.preview(newValue)
+                        .labelsHidden()
+                        .frame(width: 140)
+                        .onChange(of: selectedSound) { _, newValue in
+                            SoundPlayer.preview(newValue)
+                        }
                     }
                 }
             }
@@ -141,64 +264,92 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var positionSection: some View {
-        SettingsSection(icon: "rectangle.inset.filled", title: "Position") {
-            positionGrid
-                .frame(maxWidth: .infinity)
-
-            SettingsRow("Snap to Grid") {
-                Toggle("", isOn: $snapToGrid)
-                    .labelsHidden()
-                    .onChange(of: snapToGrid) { _, enabled in
-                        if enabled {
-                            pillPosition.snapToNearest()
+        VStack(spacing: 2) {
+            SettingsCard {
+                HStack(alignment: .top) {
+                    Text("Screen Position")
+                        .font(.system(size: 13))
+                    Spacer()
+                    positionGrid
+                }
+            }
+            SettingsCard {
+                HStack {
+                    Text("Snap to Grid")
+                        .font(.system(size: 13))
+                    Spacer()
+                    Toggle("", isOn: $snapToGrid)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .onChange(of: snapToGrid) { _, enabled in
+                            if enabled {
+                                pillPosition.snapToNearest()
+                            }
+                        }
+                }
+            }
+            SettingsCard {
+                HStack {
+                    Text("Display")
+                        .font(.system(size: 13))
+                    Spacer()
+                    Picker("", selection: $screenManager.selectedScreenIndex) {
+                        ForEach(screenManager.screenNames, id: \.index) { screen in
+                            Text(screen.name).tag(screen.index)
                         }
                     }
-            }
-
-            Divider()
-
-            SettingsRow("Display") {
-                Picker("", selection: $screenManager.selectedScreenIndex) {
-                    ForEach(screenManager.screenNames, id: \.index) { screen in
-                        Text(screen.name).tag(screen.index)
-                    }
+                    .labelsHidden()
+                    .frame(width: 180)
                 }
-                .labelsHidden()
-                .frame(width: 180)
             }
         }
     }
 
     @ViewBuilder
     private var positionGrid: some View {
-        let columns = [
-            GridItem(.fixed(44), spacing: 6),
-            GridItem(.fixed(44), spacing: 6),
-            GridItem(.fixed(44), spacing: 6),
-        ]
+        // Mini screen representation
+        VStack(spacing: 0) {
+            let columns = [
+                GridItem(.fixed(32), spacing: 2),
+                GridItem(.fixed(32), spacing: 2),
+                GridItem(.fixed(32), spacing: 2),
+            ]
 
-        LazyVGrid(columns: columns, spacing: 6) {
-            ForEach(Array(PillScreenPosition.all.enumerated()), id: \.offset) { index, pos in
-                let isActive = currentPositionIndex == index
-                Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                        pillPosition.moveTo(pos)
-                    }
-                } label: {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(isActive ? Color.accentColor : Color.primary.opacity(0.08))
-                        .frame(width: 44, height: 32)
-                        .overlay {
-                            if isActive {
-                                Circle()
-                                    .fill(.white)
-                                    .frame(width: 6, height: 6)
-                            }
+            LazyVGrid(columns: columns, spacing: 2) {
+                ForEach(Array(PillScreenPosition.all.enumerated()), id: \.offset) { index, pos in
+                    let isActive = currentPositionIndex == index
+                    Button {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            pillPosition.moveTo(pos)
                         }
+                    } label: {
+                        RoundedRectangle(cornerRadius: 3, style: .continuous)
+                            .fill(isActive ? Color.blue : .white.opacity(0.05))
+                            .frame(width: 32, height: 22)
+                            .overlay {
+                                if isActive {
+                                    Circle()
+                                        .fill(.white)
+                                        .frame(width: 4, height: 4)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .help(pos.label)
                 }
-                .buttonStyle(.plain)
-                .help(pos.label)
             }
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(.white.opacity(0.1), lineWidth: 1)
+            )
+
+            // Mini stand
+            RoundedRectangle(cornerRadius: 1)
+                .fill(.white.opacity(0.1))
+                .frame(width: 20, height: 4)
+                .padding(.top, 2)
         }
     }
 
@@ -206,28 +357,39 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var hooksSection: some View {
-        SettingsSection(icon: "link", title: "Hooks") {
-            SettingsRow("Enable Hooks") {
-                Toggle("", isOn: Binding(
-                    get: { !hooksDisabled },
-                    set: { enabled in
-                        hooksDisabled = !enabled
-                        NotificationCenter.default.post(name: .agentChHooksToggled, object: nil)
-                    }
-                ))
-                .labelsHidden()
+        VStack(spacing: 2) {
+            SettingsCard {
+                HStack {
+                    Text("Enable Hooks")
+                        .font(.system(size: 13))
+                    Spacer()
+                    Toggle("", isOn: Binding(
+                        get: { !hooksDisabled },
+                        set: { enabled in
+                            hooksDisabled = !enabled
+                            NotificationCenter.default.post(name: .agentChHooksToggled, object: nil)
+                        }
+                    ))
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                }
             }
 
             if !hooksDisabled {
-                Divider()
-
                 ForEach(AgentHookConfig.all, id: \.label) { agent in
                     let installed = HookManager.checkInstalled(port: UInt16(httpPort), agent: agent)
-                    SettingsRow(agent.label) {
-                        HStack(spacing: 8) {
+                    SettingsCard {
+                        HStack(spacing: 10) {
+                            Text(agent.label)
+                                .font(.system(size: 13, weight: .medium))
+                            Circle()
+                                .fill(installed ? Color.green : .white.opacity(0.15))
+                                .frame(width: 6, height: 6)
                             Text(installed ? "Installed" : "Not Installed")
-                                .font(.caption)
+                                .font(.system(size: 11))
                                 .foregroundStyle(installed ? .green : .secondary)
+                            Spacer()
                             Toggle("", isOn: Binding(
                                 get: { installed },
                                 set: { newValue in
@@ -240,28 +402,32 @@ struct SettingsView: View {
                                 }
                             ))
                             .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
                         }
                     }
                 }
                 .id(hookRefreshToken)
 
-                Divider()
-
-                HStack {
+                HStack(spacing: 8) {
                     Spacer()
                     Button("Install All") {
                         HookManager.installAll(port: UInt16(httpPort))
                         hookRefreshToken = UUID()
                     }
+                    .buttonStyle(SmallPillButton())
                     Button("Uninstall All") {
                         HookManager.uninstallAll()
                         hookRefreshToken = UUID()
                     }
+                    .buttonStyle(SmallPillButton())
                 }
-                .font(.caption)
+                .padding(.top, 6)
             }
         }
     }
+
+    // MARK: - Helpers
 
     private func updateLaunchAtLogin(_ enabled: Bool) {
         do {
@@ -276,43 +442,46 @@ struct SettingsView: View {
     }
 }
 
-// MARK: - Reusable components
+// MARK: - Card Component
 
-struct SettingsSection<Content: View>: View {
-    let icon: String
-    let title: String
+struct SettingsCard<Content: View>: View {
     @ViewBuilder let content: () -> Content
+    @State private var isHovered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: icon)
-                .font(.headline)
-            content()
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(.primary.opacity(0.04))
-        )
+        content()
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.white.opacity(isHovered ? 0.07 : 0.04))
+            )
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isHovered = hovering
+                }
+            }
     }
 }
 
-struct SettingsRow<Content: View>: View {
-    let label: String
-    @ViewBuilder let content: () -> Content
+// MARK: - Small Pill Button
 
-    init(_ label: String, @ViewBuilder content: @escaping () -> Content) {
-        self.label = label
-        self.content = content
-    }
-
-    var body: some View {
-        HStack {
-            Text(label)
-            Spacer()
-            content()
-        }
+struct SmallPillButton: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.white.opacity(0.6))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(.white.opacity(configuration.isPressed ? 0.1 : 0.06))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(.white.opacity(0.08), lineWidth: 1)
+            )
     }
 }
 
@@ -337,14 +506,17 @@ final class SettingsWindowController {
         let hostingView = NSHostingView(rootView: settingsView)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 450, height: 580),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 680),
+            styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.isReleasedWhenClosed = false
         window.level = .floating
-        window.title = "AgentCh Settings"
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)
