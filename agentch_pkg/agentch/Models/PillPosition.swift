@@ -67,7 +67,6 @@ final class PillPosition: ObservableObject {
             if isDragging {
                 isDragging = false
                 snapToNearestPosition()
-                saveOffset()
             }
             return event
 
@@ -135,8 +134,15 @@ final class PillPosition: ObservableObject {
             }
         }
 
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) {
-            offset = bestOffset
+        // Dispatch to main to ensure animation works from NSEvent callback
+        DispatchQueue.main.async { [self] in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) {
+                offset = bestOffset
+            }
+            // Save after the offset is set
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [self] in
+                saveOffset()
+            }
         }
     }
 

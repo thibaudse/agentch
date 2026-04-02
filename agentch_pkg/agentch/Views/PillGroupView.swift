@@ -156,9 +156,6 @@ struct PillGroupView: View {
                 let isFirst = expandsDown ? index == 0 : index == sessions.count - 1
 
                 if isFirst || isExpanded {
-                    if isExpanded && !isFirst && index > 0 {
-                        Divider().opacity(0.15)
-                    }
                     sessionRow(session: session, isFirst: isFirst)
                         .transition(.blurReplace)
                 }
@@ -191,6 +188,7 @@ struct PillGroupView: View {
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
 
                     Text(statusLabel(session.status))
                         .font(.system(size: 9, weight: .regular, design: .rounded))
@@ -213,14 +211,6 @@ struct PillGroupView: View {
                     .transition(.blurReplace)
             }
         }
-        .padding(.vertical, isExpanded ? 3 : 0)
-        .padding(.horizontal, isExpanded ? 4 : 0)
-        .background(
-            isExpanded
-                ? RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(.primary.opacity(0.04))
-                : nil
-        )
     }
 
     private var compactBadge: String {
@@ -239,10 +229,10 @@ struct PillGroupView: View {
 
     private var statusTint: Color {
         if sessionManager.sessions.contains(where: { $0.status == .waiting }) {
-            return .orange.opacity(0.08)
+            return .orange.opacity(0.15)
         }
         if sessionManager.sessions.contains(where: { $0.status == .thinking }) {
-            return .green.opacity(0.05)
+            return .green.opacity(0.1)
         }
         return .clear
     }
@@ -251,14 +241,22 @@ struct PillGroupView: View {
     private var pillBackground: some View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         if #available(macOS 26.0, *) {
-            shape
-                .fill(statusTint)
-                .glassEffect(.clear.interactive(), in: shape)
-                .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+            ZStack {
+                shape
+                    .fill(.clear)
+                    .glassEffect(.clear.interactive(), in: shape)
+                // Tint overlay on top of glass
+                shape
+                    .fill(statusTint)
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         } else {
-            shape
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+            ZStack {
+                shape.fill(.ultraThinMaterial)
+                shape.fill(statusTint)
+            }
+            .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         }
     }
 }

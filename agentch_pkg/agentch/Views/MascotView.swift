@@ -15,6 +15,7 @@ struct MascotView: View {
                 .opacity(status == .idle ? 0.5 : 1.0)
                 .scaleEffect(thinkingScale)
                 .offset(y: thinkingBounce)
+                .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
                 .frame(width: size, height: size)
 
             // Fixed-width slot for bubble/zzz — always reserved
@@ -211,23 +212,36 @@ struct ClawdMascot: View {
 
     private let legColor = Color(red: 0.75, green: 0.38, blue: 0.27)
 
+    @State private var showSitting = false
+
     var body: some View {
         ZStack {
-            if status == .waiting {
-                ClawdSittingLegsShape()
-                    .fill(legColor)
-                ClawdSittingBodyShape()
-                    .fill(bodyColor)
-                ClawdSittingEyesShape()
-                    .fill(.black)
-            } else {
-                ClawdBodyShape()
-                    .fill(status == .error ? .red : bodyColor)
-                ClawdEyesShape(animationPhase: eyePhase)
-                    .fill(.black)
-            }
+            // Sitting (behind)
+            ClawdSittingLegsShape()
+                .fill(legColor)
+                .opacity(showSitting ? 1 : 0)
+            ClawdSittingBodyShape()
+                .fill(bodyColor)
+                .opacity(showSitting ? 1 : 0)
+            ClawdSittingEyesShape()
+                .fill(.black)
+                .opacity(showSitting ? 1 : 0)
+
+            // Standing (front)
+            ClawdBodyShape()
+                .fill(status == .error ? .red : bodyColor)
+                .opacity(showSitting ? 0 : 1)
+            ClawdEyesShape(animationPhase: eyePhase)
+                .fill(.black)
+                .opacity(showSitting ? 0 : 1)
         }
         .aspectRatio(490.0 / 385.0, contentMode: .fit)
+        .onChange(of: status) { _, newStatus in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                showSitting = newStatus == .waiting
+            }
+        }
+        .onAppear { showSitting = status == .waiting }
     }
 
     private var eyePhase: CGFloat {
@@ -378,26 +392,42 @@ struct CodexMascot: View {
     private let gradientBottom = Color(red: 0.294, green: 0.298, blue: 0.922)  // #4B4CEB
     private let darkLeg = Color(red: 0.22, green: 0.22, blue: 0.7)
 
+    @State private var showSitting = false
+
+    private var gradient: LinearGradient {
+        LinearGradient(
+            colors: status == .error ? [.red, .red] : [gradientTop, gradientBottom],
+            startPoint: .top, endPoint: .bottom)
+    }
+
     var body: some View {
         ZStack {
-            if status == .waiting {
-                CodexSittingLegsShape()
-                    .fill(darkLeg)
-                CodexSittingBodyShape()
-                    .fill(LinearGradient(colors: [gradientTop, gradientBottom],
-                                         startPoint: .top, endPoint: .bottom))
-                CodexSittingFaceShape()
-                    .fill(.white.opacity(0.9))
-            } else {
-                CodexBodyShape()
-                    .fill(LinearGradient(
-                        colors: status == .error ? [.red, .red] : [gradientTop, gradientBottom],
-                        startPoint: .top, endPoint: .bottom))
-                CodexFaceShape(animationPhase: status == .thinking ? animationPhase : 0)
-                    .fill(.white.opacity(0.9))
-            }
+            // Sitting
+            CodexSittingLegsShape()
+                .fill(darkLeg)
+                .opacity(showSitting ? 1 : 0)
+            CodexSittingBodyShape()
+                .fill(gradient)
+                .opacity(showSitting ? 1 : 0)
+            CodexSittingFaceShape()
+                .fill(.white.opacity(0.9))
+                .opacity(showSitting ? 1 : 0)
+
+            // Standing
+            CodexBodyShape()
+                .fill(gradient)
+                .opacity(showSitting ? 0 : 1)
+            CodexFaceShape(animationPhase: status == .thinking ? animationPhase : 0)
+                .fill(.white.opacity(0.9))
+                .opacity(showSitting ? 0 : 1)
         }
         .aspectRatio(490.0 / 385.0, contentMode: .fit)
+        .onChange(of: status) { _, newStatus in
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                showSitting = newStatus == .waiting
+            }
+        }
+        .onAppear { showSitting = status == .waiting }
     }
 }
 
