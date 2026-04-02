@@ -71,11 +71,10 @@ struct SettingsView: View {
                 }
             }
             // Mini pill preview
-            HStack(spacing: 6) {
-                StatusDot(status: .thinking)
-                MascotView(agentType: .claude, status: .thinking, size: 16)
+            HStack(spacing: 6 * CGFloat(pillScale)) {
+                StatusDot(status: .thinking, scale: CGFloat(pillScale))
+                MascotView(agentType: .claude, status: .thinking, size: 16 * CGFloat(pillScale))
             }
-            .scaleEffect(pillScale)
             .frame(height: 30)
             .frame(maxWidth: .infinity)
 

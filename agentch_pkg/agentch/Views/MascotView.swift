@@ -171,6 +171,7 @@ struct SleepingZzz: View {
 /// Pulsing status indicator dot with glow ring for waiting.
 struct StatusDot: View {
     let status: SessionStatus
+    var scale: CGFloat = 1.0
     @State private var pulse = false
 
     private var shouldPulse: Bool {
@@ -182,14 +183,14 @@ struct StatusDot: View {
             // Glow ring for waiting
             if status == .waiting {
                 Circle()
-                    .stroke(color.opacity(pulse ? 0.4 : 0.1), lineWidth: 1.5)
-                    .frame(width: 10, height: 10)
+                    .stroke(color.opacity(pulse ? 0.4 : 0.1), lineWidth: 1.5 * scale)
+                    .frame(width: 10 * scale, height: 10 * scale)
                     .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: pulse)
             }
 
             Circle()
                 .fill(color)
-                .frame(width: 6, height: 6)
+                .frame(width: 6 * scale, height: 6 * scale)
                 .scaleEffect(shouldPulse && pulse ? 1.3 : 1.0)
                 .animation(
                     shouldPulse
@@ -198,7 +199,7 @@ struct StatusDot: View {
                     value: pulse
                 )
         }
-        .frame(width: 12, height: 12)
+        .frame(width: 12 * scale, height: 12 * scale)
         .onAppear {
             if shouldPulse { pulse = true }
         }

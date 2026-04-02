@@ -10,9 +10,10 @@ struct PillGroupView: View {
     @State private var peekTask: Task<Void, Never>?
     @State private var squish: CGFloat = 1.0
     @State private var badgePop: CGFloat = 1.0
-    private let mascotSize: CGFloat = 16
-    private let hPadding: CGFloat = 14
-    private let vPadding: CGFloat = 10
+    private var scale: CGFloat { CGFloat(pillScale) }
+    private var mascotSize: CGFloat { 16 * scale }
+    private var hPadding: CGFloat { 14 * scale }
+    private var vPadding: CGFloat { 10 * scale }
 
     private var isExpanded: Bool { (isHovering || isPeeking) && !pillPosition.isDragging }
 
@@ -87,7 +88,7 @@ struct PillGroupView: View {
                     ))
                     .offset(pillPosition.offset)
                     .padding(.top, pillPosition.topPadding)
-                    .scaleEffect(squish * pillScale)
+                    .scaleEffect(squish)
                     .transition(.blurReplace)
             }
         }
@@ -172,7 +173,7 @@ struct PillGroupView: View {
     private var pillBody: some View {
         let sessions = expandsDown ? sortedSessions : sortedSessions.reversed()
 
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 5 * scale) {
             ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
                 let isFirst = expandsDown ? index == 0 : index == sessions.count - 1
 
@@ -185,17 +186,17 @@ struct PillGroupView: View {
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
         .background(pillBackground)
-        .clipShape(.rect(cornerRadius: 20, style: .continuous))
+        .clipShape(.rect(cornerRadius: 20 * scale, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 20 * scale, style: .continuous)
                 .stroke(.primary.opacity(0.06), lineWidth: 0.5)
         )
     }
 
     @ViewBuilder
     private func sessionRow(session: Session, isFirst: Bool) -> some View {
-        HStack(spacing: 6) {
-            StatusDot(status: session.status)
+        HStack(spacing: 6 * scale) {
+            StatusDot(status: session.status, scale: scale)
 
             MascotView(
                 agentType: session.agentType,
@@ -206,17 +207,17 @@ struct PillGroupView: View {
             if isExpanded {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(session.label)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.system(size: 11 * scale, weight: .medium, design: .rounded))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .truncationMode(.tail)
 
                     Text(statusLabel(session.status))
-                        .font(.system(size: 9, weight: .regular, design: .rounded))
+                        .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
 
-                Spacer(minLength: 4)
+                Spacer(minLength: 4 * scale)
 
                 if session.status == .waiting {
                     AcknowledgeButton {
@@ -235,9 +236,9 @@ struct PillGroupView: View {
 
             if isFirst && !isExpanded && sessionManager.sessions.count > 1 {
                 Text("\(waitingCount > 0 ? waitingCount : sessionManager.sessions.count)")
-                    .font(.system(size: 8, weight: .heavy, design: .rounded))
+                    .font(.system(size: 8 * scale, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
-                    .frame(width: 14, height: 14)
+                    .frame(width: 14 * scale, height: 14 * scale)
                     .background(
                         Circle().fill(waitingCount > 0 ? .orange : .primary.opacity(0.5))
                     )
@@ -246,8 +247,8 @@ struct PillGroupView: View {
                     .transition(.blurReplace)
             }
         }
-        .padding(.vertical, isExpanded ? 4 : 0)
-        .padding(.horizontal, isExpanded ? 6 : 0)
+        .padding(.vertical, isExpanded ? 4 * scale : 0)
+        .padding(.horizontal, isExpanded ? 6 * scale : 0)
         .background {
             if isExpanded {
                 Capsule()
@@ -282,7 +283,7 @@ struct PillGroupView: View {
 
     @ViewBuilder
     private var pillBackground: some View {
-        let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: 20 * scale, style: .continuous)
         if #available(macOS 26.0, *) {
             ZStack {
                 shape
@@ -292,13 +293,13 @@ struct PillGroupView: View {
                     .fill(statusTint)
                     .allowsHitTesting(false)
             }
-            .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+            .shadow(color: .black.opacity(0.2), radius: 12 * scale, y: 4 * scale)
         } else {
             ZStack {
                 shape.fill(.ultraThinMaterial)
                 shape.fill(statusTint)
             }
-            .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
+            .shadow(color: .black.opacity(0.2), radius: 12 * scale, y: 4 * scale)
         }
     }
 }
