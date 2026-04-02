@@ -71,7 +71,12 @@ struct PillGroupView: View {
                         withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
                             isHovering = hovering
                         }
-                        if hovering { cancelPeek() }
+                        if hovering {
+                            cancelPeek()
+                            NSCursor.openHand.push()
+                        } else {
+                            NSCursor.pop()
+                        }
                     }
                     .padding(-20)
                     .modifier(ExpansionAnchor(

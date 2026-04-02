@@ -24,7 +24,7 @@ struct ParticleTrailView: View {
                 context.opacity = particle.opacity
                 context.fill(
                     Circle().path(in: rect),
-                    with: .color(.primary.opacity(0.3))
+                    with: .color(.orange.opacity(0.4))
                 )
             }
         }
@@ -45,7 +45,9 @@ struct ParticleTrailView: View {
                 let screen = pillPosition.screen
                 let x = screen.frame.width / 2 + pillPosition.offset.width
                 let y = pillPosition.topPadding + pillPosition.offset.height
-                particles.append(Particle(position: CGPoint(x: x, y: y)))
+                let jitterX = CGFloat.random(in: -3...3)
+                let jitterY = CGFloat.random(in: -3...3)
+                particles.append(Particle(position: CGPoint(x: x + jitterX, y: y + jitterY)))
 
                 // Fade and remove old particles
                 withAnimation(.linear(duration: 0.4)) {

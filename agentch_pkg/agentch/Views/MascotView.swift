@@ -6,6 +6,7 @@ struct MascotView: View {
     let size: CGFloat
 
     @State private var animationPhase: CGFloat = 0
+    @State private var breathe: CGFloat = 0
 
     private let bubbleWidth: CGFloat = 14
 
@@ -13,7 +14,7 @@ struct MascotView: View {
         HStack(alignment: .top, spacing: 0) {
             mascotShape
                 .opacity(status == .idle ? 0.5 : 1.0)
-                .scaleEffect(thinkingScale)
+                .scaleEffect(thinkingScale + breathe * 0.02)
                 .offset(y: thinkingBounce)
                 .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
                 .frame(width: size, height: size)
@@ -35,6 +36,9 @@ struct MascotView: View {
         .onAppear {
             if status == .thinking {
                 startThinkingAnimation()
+            }
+            withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
+                breathe = 1
             }
         }
         .onChange(of: status) { _, newStatus in
@@ -140,7 +144,7 @@ struct SleepingZzz: View {
                         .padding(0.5)
                 }
                 .offset(
-                    x: CGFloat(i) * 2,
+                    x: CGFloat(i) * 2 + sin(phase * .pi + CGFloat(i)) * 1.5,
                     y: -CGFloat(i) * 3 - phase * 1.5
                 )
                 .opacity(1.0 - phase * 0.3)
