@@ -9,8 +9,8 @@ struct PillGroupView: View {
     @State private var squish: CGFloat = 1.0
     @State private var badgePop: CGFloat = 1.0
     private let mascotSize: CGFloat = 16
-    private let hPadding: CGFloat = 10
-    private let vPadding: CGFloat = 6
+    private let hPadding: CGFloat = 14
+    private let vPadding: CGFloat = 10
     private let peekDuration: TimeInterval = 2.5
 
     private var isExpanded: Bool { (isHovering || isPeeking) && !pillPosition.isDragging }
