@@ -8,7 +8,13 @@ struct SoundPlayer {
         set { UserDefaults.standard.set(newValue, forKey: "notificationSound") }
     }
 
+    static var soundEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: "soundEnabled") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "soundEnabled") }
+    }
+
     static func playAttentionSound() {
+        guard soundEnabled else { return }
         NSSound(named: selectedSound)?.play()
     }
 

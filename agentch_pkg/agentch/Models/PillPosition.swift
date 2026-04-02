@@ -66,7 +66,12 @@ final class PillPosition: ObservableObject {
             mouseIsDown = false
             if isDragging {
                 isDragging = false
-                snapToNearestPosition()
+                let snapEnabled = UserDefaults.standard.object(forKey: "snapToGrid") as? Bool ?? true
+                if snapEnabled {
+                    snapToNearestPosition()
+                } else {
+                    saveOffset()
+                }
             }
             return event
 
@@ -116,6 +121,11 @@ final class PillPosition: ObservableObject {
         }
 
         return CGSize(width: x, height: y)
+    }
+
+    /// Public entry point for snapping to nearest grid position.
+    func snapToNearest() {
+        snapToNearestPosition()
     }
 
     /// Always snap to the nearest of the 9 positions on drag end.

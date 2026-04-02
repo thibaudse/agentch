@@ -9,6 +9,8 @@ struct SettingsView: View {
     @AppStorage("pillScale") var pillScale: Double = 1.0
     @AppStorage("peekDuration") var peekDuration: Double = 2.5
     @AppStorage("notificationSound") var selectedSound: String = "Blow"
+    @AppStorage("soundEnabled") var soundEnabled: Bool = true
+    @AppStorage("snapToGrid") var snapToGrid: Bool = true
     @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
     @State private var hookRefreshToken = UUID()
 
@@ -97,16 +99,23 @@ struct SettingsView: View {
     @ViewBuilder
     private var soundSection: some View {
         SettingsSection(icon: "speaker.wave.2", title: "Sound") {
-            SettingsRow("Notification Sound") {
-                Picker("", selection: $selectedSound) {
-                    ForEach(SoundPlayer.availableSounds, id: \.self) { sound in
-                        Text(sound).tag(sound)
+            SettingsRow("Enable Sound") {
+                Toggle("", isOn: $soundEnabled)
+                    .labelsHidden()
+            }
+
+            if soundEnabled {
+                SettingsRow("Notification Sound") {
+                    Picker("", selection: $selectedSound) {
+                        ForEach(SoundPlayer.availableSounds, id: \.self) { sound in
+                            Text(sound).tag(sound)
+                        }
                     }
-                }
-                .labelsHidden()
-                .frame(width: 140)
-                .onChange(of: selectedSound) { _, newValue in
-                    SoundPlayer.preview(newValue)
+                    .labelsHidden()
+                    .frame(width: 140)
+                    .onChange(of: selectedSound) { _, newValue in
+                        SoundPlayer.preview(newValue)
+                    }
                 }
             }
         }
@@ -135,6 +144,16 @@ struct SettingsView: View {
         SettingsSection(icon: "rectangle.inset.filled", title: "Position") {
             positionGrid
                 .frame(maxWidth: .infinity)
+
+            SettingsRow("Snap to Grid") {
+                Toggle("", isOn: $snapToGrid)
+                    .labelsHidden()
+                    .onChange(of: snapToGrid) { _, enabled in
+                        if enabled {
+                            pillPosition.snapToNearest()
+                        }
+                    }
+            }
 
             Divider()
 
@@ -324,6 +343,7 @@ final class SettingsWindowController {
             defer: false
         )
         window.isReleasedWhenClosed = false
+        window.level = .floating
         window.title = "AgentCh Settings"
         window.contentView = hostingView
         window.center()
