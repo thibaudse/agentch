@@ -211,6 +211,14 @@ struct PillGroupView: View {
                     .transition(.blurReplace)
             }
         }
+        .padding(.vertical, isExpanded ? 2 : 0)
+        .padding(.horizontal, isExpanded ? 3 : 0)
+        .background {
+            if isExpanded {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(.primary.opacity(0.03))
+            }
+        }
     }
 
     private var compactBadge: String {
