@@ -2,43 +2,14 @@ import SwiftUI
 import ServiceManagement
 
 struct SettingsView: View {
+    @ObservedObject var pillPosition: PillPosition
+    @ObservedObject var screenManager: ScreenManager
     @AppStorage("httpPort") var httpPort: Int = 27182
     @AppStorage("launchAtLogin") var launchAtLogin: Bool = false
 
     var body: some View {
-        Form {
-            Section("General") {
-                Toggle("Launch at Login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, newValue in
-                        updateLaunchAtLogin(newValue)
-                    }
-            }
-
-            Section("Server") {
-                TextField("HTTP Port", value: $httpPort, format: .number)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 120)
-                Text("Requires app restart to take effect")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Pill Position") {
-                Button("Reset to Default") {
-                    UserDefaults.standard.removeObject(forKey: "pillPositionX")
-                    UserDefaults.standard.removeObject(forKey: "pillPositionY")
-                }
-            }
-
-            Section("Hooks") {
-                Button("Reinstall All Hooks") {
-                    HookManager.installAll(port: UInt16(httpPort))
-                }
-            }
-        }
-        .formStyle(.grouped)
-        .frame(width: 350, height: 300)
-        .padding()
+        Text("Settings placeholder")
+            .frame(width: 450, height: 580)
     }
 
     private func updateLaunchAtLogin(_ enabled: Bool) {
@@ -59,6 +30,8 @@ final class SettingsWindowController {
     static let shared = SettingsWindowController()
 
     private var window: NSWindow?
+    var pillPosition: PillPosition?
+    var screenManager: ScreenManager?
 
     func showWindow() {
         if let window = window {
@@ -67,16 +40,18 @@ final class SettingsWindowController {
             return
         }
 
-        let settingsView = SettingsView()
+        guard let pillPosition, let screenManager else { return }
+
+        let settingsView = SettingsView(pillPosition: pillPosition, screenManager: screenManager)
         let hostingView = NSHostingView(rootView: settingsView)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 350, height: 300),
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 580),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        window.title = "agentch Settings"
+        window.title = "AgentCh Settings"
         window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)

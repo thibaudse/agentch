@@ -47,6 +47,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         observeHooksToggle()
         observeScreenChange()
         sessionManager.startCleanup()
+        SettingsWindowController.shared.pillPosition = pillPosition
+        SettingsWindowController.shared.screenManager = screenManager
     }
 
     func applicationWillTerminate(_ notification: Notification) {
