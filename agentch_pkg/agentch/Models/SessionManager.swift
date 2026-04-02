@@ -179,6 +179,21 @@ final class SessionManager: ObservableObject {
         if let tty = event.tty, sessions[index].tty == nil {
             sessions[index].tty = tty
         }
+        // Read session name from hook's saved title (Claude's task description)
+        updateLabelFromTitle(at: index, sessionId: event.sessionId)
+    }
+
+    private func updateLabelFromTitle(at index: Int, sessionId: String) {
+        let path = "/tmp/agentch/\(sessionId)"
+        guard let title = try? String(contentsOfFile: path, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !title.isEmpty else { return }
+        // Strip leading status icons (⠂, ✳, ⠐, etc.)
+        let clean = String(title.drop(while: { !$0.isASCII }).trimmingCharacters(in: .whitespaces))
+        if !clean.isEmpty {
+            sessions[index].label = clean
+            sessions[index].tabTitle = title
+        }
     }
 
     private func updateLabel(sessionId: String, label: String) {

@@ -68,20 +68,20 @@ struct HookManager {
         [ -z "$SID" ] && exit 0
         TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' ')
 
-        # Walk up to find terminal app PID
-        TPID=$PPID
-        for i in 1 2 3 4 5 6 7 8 9 10; do
-            PARENT=$(ps -o ppid= -p $TPID 2>/dev/null | tr -d ' ')
-            [ -z "$PARENT" ] || [ "$PARENT" -le 1 ] && break
-            TPID=$PARENT
-            /usr/bin/osascript -e "tell application \\"System Events\\" to return (count of windows of first process whose unix id is $TPID)" 2>/dev/null | grep -q '[1-9]' && break
-        done
-
-        # Save terminal window title for tab matching
+        # Save terminal window title for tab matching and session name
         mkdir -p /tmp/agentch
-        [ -n "$TPID" ] && [ "$TPID" -gt 1 ] && \\
-            /usr/bin/osascript -e "tell application \\"System Events\\" to return name of front window of first process whose unix id is $TPID" \\
-            > "/tmp/agentch/$SID" 2>/dev/null
+        if [ -n "$TERM_PROGRAM" ]; then
+            # Map TERM_PROGRAM to app name for osascript
+            case "$TERM_PROGRAM" in
+                ghostty)         APP_NAME="Ghostty" ;;
+                Apple_Terminal)  APP_NAME="Terminal" ;;
+                iTerm.app)       APP_NAME="iTerm2" ;;
+                WarpTerminal)    APP_NAME="Warp" ;;
+                *)               APP_NAME="$TERM_PROGRAM" ;;
+            esac
+            /usr/bin/osascript -e "tell application \\"$APP_NAME\\" to return name of front window" \
+                > "/tmp/agentch/$SID" 2>/dev/null
+        fi
 
         echo "$INPUT" | /usr/bin/curl -s -X POST "http://localhost:$PORT/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
             -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true
