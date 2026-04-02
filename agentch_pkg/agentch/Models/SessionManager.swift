@@ -136,6 +136,11 @@ final class SessionManager: ObservableObject {
         }
     }
 
+    func acknowledge(sessionId: String) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
+        sessions[index].status = .idle
+    }
+
     private func createSession(from event: SessionEvent) {
         let agentType = AgentType(rawValue: event.agentType) ?? .claude
         let folderName = URL(fileURLWithPath: event.cwd).lastPathComponent

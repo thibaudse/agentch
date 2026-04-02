@@ -217,6 +217,15 @@ struct PillGroupView: View {
 
                 Spacer(minLength: 4)
 
+                if session.status == .waiting {
+                    AcknowledgeButton {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            sessionManager.acknowledge(sessionId: session.id)
+                        }
+                    }
+                    .transition(.blurReplace)
+                }
+
                 JumpButton {
                     TerminalFocuser.focus(session: session)
                 }
