@@ -209,7 +209,6 @@ struct HookManager {
         for agent in AgentHookConfig.all {
             do {
                 try install(port: port, agent: agent)
-                NSLog("[agentch] Installed hooks for %@", agent.label)
             } catch {
                 NSLog("[agentch] Failed to install hooks for %@: %@", agent.label, error.localizedDescription)
             }

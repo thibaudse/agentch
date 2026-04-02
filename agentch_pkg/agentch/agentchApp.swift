@@ -82,23 +82,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     }
 
     private func startServer() {
-        guard eventServer == nil else {
-            NSLog("[agentch] Server already running")
-            return
-        }
-        let port = UInt16(httpPort)
-        NSLog("[agentch] Starting server on port %d", port)
+        guard eventServer == nil else { return }
         do {
-            let server = try EventServer(port: port) { [weak self] event in
+            let server = try EventServer(port: UInt16(httpPort)) { [weak self] event in
                 Task { @MainActor in
                     self?.sessionManager.handleEvent(event)
                 }
             }
             server.start()
             self.eventServer = server
-            NSLog("[agentch] Server started successfully on port %d", port)
         } catch {
-            NSLog("[agentch] Failed to start event server: %@", error.localizedDescription)
+            NSLog("[agentch] Failed to start server: %@", error.localizedDescription)
         }
     }
 
@@ -139,7 +133,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private nonisolated func requestAccessibilityIfNeeded() {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
-        NSLog("[agentch] Accessibility trusted: %@", trusted ? "yes" : "no")
     }
 
     private func autoInstallHooksIfNeeded() {

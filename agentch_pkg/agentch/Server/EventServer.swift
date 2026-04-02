@@ -47,9 +47,6 @@ final class EventServer: Sendable {
             }
 
             do {
-                if let bodyStr = String(data: body, encoding: .utf8) {
-                    NSLog("[agentch] Received: %@", String(bodyStr.prefix(500)))
-                }
                 let event = try Self.parseEvent(from: body, queryParams: queryParams)
                 onEvent(event)
                 let response = Self.httpResponse(status: 200, body: "{\"ok\":true}")
