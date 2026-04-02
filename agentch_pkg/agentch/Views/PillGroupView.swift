@@ -224,7 +224,7 @@ struct PillGroupView: View {
             }
 
             if isFirst && !isExpanded && sessionManager.sessions.count > 1 {
-                Text("\(sessionManager.sessions.count)")
+                Text("\(waitingCount > 0 ? waitingCount : sessionManager.sessions.count)")
                     .font(.system(size: 8, weight: .heavy, design: .rounded))
                     .foregroundStyle(.white)
                     .frame(width: 14, height: 14)
