@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage("peekDuration") var peekDuration: Double = 2.5
     @AppStorage("notificationSound") var selectedSound: String = "Blow"
     @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
+    @State private var hookRefreshToken = UUID()
 
     var body: some View {
         ScrollView {
@@ -217,12 +218,14 @@ struct SettingsView: View {
                                     } else {
                                         try? HookManager.uninstall(agent: agent)
                                     }
+                                    hookRefreshToken = UUID()
                                 }
                             ))
                             .labelsHidden()
                         }
                     }
                 }
+                .id(hookRefreshToken)
 
                 Divider()
 
@@ -230,9 +233,11 @@ struct SettingsView: View {
                     Spacer()
                     Button("Install All") {
                         HookManager.installAll(port: UInt16(httpPort))
+                        hookRefreshToken = UUID()
                     }
                     Button("Uninstall All") {
                         HookManager.uninstallAll()
+                        hookRefreshToken = UUID()
                     }
                 }
                 .font(.caption)
@@ -319,6 +324,7 @@ final class SettingsWindowController {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
         window.title = "AgentCh Settings"
         window.contentView = hostingView
         window.center()
