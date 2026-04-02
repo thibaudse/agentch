@@ -9,15 +9,17 @@ struct JumpButton: View {
         Button(action: action) {
             ZStack {
                 Circle()
-                    .fill(.white.opacity(isHovered ? 0.2 : 0.1))
-                    .frame(width: 20, height: 20)
+                    .fill(.primary.opacity(isHovered ? 0.15 : 0.06))
 
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.primary.opacity(isHovered ? 1.0 : 0.6))
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.primary.opacity(isHovered ? 1.0 : 0.5))
             }
+            .frame(width: 18, height: 18)
         }
         .buttonStyle(.plain)
+        .scaleEffect(isHovered ? 1.15 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.6), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }

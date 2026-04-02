@@ -156,6 +156,9 @@ struct PillGroupView: View {
                 let isFirst = expandsDown ? index == 0 : index == sessions.count - 1
 
                 if isFirst || isExpanded {
+                    if isExpanded && !isFirst && index > 0 {
+                        Divider().opacity(0.15)
+                    }
                     sessionRow(session: session, isFirst: isFirst)
                         .transition(.blurReplace)
                 }
@@ -165,6 +168,10 @@ struct PillGroupView: View {
         .padding(.vertical, vPadding)
         .background(pillBackground)
         .clipShape(.rect(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(.primary.opacity(0.06), lineWidth: 0.5)
+        )
     }
 
     @ViewBuilder
@@ -206,6 +213,14 @@ struct PillGroupView: View {
                     .transition(.blurReplace)
             }
         }
+        .padding(.vertical, isExpanded ? 3 : 0)
+        .padding(.horizontal, isExpanded ? 4 : 0)
+        .background(
+            isExpanded
+                ? RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(.primary.opacity(0.04))
+                : nil
+        )
     }
 
     private var compactBadge: String {

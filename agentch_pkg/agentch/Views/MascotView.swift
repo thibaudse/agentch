@@ -153,7 +153,7 @@ struct SleepingZzz: View {
     }
 }
 
-/// Pulsing status indicator dot.
+/// Pulsing status indicator dot with glow ring for waiting.
 struct StatusDot: View {
     let status: SessionStatus
     @State private var pulse = false
@@ -163,30 +163,40 @@ struct StatusDot: View {
     }
 
     var body: some View {
-        Circle()
-            .fill(color)
-            .frame(width: 6, height: 6)
-            .scaleEffect(shouldPulse && pulse ? 1.4 : 1.0)
-            .opacity(shouldPulse && pulse ? 0.6 : 1.0)
-            .animation(
-                shouldPulse
-                    ? .easeInOut(duration: status == .waiting ? 1.2 : 0.8).repeatForever(autoreverses: true)
-                    : .default,
-                value: pulse
-            )
-            .onAppear {
-                if shouldPulse { pulse = true }
+        ZStack {
+            // Glow ring for waiting
+            if status == .waiting {
+                Circle()
+                    .stroke(color.opacity(pulse ? 0.4 : 0.1), lineWidth: 1.5)
+                    .frame(width: 10, height: 10)
+                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: pulse)
             }
-            .onChange(of: status) { _, _ in
-                pulse = shouldPulse
-            }
+
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+                .scaleEffect(shouldPulse && pulse ? 1.3 : 1.0)
+                .animation(
+                    shouldPulse
+                        ? .easeInOut(duration: status == .waiting ? 1.2 : 0.8).repeatForever(autoreverses: true)
+                        : .default,
+                    value: pulse
+                )
+        }
+        .frame(width: 12, height: 12)
+        .onAppear {
+            if shouldPulse { pulse = true }
+        }
+        .onChange(of: status) { _, _ in
+            pulse = shouldPulse
+        }
     }
 
     private var color: Color {
         switch status {
         case .thinking: return .green
         case .waiting: return .orange
-        case .idle: return .gray
+        case .idle: return .gray.opacity(0.6)
         case .error: return .red
         }
     }
