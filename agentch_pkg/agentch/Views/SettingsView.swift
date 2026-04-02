@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage("pillScale") var pillScale: Double = 1.0
     @AppStorage("peekDuration") var peekDuration: Double = 2.5
     @AppStorage("notificationSound") var selectedSound: String = "Blow"
+    @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
 
     var body: some View {
         ScrollView {
@@ -16,6 +17,14 @@ struct SettingsView: View {
                 generalSection
                 appearanceSection
                 soundSection
+                positionSection
+                hooksSection
+
+                Text("AgentCh v1.0")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 4)
             }
             .padding(20)
         }
@@ -99,6 +108,134 @@ struct SettingsView: View {
                 .onChange(of: selectedSound) { _, newValue in
                     SoundPlayer.preview(newValue)
                 }
+            }
+        }
+    }
+
+    // MARK: - Position
+
+    private var currentPositionIndex: Int? {
+        var bestIndex: Int?
+        var bestDist: CGFloat = .greatestFiniteMagnitude
+        for (i, pos) in PillScreenPosition.all.enumerated() {
+            let target = pillPosition.offsetFor(pos)
+            let dx = pillPosition.offset.width - target.width
+            let dy = pillPosition.offset.height - target.height
+            let dist = sqrt(dx * dx + dy * dy)
+            if dist < bestDist {
+                bestDist = dist
+                bestIndex = i
+            }
+        }
+        return bestDist < 50 ? bestIndex : nil
+    }
+
+    @ViewBuilder
+    private var positionSection: some View {
+        SettingsSection(icon: "rectangle.inset.filled", title: "Position") {
+            positionGrid
+                .frame(maxWidth: .infinity)
+
+            Divider()
+
+            SettingsRow("Display") {
+                Picker("", selection: $screenManager.selectedScreenIndex) {
+                    ForEach(screenManager.screenNames, id: \.index) { screen in
+                        Text(screen.name).tag(screen.index)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 180)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var positionGrid: some View {
+        let columns = [
+            GridItem(.fixed(44), spacing: 6),
+            GridItem(.fixed(44), spacing: 6),
+            GridItem(.fixed(44), spacing: 6),
+        ]
+
+        LazyVGrid(columns: columns, spacing: 6) {
+            ForEach(Array(PillScreenPosition.all.enumerated()), id: \.offset) { index, pos in
+                let isActive = currentPositionIndex == index
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        pillPosition.moveTo(pos)
+                    }
+                } label: {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isActive ? Color.accentColor : Color.primary.opacity(0.08))
+                        .frame(width: 44, height: 32)
+                        .overlay {
+                            if isActive {
+                                Circle()
+                                    .fill(.white)
+                                    .frame(width: 6, height: 6)
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+                .help(pos.label)
+            }
+        }
+    }
+
+    // MARK: - Hooks
+
+    @ViewBuilder
+    private var hooksSection: some View {
+        SettingsSection(icon: "link", title: "Hooks") {
+            SettingsRow("Enable Hooks") {
+                Toggle("", isOn: Binding(
+                    get: { !hooksDisabled },
+                    set: { enabled in
+                        hooksDisabled = !enabled
+                        NotificationCenter.default.post(name: .agentChHooksToggled, object: nil)
+                    }
+                ))
+                .labelsHidden()
+            }
+
+            if !hooksDisabled {
+                Divider()
+
+                ForEach(AgentHookConfig.all, id: \.label) { agent in
+                    let installed = HookManager.checkInstalled(port: UInt16(httpPort), agent: agent)
+                    SettingsRow(agent.label) {
+                        HStack(spacing: 8) {
+                            Text(installed ? "Installed" : "Not Installed")
+                                .font(.caption)
+                                .foregroundStyle(installed ? .green : .secondary)
+                            Toggle("", isOn: Binding(
+                                get: { installed },
+                                set: { newValue in
+                                    if newValue {
+                                        try? HookManager.install(port: UInt16(httpPort), agent: agent)
+                                    } else {
+                                        try? HookManager.uninstall(agent: agent)
+                                    }
+                                }
+                            ))
+                            .labelsHidden()
+                        }
+                    }
+                }
+
+                Divider()
+
+                HStack {
+                    Spacer()
+                    Button("Install All") {
+                        HookManager.installAll(port: UInt16(httpPort))
+                    }
+                    Button("Uninstall All") {
+                        HookManager.uninstallAll()
+                    }
+                }
+                .font(.caption)
             }
         }
     }
