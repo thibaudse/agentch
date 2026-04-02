@@ -67,11 +67,7 @@ struct MascotView: View {
         case .claude:
             ClawdMascot(status: status, animationPhase: animationPhase)
         case .codex:
-            Image(systemName: "terminal.fill")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .foregroundStyle(.green)
-                .padding(4)
+            CodexMascot(status: status, animationPhase: animationPhase)
         case .unknown:
             Image(systemName: "questionmark.circle.fill")
                 .resizable()
@@ -357,6 +353,182 @@ struct ClawdEyesShape: Shape {
         var p = Path()
         p.addRect(CGRect(x: 89, y: 95 + eyeYOffset, width: 45.5, height: eyeHeight))
         p.addRect(CGRect(x: 355, y: 95 + eyeYOffset, width: 45.5, height: eyeHeight))
+        return p.applying(t)
+    }
+}
+
+// MARK: - Codex Mascot
+
+/// Codex mascot — pixel-art character with purple-blue gradient and > eye.
+struct CodexMascot: View {
+    let status: SessionStatus
+    let animationPhase: CGFloat
+
+    private let gradientTop = Color(red: 0.788, green: 0.588, blue: 0.961)    // #C996F5
+    private let gradientBottom = Color(red: 0.294, green: 0.298, blue: 0.922)  // #4B4CEB
+    private let darkLeg = Color(red: 0.22, green: 0.22, blue: 0.7)
+
+    var body: some View {
+        ZStack {
+            if status == .waiting {
+                CodexSittingLegsShape()
+                    .fill(darkLeg)
+                CodexSittingBodyShape()
+                    .fill(LinearGradient(colors: [gradientTop, gradientBottom],
+                                         startPoint: .top, endPoint: .bottom))
+                CodexSittingFaceShape()
+                    .fill(.white.opacity(0.9))
+            } else {
+                CodexBodyShape()
+                    .fill(LinearGradient(
+                        colors: status == .error ? [.red, .red] : [gradientTop, gradientBottom],
+                        startPoint: .top, endPoint: .bottom))
+                CodexFaceShape(animationPhase: status == .thinking ? animationPhase : 0)
+                    .fill(.white.opacity(0.9))
+            }
+        }
+        .aspectRatio(490.0 / 385.0, contentMode: .fit)
+    }
+}
+
+/// Codex body — same pixel-art shape as Clawd but with the Codex gradient.
+struct CodexBodyShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let sx = rect.width / 490
+        let sy = rect.height / 385
+        let t = CGAffineTransform(scaleX: sx, y: sy)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+
+        var p = Path()
+        // Outer body (same as Clawd standing)
+        p.move(to: CGPoint(x: 45, y: 0))
+        p.addLine(to: CGPoint(x: 445, y: 0))
+        p.addLine(to: CGPoint(x: 445, y: 96))
+        p.addLine(to: CGPoint(x: 490, y: 96))
+        p.addLine(to: CGPoint(x: 490, y: 192))
+        p.addLine(to: CGPoint(x: 445, y: 192))
+        p.addLine(to: CGPoint(x: 445, y: 384.5))
+        p.addLine(to: CGPoint(x: 400.5, y: 384.5))
+        p.addLine(to: CGPoint(x: 400.5, y: 288.5))
+        p.addLine(to: CGPoint(x: 356.5, y: 288.5))
+        p.addLine(to: CGPoint(x: 356.5, y: 384.5))
+        p.addLine(to: CGPoint(x: 312, y: 384.5))
+        p.addLine(to: CGPoint(x: 312, y: 288.5))
+        p.addLine(to: CGPoint(x: 178, y: 288.5))
+        p.addLine(to: CGPoint(x: 178, y: 384.5))
+        p.addLine(to: CGPoint(x: 133.5, y: 384.5))
+        p.addLine(to: CGPoint(x: 133.5, y: 288.5))
+        p.addLine(to: CGPoint(x: 89.5, y: 288.5))
+        p.addLine(to: CGPoint(x: 89.5, y: 384.5))
+        p.addLine(to: CGPoint(x: 45, y: 384.5))
+        p.addLine(to: CGPoint(x: 45, y: 192))
+        p.addLine(to: CGPoint(x: 0, y: 192))
+        p.addLine(to: CGPoint(x: 0, y: 96))
+        p.addLine(to: CGPoint(x: 45, y: 96))
+        p.closeSubpath()
+        return p.applying(t)
+    }
+}
+
+/// Codex face — the > chevron and smile from the SVG.
+/// Animates: chevron pulses when thinking.
+struct CodexFaceShape: Shape {
+    var animationPhase: CGFloat
+
+    var animatableData: CGFloat {
+        get { animationPhase }
+        set { animationPhase = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        let sx = rect.width / 490
+        let sy = rect.height / 385
+        let t = CGAffineTransform(scaleX: sx, y: sy)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+
+        var p = Path()
+
+        // > chevron eye (from SVG path, simplified)
+        // The SVG has a complex bezier for the > shape. Simplified as lines:
+        let pulseOffset = animationPhase * 5
+        p.move(to: CGPoint(x: 140 - pulseOffset, y: 72))
+        p.addLine(to: CGPoint(x: 200, y: 142))
+        p.addLine(to: CGPoint(x: 140 - pulseOffset, y: 215))
+        p.addLine(to: CGPoint(x: 165 - pulseOffset, y: 215))
+        p.addLine(to: CGPoint(x: 210, y: 150))
+        p.addLine(to: CGPoint(x: 165 - pulseOffset, y: 72))
+        p.closeSubpath()
+
+        // Smile/line on the right (from SVG: a rounded rect from 241,188 to 356,218)
+        let smileHeight: CGFloat = 30
+        let smileY: CGFloat = 188 + (218 - 188 - smileHeight) / 2
+        p.addRoundedRect(in: CGRect(x: 241, y: smileY, width: 115, height: smileHeight),
+                        cornerSize: CGSize(width: 15, height: 15))
+
+        return p.applying(t)
+    }
+}
+
+/// Sitting Codex legs
+struct CodexSittingLegsShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let sx = rect.width / 490
+        let sy = rect.height / 385
+        let t = CGAffineTransform(scaleX: sx, y: sy)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+        var p = Path()
+        p.addRect(CGRect(x: -50, y: 245, width: 140, height: 45))
+        p.addRect(CGRect(x: -50, y: 300, width: 140, height: 45))
+        p.addRect(CGRect(x: 400, y: 245, width: 140, height: 45))
+        p.addRect(CGRect(x: 400, y: 300, width: 140, height: 45))
+        return p.applying(t)
+    }
+}
+
+/// Sitting Codex body
+struct CodexSittingBodyShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let sx = rect.width / 490
+        let sy = rect.height / 385
+        let t = CGAffineTransform(scaleX: sx, y: sy)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+        var p = Path()
+        p.move(to: CGPoint(x: 45, y: 350))
+        p.addLine(to: CGPoint(x: 45, y: 192))
+        p.addLine(to: CGPoint(x: 0, y: 192))
+        p.addLine(to: CGPoint(x: 0, y: 96))
+        p.addLine(to: CGPoint(x: 45, y: 96))
+        p.addLine(to: CGPoint(x: 45, y: 0))
+        p.addLine(to: CGPoint(x: 445, y: 0))
+        p.addLine(to: CGPoint(x: 445, y: 96))
+        p.addLine(to: CGPoint(x: 490, y: 96))
+        p.addLine(to: CGPoint(x: 490, y: 192))
+        p.addLine(to: CGPoint(x: 445, y: 192))
+        p.addLine(to: CGPoint(x: 445, y: 350))
+        p.closeSubpath()
+        return p.applying(t)
+    }
+}
+
+/// Sitting Codex face — half-closed
+struct CodexSittingFaceShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let sx = rect.width / 490
+        let sy = rect.height / 385
+        let t = CGAffineTransform(scaleX: sx, y: sy)
+            .concatenating(CGAffineTransform(translationX: rect.minX, y: rect.minY))
+        var p = Path()
+        // Squinted > chevron
+        p.move(to: CGPoint(x: 145, y: 110))
+        p.addLine(to: CGPoint(x: 185, y: 142))
+        p.addLine(to: CGPoint(x: 145, y: 175))
+        p.addLine(to: CGPoint(x: 160, y: 175))
+        p.addLine(to: CGPoint(x: 195, y: 148))
+        p.addLine(to: CGPoint(x: 160, y: 110))
+        p.closeSubpath()
+        // Thin smile
+        p.addRoundedRect(in: CGRect(x: 250, y: 135, width: 95, height: 15),
+                        cornerSize: CGSize(width: 7, height: 7))
         return p.applying(t)
     }
 }
