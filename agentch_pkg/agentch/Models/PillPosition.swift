@@ -66,6 +66,7 @@ final class PillPosition: ObservableObject {
             mouseIsDown = false
             if isDragging {
                 isDragging = false
+                snapToNearestPosition()
                 saveOffset()
             }
             return event
@@ -116,6 +117,30 @@ final class PillPosition: ObservableObject {
         }
 
         return CGSize(width: x, height: y)
+    }
+
+    /// Snap to the nearest of the 9 positions if close enough.
+    private func snapToNearestPosition() {
+        let snapThreshold: CGFloat = 60
+        var bestDist: CGFloat = .greatestFiniteMagnitude
+        var bestOffset: CGSize?
+
+        for pos in PillScreenPosition.all {
+            let target = offsetFor(pos)
+            let dx = offset.width - target.width
+            let dy = offset.height - target.height
+            let dist = sqrt(dx * dx + dy * dy)
+            if dist < bestDist {
+                bestDist = dist
+                bestOffset = target
+            }
+        }
+
+        if bestDist < snapThreshold, let snap = bestOffset {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) {
+                offset = snap
+            }
+        }
     }
 
     /// Screen-relative padding (~2% of the shorter dimension, min 12pt)

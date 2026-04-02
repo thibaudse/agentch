@@ -6,6 +6,7 @@ struct PillGroupView: View {
     @State private var isHovering = false
     @State private var isPeeking = false
     @State private var peekTask: Task<Void, Never>?
+    @State private var squish: CGFloat = 1.0
     private let mascotSize: CGFloat = 16
     private let hPadding: CGFloat = 10
     private let vPadding: CGFloat = 6
@@ -79,13 +80,32 @@ struct PillGroupView: View {
                     ))
                     .offset(pillPosition.offset)
                     .padding(.top, pillPosition.topPadding)
+                    .scaleEffect(squish)
                     .transition(.blurReplace)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(ParticleTrailView(pillPosition: pillPosition))
         .background(Color.white.opacity(0.0001))
         .onChange(of: sessionsSnapshot) { _, _ in
             peek()
+            triggerSquish()
+        }
+        .onChange(of: sessionManager.sessions.count) { _, _ in
+            triggerSquish()
+        }
+    }
+
+    // MARK: - Squish
+
+    private func triggerSquish() {
+        withAnimation(.spring(response: 0.15, dampingFraction: 0.3)) {
+            squish = 0.92
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                squish = 1.0
+            }
         }
     }
 
@@ -182,6 +202,7 @@ struct PillGroupView: View {
                 Text(compactBadge)
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(waitingCount > 0 ? .orange : .primary)
+                    .contentTransition(.numericText())
                     .transition(.blurReplace)
             }
         }
@@ -201,12 +222,22 @@ struct PillGroupView: View {
         }
     }
 
+    private var statusTint: Color {
+        if sessionManager.sessions.contains(where: { $0.status == .waiting }) {
+            return .orange.opacity(0.08)
+        }
+        if sessionManager.sessions.contains(where: { $0.status == .thinking }) {
+            return .green.opacity(0.05)
+        }
+        return .clear
+    }
+
     @ViewBuilder
     private var pillBackground: some View {
         let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
         if #available(macOS 26.0, *) {
             shape
-                .fill(.clear)
+                .fill(statusTint)
                 .glassEffect(.clear.interactive(), in: shape)
                 .shadow(color: .black.opacity(0.2), radius: 12, y: 4)
         } else {
