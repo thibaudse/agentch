@@ -56,6 +56,21 @@ struct MenuBarView: View {
 
         Divider()
 
+        Menu("Sound: \(SoundPlayer.selectedSound)") {
+            ForEach(SoundPlayer.availableSounds, id: \.self) { sound in
+                Button {
+                    SoundPlayer.selectedSound = sound
+                    SoundPlayer.preview(sound)
+                } label: {
+                    if sound == SoundPlayer.selectedSound {
+                        Text("✓ \(sound)")
+                    } else {
+                        Text("  \(sound)")
+                    }
+                }
+            }
+        }
+
         Menu("Position") {
             ForEach(PillScreenPosition.all, id: \.label) { pos in
                 Button(pos.label) {

@@ -224,20 +224,24 @@ struct PillGroupView: View {
             }
 
             if isFirst && !isExpanded && sessionManager.sessions.count > 1 {
-                Text(compactBadge)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(waitingCount > 0 ? .orange : .primary)
+                Text("\(sessionManager.sessions.count)")
+                    .font(.system(size: 8, weight: .heavy, design: .rounded))
+                    .foregroundStyle(.white)
+                    .frame(width: 14, height: 14)
+                    .background(
+                        Circle().fill(waitingCount > 0 ? .orange : .primary.opacity(0.5))
+                    )
                     .contentTransition(.numericText())
                     .scaleEffect(badgePop)
                     .transition(.blurReplace)
             }
         }
-        .padding(.vertical, isExpanded ? 2 : 0)
-        .padding(.horizontal, isExpanded ? 3 : 0)
+        .padding(.vertical, isExpanded ? 4 : 0)
+        .padding(.horizontal, isExpanded ? 6 : 0)
         .background {
             if isExpanded {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(.primary.opacity(0.03))
+                Capsule()
+                    .fill(.primary.opacity(0.07))
             }
         }
     }
@@ -274,7 +278,6 @@ struct PillGroupView: View {
                 shape
                     .fill(.clear)
                     .glassEffect(.clear.interactive(), in: shape)
-                // Tint overlay on top of glass
                 shape
                     .fill(statusTint)
                     .allowsHitTesting(false)
