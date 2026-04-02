@@ -119,11 +119,10 @@ final class PillPosition: ObservableObject {
         return CGSize(width: x, height: y)
     }
 
-    /// Snap to the nearest of the 9 positions if close enough.
+    /// Always snap to the nearest of the 9 positions on drag end.
     private func snapToNearestPosition() {
-        let snapThreshold: CGFloat = 60
         var bestDist: CGFloat = .greatestFiniteMagnitude
-        var bestOffset: CGSize?
+        var bestOffset: CGSize = offset
 
         for pos in PillScreenPosition.all {
             let target = offsetFor(pos)
@@ -136,10 +135,8 @@ final class PillPosition: ObservableObject {
             }
         }
 
-        if bestDist < snapThreshold, let snap = bestOffset {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) {
-                offset = snap
-            }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) {
+            offset = bestOffset
         }
     }
 
