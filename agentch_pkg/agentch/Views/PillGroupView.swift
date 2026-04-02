@@ -3,6 +3,8 @@ import SwiftUI
 struct PillGroupView: View {
     @ObservedObject var sessionManager: SessionManager
     @ObservedObject var pillPosition: PillPosition
+    @AppStorage("pillScale") var pillScale: Double = 1.0
+    @AppStorage("peekDuration") var peekDurationSetting: Double = 2.5
     @State private var isHovering = false
     @State private var isPeeking = false
     @State private var peekTask: Task<Void, Never>?
@@ -11,7 +13,6 @@ struct PillGroupView: View {
     private let mascotSize: CGFloat = 16
     private let hPadding: CGFloat = 14
     private let vPadding: CGFloat = 10
-    private let peekDuration: TimeInterval = 2.5
 
     private var isExpanded: Bool { (isHovering || isPeeking) && !pillPosition.isDragging }
 
@@ -86,7 +87,7 @@ struct PillGroupView: View {
                     ))
                     .offset(pillPosition.offset)
                     .padding(.top, pillPosition.topPadding)
-                    .scaleEffect(squish)
+                    .scaleEffect(squish * pillScale)
                     .transition(.blurReplace)
             }
         }
@@ -137,7 +138,7 @@ struct PillGroupView: View {
             isPeeking = true
         }
         peekTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(peekDuration))
+            try? await Task.sleep(for: .seconds(peekDurationSetting))
             guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
                 isPeeking = false
