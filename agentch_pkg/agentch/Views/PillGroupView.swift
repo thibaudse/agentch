@@ -7,6 +7,7 @@ struct PillGroupView: View {
     @State private var isPeeking = false
     @State private var peekTask: Task<Void, Never>?
     @State private var squish: CGFloat = 1.0
+    @State private var badgePop: CGFloat = 1.0
     private let mascotSize: CGFloat = 16
     private let hPadding: CGFloat = 10
     private let vPadding: CGFloat = 6
@@ -98,6 +99,20 @@ struct PillGroupView: View {
         }
         .onChange(of: sessionManager.sessions.count) { _, _ in
             triggerSquish()
+            triggerBadgePop()
+        }
+    }
+
+    // MARK: - Badge pop
+
+    private func triggerBadgePop() {
+        withAnimation(.spring(response: 0.15, dampingFraction: 0.3)) {
+            badgePop = 1.3
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+                badgePop = 1.0
+            }
         }
     }
 
@@ -213,6 +228,7 @@ struct PillGroupView: View {
                     .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(waitingCount > 0 ? .orange : .primary)
                     .contentTransition(.numericText())
+                    .scaleEffect(badgePop)
                     .transition(.blurReplace)
             }
         }

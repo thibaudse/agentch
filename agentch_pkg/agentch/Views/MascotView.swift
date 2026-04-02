@@ -16,7 +16,7 @@ struct MascotView: View {
                 .opacity(status == .idle ? 0.5 : 1.0)
                 .scaleEffect(thinkingScale + breathe * 0.02)
                 .offset(y: thinkingBounce)
-                .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
+                .shadow(color: statusGlow, radius: status == .thinking ? 3 : 1, y: 1)
                 .frame(width: size, height: size)
 
             // Fixed-width slot for bubble/zzz — always reserved
@@ -62,6 +62,15 @@ struct MascotView: View {
         status == .thinking ? 1.0 + animationPhase * 0.05 : 1.0
     }
 
+    private var statusGlow: Color {
+        switch status {
+        case .thinking: return .green.opacity(0.4)
+        case .waiting: return .orange.opacity(0.3)
+        case .error: return .red.opacity(0.4)
+        case .idle: return .black.opacity(0.15)
+        }
+    }
+
     private var thinkingBounce: CGFloat {
         status == .thinking ? -animationPhase * 1.5 : 0
     }
@@ -95,12 +104,13 @@ struct ThinkingBubble: View {
                         .fill(.primary)
                         .frame(width: 2, height: 2)
                         .opacity(dotPhase == i ? 1.0 : 0.3)
+                        .shadow(color: .green.opacity(dotPhase == i ? 0.6 : 0), radius: 2)
                 }
             }
             .padding(.horizontal, 3.5)
             .padding(.vertical, 2.5)
             .background(
-                Capsule().fill(.primary.opacity(0.15))
+                Capsule().fill(.green.opacity(0.12))
             )
 
             HStack(spacing: 1.5) {
