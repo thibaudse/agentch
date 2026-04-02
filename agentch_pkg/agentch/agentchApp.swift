@@ -23,7 +23,7 @@ struct agentchApp: App {
 
     var body: some Scene {
         MenuBarExtra("agentch", systemImage: "bubble.left.and.bubble.right.fill") {
-            MenuBarView(sessionManager: appDelegate.sessionManager, screenManager: appDelegate.screenManager, pillPosition: appDelegate.pillPosition)
+            MenuBarView(sessionManager: appDelegate.sessionManager)
         }
         .menuBarExtraStyle(.menu)
     }
