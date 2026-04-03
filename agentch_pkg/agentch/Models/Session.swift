@@ -33,6 +33,7 @@ struct Session: Identifiable, Sendable {
     var termPid: Int?
     var tty: String?
     var tabTitle: String?
+    var pendingPermission: PermissionRequest?
 
     static let defaultBranches: Set<String> = ["main", "master"]
 
@@ -53,4 +54,9 @@ struct Session: Identifiable, Sendable {
 
         return "\(folderName)/\(branch)"
     }
+}
+
+struct PermissionRequest: Sendable {
+    let toolName: String
+    let toolInput: String
 }
