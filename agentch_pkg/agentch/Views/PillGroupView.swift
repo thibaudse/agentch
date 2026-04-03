@@ -309,6 +309,23 @@ struct PillGroupView: View {
                             .transition(.blurReplace)
                     }
 
+                    // Acknowledge button for non-permission waiting
+                    if session.status == .waiting && session.pendingPermission == nil {
+                        Button {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                sessionManager.sessions[sessionManager.sessions.firstIndex(where: { $0.id == session.id })!].status = .idle
+                            }
+                        } label: {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 7 * scale, weight: .bold))
+                                .foregroundStyle(.orange.opacity(0.6))
+                                .frame(width: 18 * scale, height: 18 * scale)
+                                .background(Circle().fill(.orange.opacity(0.1)))
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.blurReplace)
+                    }
+
                     JumpButton {
                         TerminalFocuser.focus(session: session)
                     }
@@ -346,6 +363,7 @@ struct PillGroupView: View {
                     }
                 )
                 .frame(maxWidth: maxPermissionWidth)
+                .padding(.leading, 2 * scale)
                 .padding(.top, 6 * scale)
                 .padding(.bottom, 4 * scale)
                 .transition(.blurReplace)
@@ -356,7 +374,7 @@ struct PillGroupView: View {
         .background {
             if isExpanded {
                 RoundedRectangle(
-                    cornerRadius: isRowExpanded ? 12 * scale : 20 * scale,
+                    cornerRadius: 14 * scale,
                     style: .continuous
                 )
                 .fill(.primary.opacity(hasAction && isRowHovered ? 0.1 : 0.07))
