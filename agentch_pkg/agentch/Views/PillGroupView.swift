@@ -10,6 +10,7 @@ struct PillGroupView: View {
     @State private var peekTask: Task<Void, Never>?
     @State private var squish: CGFloat = 1.0
     @State private var badgePop: CGFloat = 1.0
+    @State private var hoveredRowId: String?
     private var scale: CGFloat { CGFloat(pillScale) }
     private var mascotSize: CGFloat { 16 * scale }
     private var hPadding: CGFloat { 14 * scale }
@@ -204,6 +205,10 @@ struct PillGroupView: View {
 
     @ViewBuilder
     private func sessionRow(session: Session, isFirst: Bool) -> some View {
+        let isRowHovered = hoveredRowId == session.id
+        let isRowExpanded = isExpanded && isRowHovered
+        let hasAction = session.pendingPermission != nil
+
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6 * scale) {
                 StatusDot(status: session.status, scale: scale)
@@ -229,6 +234,14 @@ struct PillGroupView: View {
 
                     Spacer(minLength: 4 * scale)
 
+                    // Action indicator when row is collapsed but has pending permission
+                    if hasAction && !isRowExpanded {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 10 * scale))
+                            .foregroundStyle(.orange)
+                            .transition(.blurReplace)
+                    }
+
                     JumpButton {
                         TerminalFocuser.focus(session: session)
                     }
@@ -249,7 +262,8 @@ struct PillGroupView: View {
                 }
             }
 
-            if isExpanded, let permission = session.pendingPermission {
+            // Permission prompt only shown when this specific row is hovered
+            if isRowExpanded, let permission = session.pendingPermission {
                 PermissionPromptView(
                     permission: permission,
                     scale: scale,
@@ -273,11 +287,17 @@ struct PillGroupView: View {
         .padding(.horizontal, isExpanded ? 8 * scale : 6 * scale)
         .background(
             RoundedRectangle(
-                cornerRadius: isExpanded ? 12 * scale : 20 * scale,
+                cornerRadius: isRowExpanded ? 12 * scale : 20 * scale,
                 style: .continuous
             )
-            .fill(.primary.opacity(0.07))
+            .fill(.primary.opacity(hasAction && isRowHovered ? 0.1 : 0.07))
         )
+        .onHover { hovering in
+            guard hasAction else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                hoveredRowId = hovering ? session.id : nil
+            }
+        }
     }
 
     private var compactBadge: String {
