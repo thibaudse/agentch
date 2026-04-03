@@ -103,6 +103,11 @@ struct PillGroupView: View {
             triggerSquish()
             triggerBadgePop()
         }
+        .onAppear {
+            if !sessionManager.sessions.isEmpty {
+                peek()
+            }
+        }
     }
 
     // MARK: - Badge pop
@@ -193,77 +198,86 @@ struct PillGroupView: View {
         )
     }
 
+    private var maxPermissionWidth: CGFloat {
+        (NSScreen.main?.frame.width ?? 1920) / 3
+    }
+
     @ViewBuilder
     private func sessionRow(session: Session, isFirst: Bool) -> some View {
-        HStack(spacing: 6 * scale) {
-            StatusDot(status: session.status, scale: scale)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6 * scale) {
+                StatusDot(status: session.status, scale: scale)
 
-            MascotView(
-                agentType: session.agentType,
-                status: session.status,
-                size: mascotSize
-            )
+                MascotView(
+                    agentType: session.agentType,
+                    status: session.status,
+                    size: mascotSize
+                )
 
-            if isExpanded {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(session.label)
-                        .font(.system(size: 11 * scale, weight: .medium, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                if isExpanded {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(session.label)
+                            .font(.system(size: 11 * scale, weight: .medium, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
 
-                    Text(statusLabel(session.status))
-                        .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
+                        Text(statusLabel(session.status))
+                            .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
+                            .foregroundStyle(.secondary)
+                    }
 
-                Spacer(minLength: 4 * scale)
+                    Spacer(minLength: 4 * scale)
 
-                if let permission = session.pendingPermission {
-                    PermissionPromptView(
-                        permission: permission,
-                        scale: scale,
-                        onAllow: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                sessionManager.resolvePermission(sessionId: session.id, allow: true)
-                            }
-                        },
-                        onDeny: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                sessionManager.resolvePermission(sessionId: session.id, allow: false)
-                            }
-                        }
-                    )
+                    JumpButton {
+                        TerminalFocuser.focus(session: session)
+                    }
                     .transition(.blurReplace)
                 }
 
-                JumpButton {
-                    TerminalFocuser.focus(session: session)
+                if isFirst && !isExpanded && sessionManager.sessions.count > 1 {
+                    Text("\(waitingCount > 0 ? waitingCount : sessionManager.sessions.count)")
+                        .font(.system(size: 8 * scale, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
+                        .frame(width: 14 * scale, height: 14 * scale)
+                        .background(
+                            Circle().fill(waitingCount > 0 ? .orange : .primary.opacity(0.5))
+                        )
+                        .contentTransition(.numericText())
+                        .scaleEffect(badgePop)
+                        .transition(.blurReplace)
                 }
+            }
+
+            if isExpanded, let permission = session.pendingPermission {
+                PermissionPromptView(
+                    permission: permission,
+                    scale: scale,
+                    onAllow: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            sessionManager.resolvePermission(sessionId: session.id, allow: true)
+                        }
+                    },
+                    onDeny: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            sessionManager.resolvePermission(sessionId: session.id, allow: false)
+                        }
+                    }
+                )
+                .frame(maxWidth: maxPermissionWidth)
+                .padding(.top, 6 * scale)
                 .transition(.blurReplace)
             }
-
-            if isFirst && !isExpanded && sessionManager.sessions.count > 1 {
-                Text("\(waitingCount > 0 ? waitingCount : sessionManager.sessions.count)")
-                    .font(.system(size: 8 * scale, weight: .heavy, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(width: 14 * scale, height: 14 * scale)
-                    .background(
-                        Circle().fill(waitingCount > 0 ? .orange : .primary.opacity(0.5))
-                    )
-                    .contentTransition(.numericText())
-                    .scaleEffect(badgePop)
-                    .transition(.blurReplace)
-            }
         }
-        .padding(.vertical, isExpanded ? 4 * scale : 0)
-        .padding(.horizontal, isExpanded ? 6 * scale : 0)
-        .background {
-            if isExpanded {
-                Capsule()
-                    .fill(.primary.opacity(0.07))
-            }
-        }
+        .padding(.vertical, isExpanded ? 6 * scale : 3 * scale)
+        .padding(.horizontal, isExpanded ? 8 * scale : 6 * scale)
+        .background(
+            RoundedRectangle(
+                cornerRadius: isExpanded ? 12 * scale : 20 * scale,
+                style: .continuous
+            )
+            .fill(.primary.opacity(0.07))
+        )
     }
 
     private var compactBadge: String {

@@ -100,13 +100,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                     Task { @MainActor in
                         guard let self else { return }
                         self.sessionManager.handleEvent(event)
-                        if let toolName = event.toolName {
-                            self.sessionManager.setPermission(
-                                sessionId: event.sessionId,
-                                toolName: toolName,
-                                toolInput: event.toolInput
-                            )
-                        }
+                        self.sessionManager.setPermission(
+                            sessionId: event.sessionId,
+                            toolName: event.toolName ?? "Permission",
+                            toolInput: event.toolInput
+                        )
                     }
                 }
             )

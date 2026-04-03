@@ -26,9 +26,9 @@ final class EventServer: @unchecked Sendable {
         guard let connection = removePending(sessionId: sessionId) else { return }
         let body: String
         if allow {
-            body = "{\"decision\":\"allow\"}"
+            body = "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":{\"behavior\":\"allow\"}}}"
         } else {
-            body = "{\"decision\":\"deny\",\"reason\":\"Denied from AgentCh\"}"
+            body = "{\"hookSpecificOutput\":{\"hookEventName\":\"PermissionRequest\",\"decision\":{\"behavior\":\"deny\",\"message\":\"Denied from AgentCh\"}}}"
         }
         let response = Self.httpResponse(status: 200, body: body)
         connection.send(content: response, completion: .contentProcessed { _ in

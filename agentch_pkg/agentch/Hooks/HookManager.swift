@@ -83,10 +83,11 @@ struct HookManager {
                 > "/tmp/agentch/$SID" 2>/dev/null
         fi
 
-        if [ "$EVENT" = "PreToolUse" ]; then
-            # Decision endpoint: block and output response for Claude Code to read
-            echo "$INPUT" | /usr/bin/curl -s -X POST "http://localhost:$PORT/agentch/decision?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
-                -H 'Content-Type: application/json' --data-binary @- 2>/dev/null
+        if [ "$EVENT" = "PermissionRequest" ]; then
+            # Block and return decision for Claude to read
+            RESPONSE=$(echo "$INPUT" | /usr/bin/curl -s -X POST "http://localhost:$PORT/agentch/decision?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
+                -H 'Content-Type: application/json' --data-binary @- 2>/dev/null)
+            [ -n "$RESPONSE" ] && echo "$RESPONSE"
         else
             # Fire-and-forget for all other events
             echo "$INPUT" | /usr/bin/curl -s -X POST "http://localhost:$PORT/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
@@ -135,7 +136,7 @@ struct HookManager {
             }
 
             if !alreadyExists {
-                let timeout: Int = (event == "PreToolUse") ? 300 : 5
+                let timeout: Int = (event == "PermissionRequest") ? 300 : 5
                 let ourHook: [String: Any] = [
                     "type": "command",
                     "command": hookCommand(port: port),

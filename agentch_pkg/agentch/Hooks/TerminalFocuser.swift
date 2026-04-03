@@ -60,6 +60,60 @@ struct TerminalFocuser {
         fh.closeFile()
     }
 
+    /// Answer a permission prompt in the terminal: allow = Return, deny = Escape.
+    static func answerPermission(session: Session, allow: Bool) {
+        guard let claudePid = session.termPid else { return }
+        guard let terminalPid = findTerminalPid(from: claudePid) else { return }
+        guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
+        guard let appName = app.localizedName else { return }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Focus the right tab first
+            if let tty = session.tty {
+                let marker = "agentch:\(session.id)"
+                setTerminalTitle(marker, onTTY: tty)
+                Thread.sleep(forTimeInterval: 0.05)
+                let focusScript = """
+                tell application "\(appName)" to activate
+                delay 0.05
+                tell application "System Events"
+                    tell process "\(appName)"
+                        set tabGroup to first UI element of front window whose role is "AXTabGroup"
+                        repeat with btn in (UI elements of tabGroup whose role is "AXRadioButton")
+                            if name of btn contains "\(escapeForAppleScript(marker))" then
+                                click btn
+                                return
+                            end if
+                        end repeat
+                    end tell
+                end tell
+                """
+                runAppleScript(focusScript)
+                Thread.sleep(forTimeInterval: 0.1)
+            } else {
+                runAppleScript("tell application \"\(appName)\" to activate")
+                Thread.sleep(forTimeInterval: 0.1)
+            }
+
+            // Send the keystroke
+            if allow {
+                // Return confirms the default (Yes/Allow)
+                runAppleScript("""
+                tell application "System Events"
+                    keystroke return
+                end tell
+                """)
+            } else {
+                // Escape cancels/denies the permission prompt
+                runAppleScript("""
+                tell application "System Events"
+                    key code 53
+                end tell
+                """)
+            }
+        }
+    }
+
     // MARK: - Process tree
 
     static func findTerminalPid(from pid: Int) -> Int? {
