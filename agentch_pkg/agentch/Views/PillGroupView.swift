@@ -21,7 +21,7 @@ struct PillGroupView: View {
 
 
     private var sessionsSnapshot: String {
-        sessionManager.sessions.map { "\($0.id):\($0.status.rawValue)" }.joined(separator: ",")
+        sessionManager.sessions.map { "\($0.id):\($0.status.rawValue):\($0.pendingPermission != nil):\($0.pendingQuestion != nil)" }.joined(separator: ",")
     }
 
     /// Vertical expansion direction: expand down if pill is in top half, up if bottom half.
@@ -69,22 +69,6 @@ struct PillGroupView: View {
             if !sessionManager.sessions.isEmpty {
                 pillBody
                     .fixedSize()
-                    .padding(20)
-                    .contentShape(Rectangle())
-                    .onHover { hovering in
-                        pillPosition.isMouseOverPill = hovering
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
-                            isHovering = hovering
-                        }
-                        if hovering {
-                            cancelPeek()
-                            NSCursor.openHand.push()
-                        } else {
-                            NSCursor.pop()
-                            pageOffset = 0
-                        }
-                    }
-                    .padding(-20)
                     .modifier(ExpansionAnchor(
                         alignment: expandAlignment,
                         active: !pillPosition.isDragging
@@ -258,12 +242,29 @@ struct PillGroupView: View {
         }
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: hoveredRowId)
         .background(pillBackground)
         .clipShape(.rect(cornerRadius: 20 * scale, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20 * scale, style: .continuous)
                 .stroke(.primary.opacity(0.06), lineWidth: 0.5)
         )
+        .padding(20)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            pillPosition.isMouseOverPill = hovering
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
+                isHovering = hovering
+            }
+            if hovering {
+                cancelPeek()
+                NSCursor.openHand.push()
+            } else {
+                NSCursor.pop()
+                pageOffset = 0
+            }
+        }
+        .padding(-20)
     }
 
     private var maxPermissionWidth: CGFloat {
@@ -404,9 +405,10 @@ struct PillGroupView: View {
             }
         }
         .onHover { hovering in
-            guard hasAction else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                hoveredRowId = hovering ? session.id : nil
+            if hasAction {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    hoveredRowId = hovering ? session.id : nil
+                }
             }
         }
     }
