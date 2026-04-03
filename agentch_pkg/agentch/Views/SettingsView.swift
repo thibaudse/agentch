@@ -18,9 +18,12 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
-                    // Hero header
-                    heroHeader
-                        .padding(.bottom, 24)
+                    // Hero header with close button
+                    ZStack(alignment: .topLeading) {
+                        heroHeader
+                        closeButton
+                    }
+                    .padding(.bottom, 24)
 
                     Group {
                         sectionHeader("General", icon: "gearshape.fill", color: .gray)
@@ -45,24 +48,30 @@ struct SettingsView: View {
 
                     Text("v1.0")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.15))
+                        .foregroundStyle(.primary.opacity(0.15))
                         .frame(maxWidth: .infinity)
                         .padding(.top, 28)
                         .padding(.bottom, 16)
                 }
                 .padding(.horizontal, 28)
+                .padding(.vertical, 12)
             }
         }
         .frame(width: 520, height: 680)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .background {
             if #available(macOS 26.0, *) {
-                Rectangle()
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(.clear)
-                    .glassEffect(.regular.tint(.clear), in: .rect)
+                    .glassEffect(.regular.tint(.clear), in: .rect(cornerRadius: 16))
+                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
             } else {
-                Rectangle().fill(.ultraThickMaterial)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(.ultraThickMaterial)
+                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
             }
         }
+        .padding(50)
     }
 
     // MARK: - Hero Header
@@ -75,14 +84,35 @@ struct SettingsView: View {
 
             Text("AgentCh")
                 .font(.system(size: 18, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
 
             Text("Visual feedback for your AI agents")
                 .font(.system(size: 11))
-                .foregroundStyle(.white.opacity(0.35))
+                .foregroundStyle(.primary.opacity(0.35))
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 4)
+        .padding(.top, 12)
+    }
+
+    // MARK: - Close Button
+
+    @ViewBuilder
+    private var closeButton: some View {
+        Button {
+            NSApp.keyWindow?.close()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                .background(
+                    Circle()
+                        .fill(.primary.opacity(0.08))
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 6)
     }
 
     // MARK: - Section Header
@@ -99,7 +129,7 @@ struct SettingsView: View {
                 )
             Text(title.uppercased())
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.4))
+                .foregroundStyle(.primary.opacity(0.4))
                 .tracking(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -140,11 +170,11 @@ struct SettingsView: View {
                             .padding(.vertical, 4)
                             .background(
                                 RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                    .fill(.white.opacity(0.06))
+                                    .fill(.primary.opacity(0.06))
                             )
                         Text("restart needed")
                             .font(.system(size: 10))
-                            .foregroundStyle(.white.opacity(0.2))
+                            .foregroundStyle(.primary.opacity(0.2))
                     }
                 }
             }
@@ -179,10 +209,10 @@ struct SettingsView: View {
                         .padding(.horizontal, 12)
                         .background(
                             Capsule()
-                                .fill(.white.opacity(0.04))
+                                .fill(.primary.opacity(0.04))
                                 .overlay(
                                     Capsule()
-                                        .stroke(.white.opacity(0.06), lineWidth: 1)
+                                        .stroke(.primary.opacity(0.06), lineWidth: 1)
                                 )
                         )
                         Spacer()
@@ -325,7 +355,7 @@ struct SettingsView: View {
                         }
                     } label: {
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(isActive ? Color.blue : .white.opacity(0.05))
+                            .fill(isActive ? Color.blue : .primary.opacity(0.05))
                             .frame(width: 32, height: 22)
                             .overlay {
                                 if isActive {
@@ -342,12 +372,12 @@ struct SettingsView: View {
             .padding(4)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(.white.opacity(0.1), lineWidth: 1)
+                    .stroke(.primary.opacity(0.1), lineWidth: 1)
             )
 
             // Mini stand
             RoundedRectangle(cornerRadius: 1)
-                .fill(.white.opacity(0.1))
+                .fill(.primary.opacity(0.1))
                 .frame(width: 20, height: 4)
                 .padding(.top, 2)
         }
@@ -381,14 +411,18 @@ struct SettingsView: View {
                     let installed = HookManager.checkInstalled(port: UInt16(httpPort), agent: agent)
                     SettingsCard {
                         HStack(spacing: 10) {
-                            Text(agent.label)
-                                .font(.system(size: 13, weight: .medium))
-                            Circle()
-                                .fill(installed ? Color.green : .white.opacity(0.15))
-                                .frame(width: 6, height: 6)
-                            Text(installed ? "Installed" : "Not Installed")
-                                .font(.system(size: 11))
-                                .foregroundStyle(installed ? .green : .secondary)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(agent.label)
+                                    .font(.system(size: 13, weight: .medium))
+                                HStack(spacing: 4) {
+                                    Circle()
+                                        .fill(installed ? Color.green : .primary.opacity(0.15))
+                                        .frame(width: 6, height: 6)
+                                    Text(installed ? "Installed" : "Not Installed")
+                                        .font(.system(size: 11))
+                                        .foregroundStyle(installed ? .green : .secondary)
+                                }
+                            }
                             Spacer()
                             Toggle("", isOn: Binding(
                                 get: { installed },
@@ -455,7 +489,7 @@ struct SettingsCard<Content: View>: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(.white.opacity(isHovered ? 0.07 : 0.04))
+                    .fill(.primary.opacity(isHovered ? 0.07 : 0.04))
             )
             .onHover { hovering in
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -471,18 +505,24 @@ struct SmallPillButton: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(.white.opacity(0.6))
+            .foregroundStyle(.primary.opacity(0.6))
             .padding(.horizontal, 12)
             .padding(.vertical, 5)
             .background(
                 Capsule()
-                    .fill(.white.opacity(configuration.isPressed ? 0.1 : 0.06))
+                    .fill(.primary.opacity(configuration.isPressed ? 0.1 : 0.06))
             )
             .overlay(
                 Capsule()
-                    .stroke(.white.opacity(0.08), lineWidth: 1)
+                    .stroke(.primary.opacity(0.08), lineWidth: 1)
             )
     }
+}
+
+/// Borderless window that can become key (for text fields, pickers, etc.)
+class KeyableWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
 
 @MainActor
@@ -505,21 +545,22 @@ final class SettingsWindowController {
         let settingsView = SettingsView(pillPosition: pillPosition, screenManager: screenManager)
         let hostingView = NSHostingView(rootView: settingsView)
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 680),
-            styleMask: [.titled, .closable, .fullSizeContentView],
+        let window = KeyableWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 620, height: 780),
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
         window.isReleasedWhenClosed = false
-        window.level = .floating
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
+        window.level = .normal
         window.isOpaque = false
         window.backgroundColor = .clear
+        window.isMovableByWindowBackground = true
+        window.hasShadow = false
         window.contentView = hostingView
         window.center()
         window.makeKeyAndOrderFront(nil)
+        window.invalidateShadow()
         NSApp.activate(ignoringOtherApps: true)
 
         self.window = window
