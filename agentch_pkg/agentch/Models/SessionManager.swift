@@ -115,12 +115,12 @@ final class SessionManager: ObservableObject {
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
-        case .postToolUse:
+        case .preToolUse, .postToolUse:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
-        case .preToolUse, .stop, .permissionRequest:
+        case .stop, .permissionRequest:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             let wasNotWaiting = sessions[index].status != .waiting
             sessions[index].status = .waiting
