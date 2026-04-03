@@ -115,19 +115,12 @@ final class SessionManager: ObservableObject {
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
-        case .preToolUse, .postToolUse:
+        case .postToolUse:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
-        case .permissionRequest:
-            guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
-            let wasNotWaiting = sessions[index].status != .waiting
-            sessions[index].status = .waiting
-            updateTermInfo(at: index, from: event)
-            if wasNotWaiting { SoundPlayer.playAttentionSound() }
-
-        case .stop:
+        case .preToolUse, .stop, .permissionRequest:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             let wasNotWaiting = sessions[index].status != .waiting
             sessions[index].status = .waiting
