@@ -1,21 +1,59 @@
 import Foundation
 import Network
 
-final class EventServer: Sendable {
+final class EventServer: @unchecked Sendable {
     let port: UInt16
     private let listener: NWListener
     private let onEvent: @Sendable (SessionEvent) -> Void
+    private let onDecisionEvent: @Sendable (SessionEvent) -> Void
+    private let pendingLock = NSLock()
+    private var _pendingConnections: [String: NWConnection] = [:]
 
-    init(port: UInt16 = 27182, onEvent: @escaping @Sendable (SessionEvent) -> Void) throws {
+    private func storePending(sessionId: String, connection: NWConnection) {
+        pendingLock.lock()
+        _pendingConnections[sessionId] = connection
+        pendingLock.unlock()
+    }
+
+    private func removePending(sessionId: String) -> NWConnection? {
+        pendingLock.lock()
+        let conn = _pendingConnections.removeValue(forKey: sessionId)
+        pendingLock.unlock()
+        return conn
+    }
+
+    func resolveDecision(sessionId: String, allow: Bool) {
+        guard let connection = removePending(sessionId: sessionId) else { return }
+        let body: String
+        if allow {
+            body = "{\"decision\":\"allow\"}"
+        } else {
+            body = "{\"decision\":\"deny\",\"reason\":\"Denied from AgentCh\"}"
+        }
+        let response = Self.httpResponse(status: 200, body: body)
+        connection.send(content: response, completion: .contentProcessed { _ in
+            connection.cancel()
+        })
+    }
+
+    init(port: UInt16 = 27182, onEvent: @escaping @Sendable (SessionEvent) -> Void, onDecisionEvent: @escaping @Sendable (SessionEvent) -> Void) throws {
         self.port = port
         self.onEvent = onEvent
+        self.onDecisionEvent = onDecisionEvent
         let params = NWParameters.tcp
         self.listener = try NWListener(using: params, on: NWEndpoint.Port(rawValue: port)!)
     }
 
     func start() {
-        listener.newConnectionHandler = { [onEvent] connection in
-            Self.handleConnection(connection, onEvent: onEvent)
+        listener.newConnectionHandler = { [onEvent, onDecisionEvent] connection in
+            Self.handleConnection(
+                connection,
+                onEvent: onEvent,
+                onDecisionEvent: onDecisionEvent,
+                storePending: { [weak self] sessionId, conn in
+                    self?.storePending(sessionId: sessionId, connection: conn)
+                }
+            )
         }
         listener.start(queue: .global(qos: .userInitiated))
     }
@@ -26,7 +64,9 @@ final class EventServer: Sendable {
 
     private static func handleConnection(
         _ connection: NWConnection,
-        onEvent: @escaping @Sendable (SessionEvent) -> Void
+        onEvent: @escaping @Sendable (SessionEvent) -> Void,
+        onDecisionEvent: @escaping @Sendable (SessionEvent) -> Void,
+        storePending: @escaping (String, NWConnection) -> Void
     ) {
         connection.start(queue: .global(qos: .userInitiated))
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, _, error in
@@ -37,6 +77,7 @@ final class EventServer: Sendable {
 
             let httpStr = String(data: data, encoding: .utf8) ?? ""
             let queryParams = Self.extractQueryParams(from: httpStr)
+            let path = Self.extractPath(from: httpStr)
 
             guard let body = Self.extractHTTPBody(from: data) else {
                 let response = Self.httpResponse(status: 400, body: "{\"error\":\"invalid request\"}")
@@ -48,11 +89,17 @@ final class EventServer: Sendable {
 
             do {
                 let event = try Self.parseEvent(from: body, queryParams: queryParams)
-                onEvent(event)
-                let response = Self.httpResponse(status: 200, body: "{\"ok\":true}")
-                connection.send(content: response, completion: .contentProcessed { _ in
-                    connection.cancel()
-                })
+
+                if path == "/agentch/decision" {
+                    onDecisionEvent(event)
+                    storePending(event.sessionId, connection)
+                } else {
+                    onEvent(event)
+                    let response = Self.httpResponse(status: 200, body: "{\"ok\":true}")
+                    connection.send(content: response, completion: .contentProcessed { _ in
+                        connection.cancel()
+                    })
+                }
             } catch {
                 let response = Self.httpResponse(status: 400, body: "{\"error\":\"invalid event\"}")
                 connection.send(content: response, completion: .contentProcessed { _ in
@@ -92,6 +139,18 @@ final class EventServer: Sendable {
             }
         }
         return params
+    }
+
+    static func extractPath(from httpRequest: String) -> String {
+        guard let firstLine = httpRequest.split(separator: "\r\n").first ?? httpRequest.split(separator: "\n").first,
+              let urlPart = firstLine.split(separator: " ").dropFirst().first else {
+            return "/"
+        }
+        let urlStr = String(urlPart)
+        if let qIndex = urlStr.firstIndex(of: "?") {
+            return String(urlStr[..<qIndex])
+        }
+        return urlStr
     }
 
     static func extractHTTPBody(from data: Data) -> Data? {
