@@ -303,13 +303,15 @@ struct PillGroupView: View {
         }
         .padding(.vertical, isExpanded ? 6 * scale : 3 * scale)
         .padding(.horizontal, isExpanded ? 8 * scale : 6 * scale)
-        .background(
-            RoundedRectangle(
-                cornerRadius: isRowExpanded ? 12 * scale : 20 * scale,
-                style: .continuous
-            )
-            .fill(.primary.opacity(hasAction && isRowHovered ? 0.1 : 0.07))
-        )
+        .background {
+            if isExpanded {
+                RoundedRectangle(
+                    cornerRadius: isRowExpanded ? 12 * scale : 20 * scale,
+                    style: .continuous
+                )
+                .fill(.primary.opacity(hasAction && isRowHovered ? 0.1 : 0.07))
+            }
+        }
         .onHover { hovering in
             guard hasAction else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
