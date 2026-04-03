@@ -11,6 +11,7 @@ struct PillGroupView: View {
     @State private var squish: CGFloat = 1.0
     @State private var badgePop: CGFloat = 1.0
     @State private var hoveredRowId: String?
+    @State private var pageOffset: Int = 0
     private var scale: CGFloat { CGFloat(pillScale) }
     private var mascotSize: CGFloat { 16 * scale }
     private var hPadding: CGFloat { 14 * scale }
@@ -80,6 +81,7 @@ struct PillGroupView: View {
                             NSCursor.openHand.push()
                         } else {
                             NSCursor.pop()
+                            pageOffset = 0
                         }
                     }
                     .padding(-20)
@@ -185,8 +187,38 @@ struct PillGroupView: View {
         let sessions = expandsDown ? sortedSessions : sortedSessions.reversed()
 
         VStack(alignment: .leading, spacing: 5 * scale) {
-            let visibleSessions = isExpanded ? Array(sessions.prefix(maxVisibleRows)) : sessions
-            let hiddenCount = isExpanded ? max(0, sessions.count - maxVisibleRows) : 0
+            let clampedOffset = min(pageOffset, max(0, sessions.count - maxVisibleRows))
+            let pageEnd = min(clampedOffset + maxVisibleRows, sessions.count)
+            let visibleSessions = isExpanded ? Array(sessions[clampedOffset..<pageEnd]) : sessions
+            let beforeCount = isExpanded ? clampedOffset : 0
+            let afterCount = isExpanded ? max(0, sessions.count - pageEnd) : 0
+
+            // "N more" at top to go back
+            if isExpanded && beforeCount > 0 {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        pageOffset = max(0, pageOffset - maxVisibleRows)
+                    }
+                } label: {
+                    HStack(spacing: 4 * scale) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 7 * scale, weight: .bold))
+                        Text("\(beforeCount) more")
+                            .font(.system(size: 9 * scale, weight: .medium, design: .rounded))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10 * scale)
+                    .padding(.vertical, 4 * scale)
+                    .background(
+                        Capsule()
+                            .fill(.primary.opacity(0.06))
+                    )
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 2 * scale)
+                .transition(.blurReplace)
+            }
 
             ForEach(Array(visibleSessions.enumerated()), id: \.element.id) { index, session in
                 let isFirst = expandsDown ? index == 0 : index == visibleSessions.count - 1
@@ -197,13 +229,31 @@ struct PillGroupView: View {
                 }
             }
 
-            if isExpanded && hiddenCount > 0 {
-                Text("+\(hiddenCount) more")
-                    .font(.system(size: 9 * scale, weight: .medium, design: .rounded))
+            // "N more" at bottom to see next page
+            if isExpanded && afterCount > 0 {
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        pageOffset = min(pageOffset + maxVisibleRows, sessions.count - maxVisibleRows)
+                    }
+                } label: {
+                    HStack(spacing: 4 * scale) {
+                        Text("\(afterCount) more")
+                            .font(.system(size: 9 * scale, weight: .medium, design: .rounded))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7 * scale, weight: .bold))
+                    }
                     .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10 * scale)
+                    .padding(.vertical, 4 * scale)
+                    .background(
+                        Capsule()
+                            .fill(.primary.opacity(0.06))
+                    )
                     .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 2 * scale)
-                    .transition(.blurReplace)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2 * scale)
+                .transition(.blurReplace)
             }
         }
         .padding(.horizontal, hPadding)
