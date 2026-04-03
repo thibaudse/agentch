@@ -49,6 +49,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         sessionManager.startCleanup()
         SettingsWindowController.shared.pillPosition = pillPosition
         SettingsWindowController.shared.screenManager = screenManager
+        sessionManager.onResolvePermission = { [weak self] sessionId, allow in
+            self?.eventServer?.resolveDecision(sessionId: sessionId, allow: allow)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -86,11 +89,27 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private func startServer() {
         guard eventServer == nil else { return }
         do {
-            let server = try EventServer(port: UInt16(httpPort)) { [weak self] event in
-                Task { @MainActor in
-                    self?.sessionManager.handleEvent(event)
+            let server = try EventServer(
+                port: UInt16(httpPort),
+                onEvent: { [weak self] event in
+                    Task { @MainActor in
+                        self?.sessionManager.handleEvent(event)
+                    }
+                },
+                onDecisionEvent: { [weak self] event in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        self.sessionManager.handleEvent(event)
+                        if let toolName = event.toolName {
+                            self.sessionManager.setPermission(
+                                sessionId: event.sessionId,
+                                toolName: toolName,
+                                toolInput: event.toolInput
+                            )
+                        }
+                    }
                 }
-            }
+            )
             server.start()
             self.eventServer = server
         } catch {

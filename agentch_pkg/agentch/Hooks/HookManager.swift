@@ -67,11 +67,11 @@ struct HookManager {
         SID=$(echo "$INPUT" | grep -o '"session_id":"[^"]*"' | head -1 | cut -d'"' -f4)
         [ -z "$SID" ] && exit 0
         TTY=$(ps -o tty= -p $PPID 2>/dev/null | tr -d ' ')
+        EVENT=$(echo "$INPUT" | grep -o '"hook_event_name":"[^"]*"' | head -1 | cut -d'"' -f4)
 
         # Save terminal window title for tab matching and session name
         mkdir -p /tmp/agentch
         if [ -n "$TERM_PROGRAM" ]; then
-            # Map TERM_PROGRAM to app name for osascript
             case "$TERM_PROGRAM" in
                 ghostty)         APP_NAME="Ghostty" ;;
                 Apple_Terminal)  APP_NAME="Terminal" ;;
@@ -79,12 +79,19 @@ struct HookManager {
                 WarpTerminal)    APP_NAME="Warp" ;;
                 *)               APP_NAME="$TERM_PROGRAM" ;;
             esac
-            /usr/bin/osascript -e "tell application \\"$APP_NAME\\" to return name of front window" \
+            /usr/bin/osascript -e "tell application \\"$APP_NAME\\" to return name of front window" \\
                 > "/tmp/agentch/$SID" 2>/dev/null
         fi
 
-        echo "$INPUT" | /usr/bin/curl -s -X POST "http://localhost:$PORT/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
-            -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true
+        if [ "$EVENT" = "PreToolUse" ]; then
+            # Decision endpoint: block and output response for Claude Code to read
+            echo "$INPUT" | /usr/bin/curl -s -X POST "http://localhost:$PORT/agentch/decision?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
+                -H 'Content-Type: application/json' --data-binary @- 2>/dev/null
+        else
+            # Fire-and-forget for all other events
+            echo "$INPUT" | /usr/bin/curl -s -X POST "http://localhost:$PORT/agentch?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
+                -H 'Content-Type: application/json' --data-binary @- > /dev/null 2>&1 || true
+        fi
         """
 
         let dir = (hookScriptPath as NSString).deletingLastPathComponent
@@ -128,10 +135,11 @@ struct HookManager {
             }
 
             if !alreadyExists {
+                let timeout: Int = (event == "PreToolUse") ? 300 : 5
                 let ourHook: [String: Any] = [
                     "type": "command",
                     "command": hookCommand(port: port),
-                    "timeout": 5,
+                    "timeout": timeout,
                 ]
                 var matcherGroup: [String: Any] = [
                     "hooks": [ourHook]
