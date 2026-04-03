@@ -9,10 +9,29 @@ final class EventServer: @unchecked Sendable {
     private let pendingLock = NSLock()
     private var _pendingConnections: [String: NWConnection] = [:]
 
+    var onDecisionExpired: (@Sendable (String) -> Void)?
+
     private func storePending(sessionId: String, connection: NWConnection) {
         pendingLock.lock()
         _pendingConnections[sessionId] = connection
         pendingLock.unlock()
+
+        // Detect when curl is killed (user answered in terminal)
+        // Read from connection — when the client disconnects, this completes
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 1) { [weak self] data, _, isComplete, error in
+            if data == nil || isComplete || error != nil {
+                self?.handleExpired(sessionId: sessionId)
+            }
+        }
+    }
+
+    private func handleExpired(sessionId: String) {
+        pendingLock.lock()
+        let had = _pendingConnections.removeValue(forKey: sessionId) != nil
+        pendingLock.unlock()
+        if had {
+            onDecisionExpired?(sessionId)
+        }
     }
 
     private func removePending(sessionId: String) -> NWConnection? {

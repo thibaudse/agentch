@@ -111,6 +111,14 @@ final class SessionManager: ObservableObject {
     }
 
     func handleEvent(_ event: SessionEvent) {
+        // Any event that indicates progress should clear pending permissions
+        let clearEvents: Set<SessionEventType> = [.preToolUse, .postToolUse, .userPromptSubmit, .stop, .sessionEnd, .permissionRequest]
+        if clearEvents.contains(event.event),
+           let index = sessions.firstIndex(where: { $0.id == event.sessionId }),
+           sessions[index].pendingPermission != nil {
+            clearPermissionIfNeeded(at: index)
+        }
+
         // Auto-create session if we receive an event for an unknown session
         // (e.g., agentch started while Claude sessions were already running)
         if event.event != .sessionEnd && event.event != .sessionStart {
@@ -136,20 +144,19 @@ final class SessionManager: ObservableObject {
 
         case .userPromptSubmit:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
+            clearPermissionIfNeeded(at: index)
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
         case .preToolUse:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
+            clearPermissionIfNeeded(at: index)
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
         case .postToolUse:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
-            if sessions[index].pendingPermission != nil {
-                sessions[index].pendingPermission = nil
-                onResolvePermission?(event.sessionId, true)
-            }
+            clearPermissionIfNeeded(at: index)
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
@@ -159,6 +166,17 @@ final class SessionManager: ObservableObject {
             sessions[index].status = .waiting
             updateTermInfo(at: index, from: event)
             if wasNotWaiting { SoundPlayer.playAttentionSound() }
+        }
+    }
+
+    private func clearPermissionIfNeeded(at index: Int) {
+        if sessions[index].pendingPermission != nil {
+            let sessionId = sessions[index].id
+            NSLog("[agentch] clearPermission for session=%@", sessionId)
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                sessions[index].pendingPermission = nil
+            }
+            onResolvePermission?(sessionId, true)
         }
     }
 

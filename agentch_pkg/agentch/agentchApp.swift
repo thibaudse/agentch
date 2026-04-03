@@ -52,6 +52,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         sessionManager.onResolvePermission = { [weak self] sessionId, allow in
             self?.eventServer?.resolveDecision(sessionId: sessionId, allow: allow)
         }
+        eventServer?.onDecisionExpired = { [weak self] sessionId in
+            Task { @MainActor in
+                guard let self,
+                      let index = self.sessionManager.sessions.firstIndex(where: { $0.id == sessionId }),
+                      self.sessionManager.sessions[index].pendingPermission != nil else { return }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    self.sessionManager.sessions[index].pendingPermission = nil
+                }
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -92,11 +102,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             let server = try EventServer(
                 port: UInt16(httpPort),
                 onEvent: { [weak self] event in
+                    NSLog("[agentch] onEvent: %@ session=%@", event.event.rawValue, event.sessionId)
                     Task { @MainActor in
-                        self?.sessionManager.handleEvent(event)
+                        guard let self else { return }
+                        self.sessionManager.handleEvent(event)
                     }
                 },
                 onDecisionEvent: { [weak self] event in
+                    NSLog("[agentch] onDecisionEvent: %@ session=%@", event.event.rawValue, event.sessionId)
                     Task { @MainActor in
                         guard let self else { return }
                         self.sessionManager.handleEvent(event)
