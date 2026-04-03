@@ -457,15 +457,24 @@ struct PermissionPromptView: View {
                     .truncationMode(.middle)
             }
 
-            // Code block with diff coloring
+            // Code block — diff view for edits, plain text for others
             if !permission.toolInput.isEmpty {
+                let isDiff = permission.toolName == "Edit"
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(permission.toolInput.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
-                            DiffLineView(line: line, scale: scale)
+                    if isDiff {
+                        VStack(alignment: .leading, spacing: 0) {
+                            ForEach(Array(permission.toolInput.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+                                DiffLineView(line: line, scale: scale)
+                            }
                         }
+                        .padding(6 * scale)
+                    } else {
+                        Text(permission.toolInput)
+                            .font(.system(size: 9 * scale, design: .monospaced))
+                            .foregroundStyle(.primary.opacity(0.8))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(6 * scale)
                     }
-                    .padding(6 * scale)
                 }
                 .frame(maxHeight: 80 * scale)
                 .background(
@@ -526,22 +535,22 @@ struct DiffLineView: View {
             // +/- indicator
             Text(isRemoval ? "−" : isAddition ? "+" : " ")
                 .font(.system(size: 9 * scale, weight: .bold, design: .monospaced))
-                .foregroundStyle(isRemoval ? .red : isAddition ? .green : .clear)
+                .foregroundStyle(isRemoval ? Color.red : isAddition ? Color.green : .clear)
                 .frame(width: 10 * scale, alignment: .center)
 
             // Content
             Text(parsed.content)
                 .font(.system(size: 9 * scale, design: .monospaced))
                 .foregroundStyle(
-                    isRemoval ? Color(red: 0.7, green: 0.1, blue: 0.1) :
-                    isAddition ? Color(red: 0.0, green: 0.55, blue: 0.2) :
+                    isRemoval ? Color.red :
+                    isAddition ? Color.green :
                     .primary.opacity(0.7)
                 )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 1 * scale)
         .background(
-            isRemoval ? Color.red.opacity(0.12) :
+            isRemoval ? Color.red.opacity(0.15) :
             isAddition ? Color.green.opacity(0.15) :
             Color.clear
         )
