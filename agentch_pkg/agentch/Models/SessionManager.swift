@@ -21,6 +21,7 @@ struct SessionEvent: Sendable {
     var tty: String?
     var toolName: String?
     var toolInput: String?
+    var toolFilePath: String?
 
     static func from(json: [String: Any], queryParams: [String: String] = [:]) -> SessionEvent? {
         guard let hookEventName = json["hook_event_name"] as? String,
@@ -43,10 +44,19 @@ struct SessionEvent: Sendable {
         let tty = queryParams["tty"]?.isEmpty == true ? nil : queryParams["tty"]
         let toolName = json["tool_name"] as? String
         let toolInput: String?
+        var toolFilePath: String?
         if let input = json["tool_input"] as? [String: Any] {
+            toolFilePath = input["file_path"] as? String
             if let command = input["command"] as? String {
                 toolInput = command
-            } else if let filePath = input["file_path"] as? String {
+            } else if toolName == "Edit",
+                      let oldStr = input["old_string"] as? String,
+                      let newStr = input["new_string"] as? String {
+                toolInput = Self.formatDiff(old: oldStr, new: newStr, filePath: toolFilePath)
+            } else if toolName == "Write",
+                      let content = input["content"] as? String {
+                toolInput = String(content.prefix(500))
+            } else if let filePath = toolFilePath {
                 toolInput = filePath
             } else if let data = try? JSONSerialization.data(withJSONObject: input, options: []),
                       let str = String(data: data, encoding: .utf8) {
@@ -60,8 +70,38 @@ struct SessionEvent: Sendable {
         return SessionEvent(
             event: event, sessionId: sessionId, cwd: cwd, agentType: agentType,
             termProgram: termProgram, termPid: termPid, tty: tty,
-            toolName: toolName, toolInput: toolInput
+            toolName: toolName, toolInput: toolInput, toolFilePath: toolFilePath
         )
+    }
+
+    /// Format old/new strings as a unified diff with line numbers.
+    /// Lines are formatted as "NNN - old" or "NNN + new" where NNN is the file line number.
+    private static func formatDiff(old: String, new: String, filePath: String?) -> String {
+        var startLine = 1
+        if let filePath,
+           let content = try? String(contentsOfFile: filePath, encoding: .utf8) {
+            let fileLines = content.components(separatedBy: "\n")
+            let oldFirstLine = old.components(separatedBy: "\n").first ?? ""
+            for (i, line) in fileLines.enumerated() {
+                if line.contains(oldFirstLine) {
+                    startLine = i + 1
+                    break
+                }
+            }
+        }
+
+        let oldLines = old.components(separatedBy: "\n")
+        let newLines = new.components(separatedBy: "\n")
+        var result: [String] = []
+        for (i, line) in oldLines.enumerated() {
+            let lineNum = String(format: "%3d", startLine + i)
+            result.append("\(lineNum) - \(line)")
+        }
+        for (i, line) in newLines.enumerated() {
+            let lineNum = String(format: "%3d", startLine + i)
+            result.append("\(lineNum) + \(line)")
+        }
+        return result.joined(separator: "\n")
     }
 
     /// Detect agent type from the process name at the given PID.
@@ -187,11 +227,12 @@ final class SessionManager: ObservableObject {
         onResolvePermission?(sessionId, allow)
     }
 
-    func setPermission(sessionId: String, toolName: String, toolInput: String?) {
+    func setPermission(sessionId: String, toolName: String, toolInput: String?, filePath: String?) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
         sessions[index].pendingPermission = PermissionRequest(
             toolName: toolName,
-            toolInput: toolInput ?? ""
+            toolInput: toolInput ?? "",
+            filePath: filePath
         )
         let wasNotWaiting = sessions[index].status != .waiting
         sessions[index].status = .waiting

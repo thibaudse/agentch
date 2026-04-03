@@ -59,4 +59,5 @@ struct Session: Identifiable, Sendable {
 struct PermissionRequest: Sendable {
     let toolName: String
     let toolInput: String
+    let filePath: String?
 }

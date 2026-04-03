@@ -116,7 +116,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                         self.sessionManager.setPermission(
                             sessionId: event.sessionId,
                             toolName: event.toolName ?? "Permission",
-                            toolInput: event.toolInput
+                            toolInput: event.toolInput,
+                            filePath: event.toolFilePath
                         )
                     }
                 }

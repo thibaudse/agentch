@@ -425,19 +425,31 @@ struct PermissionPromptView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4 * scale) {
+            // Tool name
             Text(permission.toolName)
                 .font(.system(size: 10 * scale, weight: .bold, design: .rounded))
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color(red: 0.85, green: 0.5, blue: 0.0))
 
+            // File path above code block
+            if let filePath = permission.filePath {
+                Text(filePath)
+                    .font(.system(size: 8 * scale, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+
+            // Code block with diff coloring
             if !permission.toolInput.isEmpty {
                 ScrollView {
-                    Text(permission.toolInput)
-                        .font(.system(size: 9 * scale, design: .monospaced))
-                        .foregroundStyle(.primary.opacity(0.8))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(6 * scale)
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(Array(permission.toolInput.components(separatedBy: "\n").enumerated()), id: \.offset) { _, line in
+                            DiffLineView(line: line, scale: scale)
+                        }
+                    }
+                    .padding(6 * scale)
                 }
-                .frame(maxHeight: 60 * scale)
+                .frame(maxHeight: 80 * scale)
                 .background(
                     RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
                         .fill(.primary.opacity(0.06))
@@ -458,6 +470,63 @@ struct PermissionPromptView: View {
                     .cursor(.pointingHand)
             }
         }
+    }
+}
+
+struct DiffLineView: View {
+    let line: String
+    let scale: CGFloat
+
+    // Format: "NNN - content" or "NNN + content"
+    private var parsed: (lineNum: String, sign: String, content: String) {
+        // Find the " - " or " + " separator after the line number
+        if let range = line.range(of: " - ", options: [], range: line.startIndex..<line.endIndex) {
+            let num = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+            let content = String(line[range.upperBound...])
+            return (num, "-", content)
+        }
+        if let range = line.range(of: " + ", options: [], range: line.startIndex..<line.endIndex) {
+            let num = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+            let content = String(line[range.upperBound...])
+            return (num, "+", content)
+        }
+        return ("", " ", line)
+    }
+
+    private var isRemoval: Bool { parsed.sign == "-" }
+    private var isAddition: Bool { parsed.sign == "+" }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            // Line number
+            Text(parsed.lineNum)
+                .font(.system(size: 8 * scale, design: .monospaced))
+                .foregroundStyle(.primary.opacity(0.3))
+                .frame(width: 24 * scale, alignment: .trailing)
+                .padding(.trailing, 4 * scale)
+
+            // +/- indicator
+            Text(isRemoval ? "−" : isAddition ? "+" : " ")
+                .font(.system(size: 9 * scale, weight: .bold, design: .monospaced))
+                .foregroundStyle(isRemoval ? .red : isAddition ? .green : .clear)
+                .frame(width: 10 * scale, alignment: .center)
+
+            // Content
+            Text(parsed.content)
+                .font(.system(size: 9 * scale, design: .monospaced))
+                .foregroundStyle(
+                    isRemoval ? Color(red: 0.7, green: 0.1, blue: 0.1) :
+                    isAddition ? Color(red: 0.0, green: 0.55, blue: 0.2) :
+                    .primary.opacity(0.7)
+                )
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 1 * scale)
+        .background(
+            isRemoval ? Color.red.opacity(0.12) :
+            isAddition ? Color.green.opacity(0.15) :
+            Color.clear
+        )
     }
 }
 
