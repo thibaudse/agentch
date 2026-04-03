@@ -219,12 +219,21 @@ struct PillGroupView: View {
 
                 Spacer(minLength: 4 * scale)
 
-                if session.status == .waiting {
-                    AcknowledgeButton {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            sessionManager.acknowledge(sessionId: session.id)
+                if let permission = session.pendingPermission {
+                    PermissionPromptView(
+                        permission: permission,
+                        scale: scale,
+                        onAllow: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                sessionManager.resolvePermission(sessionId: session.id, allow: true)
+                            }
+                        },
+                        onDeny: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                sessionManager.resolvePermission(sessionId: session.id, allow: false)
+                            }
                         }
-                    }
+                    )
                     .transition(.blurReplace)
                 }
 
@@ -300,6 +309,50 @@ struct PillGroupView: View {
                 shape.fill(statusTint)
             }
             .shadow(color: .black.opacity(0.2), radius: 12 * scale, y: 4 * scale)
+        }
+    }
+}
+
+struct PermissionPromptView: View {
+    let permission: PermissionRequest
+    let scale: CGFloat
+    let onAllow: () -> Void
+    let onDeny: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4 * scale) {
+            Text(permission.toolName)
+                .font(.system(size: 10 * scale, weight: .bold, design: .rounded))
+                .foregroundStyle(.orange)
+
+            if !permission.toolInput.isEmpty {
+                ScrollView {
+                    Text(permission.toolInput)
+                        .font(.system(size: 9 * scale, design: .monospaced))
+                        .foregroundStyle(.primary.opacity(0.8))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(6 * scale)
+                }
+                .frame(maxHeight: 60 * scale)
+                .background(
+                    RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+                        .fill(.primary.opacity(0.06))
+                )
+            }
+
+            HStack(spacing: 6 * scale) {
+                Button("Allow") { onAllow() }
+                    .font(.system(size: 9 * scale, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.green)
+                    .buttonStyle(.plain)
+                    .cursor(.pointingHand)
+
+                Button("Deny") { onDeny() }
+                    .font(.system(size: 9 * scale, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+                    .cursor(.pointingHand)
+            }
         }
     }
 }
