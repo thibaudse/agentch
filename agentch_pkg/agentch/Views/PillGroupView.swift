@@ -165,9 +165,14 @@ struct PillGroupView: View {
 
     // MARK: - Pill body
 
+    private let maxVisibleRows = 5
+
     private var sortedSessions: [Session] {
+        // Pending permissions first, then by status
         sessionManager.sessions.sorted { a, b in
-            a.status.sortOrder < b.status.sortOrder
+            if a.pendingPermission != nil && b.pendingPermission == nil { return true }
+            if a.pendingPermission == nil && b.pendingPermission != nil { return false }
+            return a.status.sortOrder < b.status.sortOrder
         }
     }
 
@@ -180,13 +185,25 @@ struct PillGroupView: View {
         let sessions = expandsDown ? sortedSessions : sortedSessions.reversed()
 
         VStack(alignment: .leading, spacing: 5 * scale) {
-            ForEach(Array(sessions.enumerated()), id: \.element.id) { index, session in
-                let isFirst = expandsDown ? index == 0 : index == sessions.count - 1
+            let visibleSessions = isExpanded ? Array(sessions.prefix(maxVisibleRows)) : sessions
+            let hiddenCount = isExpanded ? max(0, sessions.count - maxVisibleRows) : 0
+
+            ForEach(Array(visibleSessions.enumerated()), id: \.element.id) { index, session in
+                let isFirst = expandsDown ? index == 0 : index == visibleSessions.count - 1
 
                 if isFirst || isExpanded {
                     sessionRow(session: session, isFirst: isFirst)
                         .transition(.blurReplace)
                 }
+            }
+
+            if isExpanded && hiddenCount > 0 {
+                Text("+\(hiddenCount) more")
+                    .font(.system(size: 9 * scale, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.top, 2 * scale)
+                    .transition(.blurReplace)
             }
         }
         .padding(.horizontal, hPadding)
@@ -280,6 +297,7 @@ struct PillGroupView: View {
                 )
                 .frame(maxWidth: maxPermissionWidth)
                 .padding(.top, 6 * scale)
+                .padding(.bottom, 4 * scale)
                 .transition(.blurReplace)
             }
         }
