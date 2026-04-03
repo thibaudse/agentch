@@ -8,6 +8,7 @@ enum SessionEventType: String, Codable, Sendable {
     case postToolUse = "PostToolUse"
     case userPromptSubmit = "UserPromptSubmit"
     case permissionRequest = "PermissionRequest"
+    case elicitation = "Elicitation"
     case stop = "Stop"
 }
 
@@ -22,6 +23,9 @@ struct SessionEvent: Sendable {
     var toolName: String?
     var toolInput: String?
     var toolFilePath: String?
+    var question: String?
+    var questionOptions: [QuestionOption]?
+    var questionMultiSelect: Bool?
 
     static func from(json: [String: Any], queryParams: [String: String] = [:]) -> SessionEvent? {
         guard let hookEventName = json["hook_event_name"] as? String,
@@ -67,10 +71,30 @@ struct SessionEvent: Sendable {
         } else {
             toolInput = nil
         }
+        // Parse question for Elicitation events
+        let question: String?
+        var questionOptions: [[String: Any]]?
+        var questionMultiSelect: Bool?
+        if hookEventName == "Elicitation" {
+            question = json["question"] as? String
+                ?? (json["message"] as? String)
+                ?? (json["description"] as? String)
+            questionOptions = json["options"] as? [[String: Any]]
+            questionMultiSelect = json["multiSelect"] as? Bool
+        } else {
+            question = nil
+        }
+
         return SessionEvent(
             event: event, sessionId: sessionId, cwd: cwd, agentType: agentType,
             termProgram: termProgram, termPid: termPid, tty: tty,
-            toolName: toolName, toolInput: toolInput, toolFilePath: toolFilePath
+            toolName: toolName, toolInput: toolInput, toolFilePath: toolFilePath,
+            question: question,
+            questionOptions: questionOptions?.compactMap { opt in
+                guard let label = opt["label"] as? String else { return nil }
+                return QuestionOption(label: label)
+            },
+            questionMultiSelect: questionMultiSelect
         )
     }
 
@@ -125,6 +149,7 @@ final class SessionManager: ObservableObject {
     @Published var sessions: [Session] = []
     private var cleanupTask: Task<Void, Never>?
     var onResolvePermission: ((String, Bool) -> Void)?
+    var onResolveQuestion: ((String, String?) -> Void)?  // sessionId, answer (nil = skip)
 
     /// Start periodic cleanup of dead sessions (process no longer running).
     func startCleanup() {
@@ -152,7 +177,7 @@ final class SessionManager: ObservableObject {
 
     func handleEvent(_ event: SessionEvent) {
         // Any event that indicates progress should clear pending permissions
-        let clearEvents: Set<SessionEventType> = [.preToolUse, .postToolUse, .userPromptSubmit, .stop, .sessionEnd, .permissionRequest]
+        let clearEvents: Set<SessionEventType> = [.preToolUse, .postToolUse, .userPromptSubmit, .stop, .sessionEnd, .permissionRequest, .elicitation]
         if clearEvents.contains(event.event),
            let index = sessions.firstIndex(where: { $0.id == event.sessionId }),
            sessions[index].pendingPermission != nil {
@@ -206,17 +231,30 @@ final class SessionManager: ObservableObject {
             sessions[index].status = .waiting
             updateTermInfo(at: index, from: event)
             if wasNotWaiting { SoundPlayer.playAttentionSound() }
+
+        case .elicitation:
+            guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
+            let wasNotWaiting = sessions[index].status != .waiting
+            sessions[index].status = .waiting
+            updateTermInfo(at: index, from: event)
+            if wasNotWaiting { SoundPlayer.playAttentionSound() }
         }
     }
 
     private func clearPermissionIfNeeded(at index: Int) {
         if sessions[index].pendingPermission != nil {
             let sessionId = sessions[index].id
-            NSLog("[agentch] clearPermission for session=%@", sessionId)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 sessions[index].pendingPermission = nil
             }
             onResolvePermission?(sessionId, true)
+        }
+        if sessions[index].pendingQuestion != nil {
+            let sessionId = sessions[index].id
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                sessions[index].pendingQuestion = nil
+            }
+            onResolveQuestion?(sessionId, nil)
         }
     }
 
@@ -237,6 +275,21 @@ final class SessionManager: ObservableObject {
         let wasNotWaiting = sessions[index].status != .waiting
         sessions[index].status = .waiting
         if wasNotWaiting { SoundPlayer.playAttentionSound() }
+    }
+
+    func setQuestion(sessionId: String, question: String, options: [QuestionOption] = []) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
+        sessions[index].pendingQuestion = PendingQuestion(question: question, options: options)
+        let wasNotWaiting = sessions[index].status != .waiting
+        sessions[index].status = .waiting
+        if wasNotWaiting { SoundPlayer.playAttentionSound() }
+    }
+
+    func resolveQuestion(sessionId: String, answer: String?) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
+        sessions[index].pendingQuestion = nil
+        sessions[index].status = answer != nil ? .thinking : .waiting
+        onResolveQuestion?(sessionId, answer)
     }
 
     private func createSession(from event: SessionEvent) {

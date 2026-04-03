@@ -55,6 +55,23 @@ final class EventServer: @unchecked Sendable {
         })
     }
 
+    func resolveQuestion(sessionId: String, answer: String?) {
+        guard let connection = removePending(sessionId: sessionId) else { return }
+        let body: String
+        if let answer {
+            let escaped = answer.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\n", with: "\\n")
+            body = "{\"hookSpecificOutput\":{\"hookEventName\":\"Elicitation\",\"decision\":{\"action\":\"accept\",\"value\":\"\(escaped)\"}}}"
+        } else {
+            body = "{\"hookSpecificOutput\":{\"hookEventName\":\"Elicitation\",\"decision\":{\"action\":\"decline\"}}}"
+        }
+        let response = Self.httpResponse(status: 200, body: body)
+        connection.send(content: response, completion: .contentProcessed { _ in
+            connection.cancel()
+        })
+    }
+
     init(port: UInt16 = 27182, onEvent: @escaping @Sendable (SessionEvent) -> Void, onDecisionEvent: @escaping @Sendable (SessionEvent) -> Void) throws {
         self.port = port
         self.onEvent = onEvent

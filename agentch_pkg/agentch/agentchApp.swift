@@ -52,13 +52,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         sessionManager.onResolvePermission = { [weak self] sessionId, allow in
             self?.eventServer?.resolveDecision(sessionId: sessionId, allow: allow)
         }
+        sessionManager.onResolveQuestion = { [weak self] sessionId, answer in
+            self?.eventServer?.resolveQuestion(sessionId: sessionId, answer: answer)
+        }
         eventServer?.onDecisionExpired = { [weak self] sessionId in
             Task { @MainActor in
                 guard let self,
-                      let index = self.sessionManager.sessions.firstIndex(where: { $0.id == sessionId }),
-                      self.sessionManager.sessions[index].pendingPermission != nil else { return }
+                      let index = self.sessionManager.sessions.firstIndex(where: { $0.id == sessionId }) else { return }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     self.sessionManager.sessions[index].pendingPermission = nil
+                    self.sessionManager.sessions[index].pendingQuestion = nil
                 }
             }
         }
@@ -113,12 +116,20 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                     Task { @MainActor in
                         guard let self else { return }
                         self.sessionManager.handleEvent(event)
-                        self.sessionManager.setPermission(
-                            sessionId: event.sessionId,
-                            toolName: event.toolName ?? "Permission",
-                            toolInput: event.toolInput,
-                            filePath: event.toolFilePath
-                        )
+                        if event.event == .elicitation {
+                            self.sessionManager.setQuestion(
+                                sessionId: event.sessionId,
+                                question: event.question ?? "Claude is asking a question",
+                                options: event.questionOptions ?? []
+                            )
+                        } else {
+                            self.sessionManager.setPermission(
+                                sessionId: event.sessionId,
+                                toolName: event.toolName ?? "Permission",
+                                toolInput: event.toolInput,
+                                filePath: event.toolFilePath
+                            )
+                        }
                     }
                 }
             )

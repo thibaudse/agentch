@@ -15,6 +15,7 @@ final class AgentChPanel: NSPanel {
         isOpaque = false
         hasShadow = false
         hidesOnDeactivate = false
+        becomesKeyOnlyIfNeeded = true
         isMovable = false
         collectionBehavior = [
             .canJoinAllSpaces,
@@ -24,7 +25,7 @@ final class AgentChPanel: NSPanel {
         ]
     }
 
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
     func coverScreen(_ screen: NSScreen? = nil) {

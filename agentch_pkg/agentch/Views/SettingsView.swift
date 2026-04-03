@@ -60,16 +60,9 @@ struct SettingsView: View {
         .frame(width: 520, height: 680)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .background {
-            if #available(macOS 26.0, *) {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.clear)
-                    .glassEffect(.regular.tint(.clear), in: .rect(cornerRadius: 16))
-                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-            } else {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.ultraThickMaterial)
-                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-            }
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
         }
         .padding(50)
     }

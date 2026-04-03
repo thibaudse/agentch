@@ -274,7 +274,7 @@ struct PillGroupView: View {
     private func sessionRow(session: Session, isFirst: Bool) -> some View {
         let isRowHovered = hoveredRowId == session.id
         let isRowExpanded = isExpanded && isRowHovered
-        let hasAction = session.pendingPermission != nil
+        let hasAction = session.pendingPermission != nil || session.pendingQuestion != nil
 
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6 * scale) {
@@ -368,6 +368,29 @@ struct PillGroupView: View {
                 .padding(.bottom, 4 * scale)
                 .transition(.blurReplace)
             }
+
+            // Question prompt
+            if isRowExpanded, let question = session.pendingQuestion {
+                QuestionPromptView(
+                    question: question,
+                    scale: scale,
+                    onSubmit: { answer in
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            sessionManager.resolveQuestion(sessionId: session.id, answer: answer)
+                        }
+                    },
+                    onSkip: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            sessionManager.resolveQuestion(sessionId: session.id, answer: nil)
+                        }
+                    }
+                )
+                .frame(maxWidth: maxPermissionWidth)
+                .padding(.leading, 2 * scale)
+                .padding(.top, 6 * scale)
+                .padding(.bottom, 4 * scale)
+                .transition(.blurReplace)
+            }
         }
         .padding(.vertical, isExpanded ? 6 * scale : 3 * scale)
         .padding(.horizontal, isExpanded ? 8 * scale : 6 * scale)
@@ -415,23 +438,11 @@ struct PillGroupView: View {
     @ViewBuilder
     private var pillBackground: some View {
         let shape = RoundedRectangle(cornerRadius: 20 * scale, style: .continuous)
-        if #available(macOS 26.0, *) {
-            ZStack {
-                shape
-                    .fill(.clear)
-                    .glassEffect(.clear.interactive(), in: shape)
-                shape
-                    .fill(statusTint)
-                    .allowsHitTesting(false)
-            }
-            .shadow(color: .black.opacity(0.2), radius: 12 * scale, y: 4 * scale)
-        } else {
-            ZStack {
-                shape.fill(.ultraThinMaterial)
-                shape.fill(statusTint)
-            }
-            .shadow(color: .black.opacity(0.2), radius: 12 * scale, y: 4 * scale)
+        ZStack {
+            shape.fill(.ultraThinMaterial)
+            shape.fill(statusTint)
         }
+        .shadow(color: .black.opacity(0.2), radius: 12 * scale, y: 4 * scale)
     }
 }
 
@@ -558,6 +569,140 @@ struct DiffLineView: View {
 }
 
 /// Applies a 0x0 frame with alignment when active, passthrough when not.
+struct QuestionPromptView: View {
+    let question: PendingQuestion
+    let scale: CGFloat
+    let onSubmit: (String) -> Void
+    let onSkip: () -> Void
+    @State private var answer = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6 * scale) {
+            // Header
+            Text("Question")
+                .font(.system(size: 10 * scale, weight: .bold, design: .rounded))
+                .foregroundStyle(Color(red: 0.85, green: 0.5, blue: 0.0))
+
+            Text(question.question)
+                .font(.system(size: 9 * scale, design: .rounded))
+                .foregroundStyle(.primary.opacity(0.8))
+                .padding(.bottom, 2 * scale)
+
+            // Options
+            if !question.options.isEmpty {
+                VStack(alignment: .leading, spacing: 2 * scale) {
+                    ForEach(question.options, id: \.label) { option in
+                        Button { onSubmit(option.label) } label: {
+                            Text(option.label)
+                                .font(.system(size: 9 * scale, weight: .medium, design: .rounded))
+                                .foregroundStyle(.primary.opacity(0.8))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 8 * scale)
+                                .padding(.vertical, 5 * scale)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+                                        .fill(.primary.opacity(0.08))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .cursor(.pointingHand)
+                    }
+                }
+            }
+
+            // Text field + skip
+            HStack(spacing: 4 * scale) {
+                HStack(spacing: 0) {
+                    TextField(question.options.isEmpty ? "Type your answer..." : "Or type custom...", text: $answer)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 9 * scale, design: .monospaced))
+                        .padding(.horizontal, 8 * scale)
+                        .padding(.vertical, 6 * scale)
+                        .onSubmit {
+                            guard !answer.isEmpty else { return }
+                            onSubmit(answer)
+                        }
+
+                    Button {
+                        guard !answer.isEmpty else { return }
+                        onSubmit(answer)
+                    } label: {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.system(size: 14 * scale))
+                            .foregroundStyle(answer.isEmpty ? Color.primary.opacity(0.15) : Color.green)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(answer.isEmpty)
+                    .padding(.trailing, 6 * scale)
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 8 * scale, style: .continuous)
+                        .fill(.primary.opacity(0.06))
+                )
+
+                Button { onSkip() } label: {
+                    HStack(spacing: 3 * scale) {
+                        Image(systemName: "forward.fill")
+                            .font(.system(size: 7 * scale))
+                        Text("Skip")
+                            .font(.system(size: 9 * scale, weight: .medium, design: .rounded))
+                    }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8 * scale)
+                    .padding(.vertical, 6 * scale)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8 * scale, style: .continuous)
+                            .fill(.primary.opacity(0.06))
+                    )
+                }
+                .buttonStyle(.plain)
+                .cursor(.pointingHand)
+            }
+        }
+    }
+}
+
+/// Simple flow layout for wrapping option chips
+struct FlowLayout: Layout {
+    var spacing: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = arrange(proposal: proposal, subviews: subviews)
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(proposal: proposal, subviews: subviews)
+        for (index, position) in result.positions.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + position.x, y: bounds.minY + position.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrange(proposal: ProposedViewSize, subviews: Subviews) -> (positions: [CGPoint], size: CGSize) {
+        let maxWidth = proposal.width ?? .infinity
+        var positions: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var maxX: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x + size.width > maxWidth && x > 0 {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            positions.append(CGPoint(x: x, y: y))
+            rowHeight = max(rowHeight, size.height)
+            x += size.width + spacing
+            maxX = max(maxX, x - spacing)
+        }
+
+        return (positions, CGSize(width: maxX, height: y + rowHeight))
+    }
+}
+
 struct ExpansionAnchor: ViewModifier {
     let alignment: Alignment
     let active: Bool

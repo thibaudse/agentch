@@ -34,6 +34,7 @@ struct Session: Identifiable, Sendable {
     var tty: String?
     var tabTitle: String?
     var pendingPermission: PermissionRequest?
+    var pendingQuestion: PendingQuestion?
 
     static let defaultBranches: Set<String> = ["main", "master"]
 
@@ -60,4 +61,13 @@ struct PermissionRequest: Sendable {
     let toolName: String
     let toolInput: String
     let filePath: String?
+}
+
+struct QuestionOption: Sendable {
+    let label: String
+}
+
+struct PendingQuestion: Sendable {
+    let question: String
+    let options: [QuestionOption]
 }

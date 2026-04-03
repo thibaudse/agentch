@@ -17,7 +17,7 @@ enum AgentHookConfig {
         switch self {
         case .claude:
             return ["SessionStart", "SessionEnd", "PreToolUse", "PostToolUse",
-                    "Stop", "UserPromptSubmit", "PermissionRequest"]
+                    "Stop", "UserPromptSubmit", "PermissionRequest", "Elicitation"]
         case .codex:
             return ["SessionStart", "PreToolUse", "PostToolUse",
                     "Stop", "UserPromptSubmit"]
@@ -29,7 +29,7 @@ enum AgentHookConfig {
         switch self {
         case .claude:
             return ["SessionStart", "SessionEnd", "PreToolUse", "PostToolUse",
-                    "Stop", "UserPromptSubmit", "PermissionRequest"]
+                    "Stop", "UserPromptSubmit", "PermissionRequest", "Elicitation"]
         case .codex:
             return ["SessionStart", "PreToolUse", "PostToolUse",
                     "Stop", "UserPromptSubmit"]
@@ -83,7 +83,7 @@ struct HookManager {
                 > "/tmp/agentch/$SID" 2>/dev/null
         fi
 
-        if [ "$EVENT" = "PermissionRequest" ]; then
+        if [ "$EVENT" = "PermissionRequest" ] || [ "$EVENT" = "Elicitation" ]; then
             # Block and return decision for Claude to read
             RESPONSE=$(echo "$INPUT" | /usr/bin/curl -s -X POST "http://localhost:$PORT/agentch/decision?term=${TERM_PROGRAM:-}&pid=$PPID&tty=$TTY" \\
                 -H 'Content-Type: application/json' --data-binary @- 2>/dev/null)
@@ -136,7 +136,7 @@ struct HookManager {
             }
 
             if !alreadyExists {
-                let timeout: Int = (event == "PermissionRequest") ? 300 : 5
+                let timeout: Int = (event == "PermissionRequest" || event == "Elicitation") ? 300 : 5
                 let ourHook: [String: Any] = [
                     "type": "command",
                     "command": hookCommand(port: port),
