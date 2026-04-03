@@ -19,6 +19,8 @@ struct SessionEvent: Sendable {
     var termProgram: String?
     var termPid: Int?
     var tty: String?
+    var toolName: String?
+    var toolInput: String?
 
     static func from(json: [String: Any], queryParams: [String: String] = [:]) -> SessionEvent? {
         guard let hookEventName = json["hook_event_name"] as? String,
@@ -39,9 +41,26 @@ struct SessionEvent: Sendable {
         let termProgram = queryParams["term"]?.isEmpty == true ? nil : queryParams["term"]
         let termPid = queryParams["pid"].flatMap(Int.init)
         let tty = queryParams["tty"]?.isEmpty == true ? nil : queryParams["tty"]
+        let toolName = json["tool_name"] as? String
+        let toolInput: String?
+        if let input = json["tool_input"] as? [String: Any] {
+            if let command = input["command"] as? String {
+                toolInput = command
+            } else if let filePath = input["file_path"] as? String {
+                toolInput = filePath
+            } else if let data = try? JSONSerialization.data(withJSONObject: input, options: []),
+                      let str = String(data: data, encoding: .utf8) {
+                toolInput = String(str.prefix(200))
+            } else {
+                toolInput = nil
+            }
+        } else {
+            toolInput = nil
+        }
         return SessionEvent(
             event: event, sessionId: sessionId, cwd: cwd, agentType: agentType,
-            termProgram: termProgram, termPid: termPid, tty: tty
+            termProgram: termProgram, termPid: termPid, tty: tty,
+            toolName: toolName, toolInput: toolInput
         )
     }
 
@@ -65,6 +84,7 @@ struct SessionEvent: Sendable {
 final class SessionManager: ObservableObject {
     @Published var sessions: [Session] = []
     private var cleanupTask: Task<Void, Never>?
+    var onResolvePermission: ((String, Bool) -> Void)?
 
     /// Start periodic cleanup of dead sessions (process no longer running).
     func startCleanup() {
@@ -106,6 +126,10 @@ final class SessionManager: ObservableObject {
             }
 
         case .sessionEnd:
+            if let index = sessions.firstIndex(where: { $0.id == event.sessionId }),
+               sessions[index].pendingPermission != nil {
+                resolvePermission(sessionId: event.sessionId, allow: true)
+            }
             withAnimation(.spring(duration: 0.3)) {
                 sessions.removeAll { $0.id == event.sessionId }
             }
@@ -115,8 +139,17 @@ final class SessionManager: ObservableObject {
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
-        case .preToolUse, .postToolUse:
+        case .preToolUse:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
+            sessions[index].status = .thinking
+            updateTermInfo(at: index, from: event)
+
+        case .postToolUse:
+            guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
+            if sessions[index].pendingPermission != nil {
+                sessions[index].pendingPermission = nil
+                onResolvePermission?(event.sessionId, true)
+            }
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
@@ -129,9 +162,22 @@ final class SessionManager: ObservableObject {
         }
     }
 
-    func acknowledge(sessionId: String) {
+    func resolvePermission(sessionId: String, allow: Bool) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
-        sessions[index].status = .idle
+        sessions[index].pendingPermission = nil
+        sessions[index].status = allow ? .thinking : .waiting
+        onResolvePermission?(sessionId, allow)
+    }
+
+    func setPermission(sessionId: String, toolName: String, toolInput: String?) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
+        sessions[index].pendingPermission = PermissionRequest(
+            toolName: toolName,
+            toolInput: toolInput ?? ""
+        )
+        let wasNotWaiting = sessions[index].status != .waiting
+        sessions[index].status = .waiting
+        if wasNotWaiting { SoundPlayer.playAttentionSound() }
     }
 
     private func createSession(from event: SessionEvent) {
