@@ -494,18 +494,42 @@ struct PermissionPromptView: View {
                 )
             }
 
-            HStack(spacing: 6 * scale) {
-                Button("Allow") { onAllow() }
-                    .font(.system(size: 9 * scale, weight: .semibold, design: .rounded))
+            HStack(spacing: 4 * scale) {
+                Button { onAllow() } label: {
+                    HStack(spacing: 3 * scale) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 7 * scale, weight: .bold))
+                        Text("Allow")
+                            .font(.system(size: 9 * scale, weight: .semibold, design: .rounded))
+                    }
                     .foregroundStyle(.green)
-                    .buttonStyle(.plain)
-                    .cursor(.pointingHand)
+                    .padding(.horizontal, 10 * scale)
+                    .padding(.vertical, 5 * scale)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+                            .fill(Color.green.opacity(0.12))
+                    )
+                }
+                .buttonStyle(.plain)
+                .cursor(.pointingHand)
 
-                Button("Deny") { onDeny() }
-                    .font(.system(size: 9 * scale, weight: .semibold, design: .rounded))
+                Button { onDeny() } label: {
+                    HStack(spacing: 3 * scale) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 7 * scale, weight: .bold))
+                        Text("Deny")
+                            .font(.system(size: 9 * scale, weight: .semibold, design: .rounded))
+                    }
                     .foregroundStyle(.secondary)
-                    .buttonStyle(.plain)
-                    .cursor(.pointingHand)
+                    .padding(.horizontal, 10 * scale)
+                    .padding(.vertical, 5 * scale)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+                            .fill(.primary.opacity(0.06))
+                    )
+                }
+                .buttonStyle(.plain)
+                .cursor(.pointingHand)
             }
         }
     }

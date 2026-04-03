@@ -1,6 +1,6 @@
 # agentch
 
-A floating glass pill for macOS that shows your active AI agent sessions and lets you approve permissions directly from the pill.
+A floating pill for macOS that shows your active AI agent sessions and lets you approve permissions directly from the pill.
 
 See at a glance which sessions are working, waiting for input, or need attention — and jump to any session with one click.
 
