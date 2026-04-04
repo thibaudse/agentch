@@ -8,14 +8,6 @@ Supports **Claude Code** and **OpenAI Codex**.
 
 ## Install
 
-### Homebrew
-
-```bash
-brew tap thibaudse/agentch https://github.com/thibaudse/agentch
-brew install --HEAD agentch
-brew services start agentch
-```
-
 ### Script
 
 ```bash
@@ -30,18 +22,13 @@ cd agentch
 make install
 ```
 
+Requires [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
+
 ## Usage
 
-```bash
-agentch
-```
+Open **AgentCh** from Applications or Spotlight. On first launch, it auto-installs hooks for both Claude Code and Codex and starts listening for sessions.
 
-On first launch, agentch auto-installs hooks for both Claude Code and Codex and starts listening for sessions.
-
-**Auto-start on login:**
-```bash
-agentch --launchd
-```
+**Launch at Login:** enable in the AgentCh settings (menu bar icon → Settings).
 
 ### Codex setup
 
@@ -57,8 +44,8 @@ Then start a new Codex session — it should appear in the pill.
 
 Use the menu bar to install/uninstall hooks per agent, or:
 
-- **Install all:** automatically done on launch
-- **Uninstall:** via menu bar → Hooks → Uninstall All
+- **Install all:** automatically done on first launch
+- **Manage:** menu bar icon → Settings → Hooks
 
 ## Requirements
 
