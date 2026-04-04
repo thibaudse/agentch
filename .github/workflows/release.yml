@@ -5,26 +5,28 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build
-        run: swift build -c release
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
-      - name: Package
-        run: |
-          mkdir -p dist
-          cp .build/release/agentch dist/
-          cd dist && tar czf agentch-macos-arm64.tar.gz agentch
-          shasum -a 256 agentch-macos-arm64.tar.gz > agentch-macos-arm64.tar.gz.sha256
+      - name: Build DMG
+        run: make dmg
+
+      - name: Checksum
+        run: shasum -a 256 AgentCh.dmg > AgentCh.dmg.sha256
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/agentch-macos-arm64.tar.gz
-            dist/agentch-macos-arm64.tar.gz.sha256
+            AgentCh.dmg
+            AgentCh.dmg.sha256
           generate_release_notes: true

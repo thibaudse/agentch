@@ -9,7 +9,7 @@ struct agentchApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("agentch", systemImage: "bubble.left.and.bubble.right.fill") {
+        MenuBarExtra("agentch", image: "MenuBarIcon") {
             MenuBarView(sessionManager: appDelegate.sessionManager)
         }
         .menuBarExtraStyle(.menu)

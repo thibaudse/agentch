@@ -12,6 +12,12 @@ Supports **Claude Code** and **OpenAI Codex**.
 
 Grab the latest [AgentCh.dmg](https://github.com/thibaudse/agentch/releases/latest) — open it and drag AgentCh to Applications.
 
+If macOS says the app is "damaged or incomplete", remove the quarantine flag:
+
+```bash
+xattr -cr /Applications/AgentCh.app
+```
+
 ### Script
 
 ```bash
