@@ -1,7 +1,7 @@
 APP_NAME = AgentCh
 APP_DIR = /Applications
 
-.PHONY: build install uninstall clean generate
+.PHONY: build install uninstall clean generate dmg
 
 generate:
 	@which xcodegen > /dev/null || (echo "Install xcodegen: brew install xcodegen" && exit 1)
@@ -20,5 +20,13 @@ uninstall:
 	@rm -rf "$(APP_DIR)/$(APP_NAME).app"
 	@echo "Uninstalled $(APP_NAME).app"
 
+dmg: build
+	@rm -rf build/dmg $(APP_NAME).dmg
+	@mkdir -p build/dmg
+	@cp -R "build/Release/$(APP_NAME).app" build/dmg/
+	@ln -s /Applications build/dmg/Applications
+	@hdiutil create -volname "$(APP_NAME)" -srcfolder build/dmg -ov -format UDBZ "$(APP_NAME).dmg"
+	@echo "Created $(APP_NAME).dmg"
+
 clean:
-	@rm -rf build DerivedData $(APP_NAME).xcodeproj
+	@rm -rf build DerivedData $(APP_NAME).xcodeproj $(APP_NAME).dmg

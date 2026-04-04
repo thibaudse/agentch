@@ -9,7 +9,7 @@ echo "Installing $APP_NAME..."
 
 # Get latest release URL
 DOWNLOAD_URL=$(curl -sL "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep "browser_download_url.*$APP_NAME.app.zip" \
+    | grep "browser_download_url.*$APP_NAME.dmg" \
     | cut -d '"' -f 4)
 
 if [ -z "$DOWNLOAD_URL" ]; then
@@ -27,12 +27,13 @@ if [ -z "$DOWNLOAD_URL" ]; then
     make install
     rm -rf "$TMPDIR"
 else
-    # Download and install .app
+    # Download DMG and install .app
     TMPDIR=$(mktemp -d)
-    curl -sL "$DOWNLOAD_URL" -o "$TMPDIR/$APP_NAME.app.zip"
-    unzip -q "$TMPDIR/$APP_NAME.app.zip" -d "$TMPDIR"
+    curl -sL "$DOWNLOAD_URL" -o "$TMPDIR/$APP_NAME.dmg"
+    hdiutil attach "$TMPDIR/$APP_NAME.dmg" -nobrowse -mountpoint "$TMPDIR/mnt" -quiet
     rm -rf "$INSTALL_DIR/$APP_NAME.app"
-    cp -R "$TMPDIR/$APP_NAME.app" "$INSTALL_DIR/$APP_NAME.app"
+    cp -R "$TMPDIR/mnt/$APP_NAME.app" "$INSTALL_DIR/$APP_NAME.app"
+    hdiutil detach "$TMPDIR/mnt" -quiet
     rm -rf "$TMPDIR"
 fi
 

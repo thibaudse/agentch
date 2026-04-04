@@ -2,6 +2,7 @@
 *.xcodeproj/
 DerivedData/
 build/
+*.dmg
 
 # Old SPM artifacts
 .build/
