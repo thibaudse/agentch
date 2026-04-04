@@ -1,36 +1,24 @@
-PREFIX ?= /usr/local
-BINDIR = $(PREFIX)/bin
-HOOK_DIR = $(HOME)/.agentch
+APP_NAME = AgentCh
+APP_DIR = /Applications
 
-.PHONY: build install uninstall clean
+.PHONY: build install uninstall clean generate
 
-build:
-	swift build -c release
+generate:
+	@which xcodegen > /dev/null || (echo "Install xcodegen: brew install xcodegen" && exit 1)
+	xcodegen generate
+
+build: generate
+	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Release build SYMROOT=build 2>&1 | tail -3
 
 install: build
-	@mkdir -p $(BINDIR)
-	@cp .build/release/agentch $(BINDIR)/agentch
-	@echo "Installed agentch to $(BINDIR)/agentch"
-	@echo "Run 'agentch' to start, or 'make launchd' to auto-start on login"
+	@rm -rf "$(APP_DIR)/$(APP_NAME).app"
+	@cp -R "build/Release/$(APP_NAME).app" "$(APP_DIR)/$(APP_NAME).app"
+	@echo "Installed $(APP_NAME).app to $(APP_DIR)/"
+	@echo "Open from Applications or Spotlight."
 
 uninstall:
-	@rm -f $(BINDIR)/agentch
-	@rm -rf $(HOOK_DIR)
-	@launchctl bootout gui/$$(id -u) ~/Library/LaunchAgents/com.agentch.plist 2>/dev/null || true
-	@rm -f ~/Library/LaunchAgents/com.agentch.plist
-	@echo "Uninstalled agentch"
-
-launchd:
-	@mkdir -p ~/Library/LaunchAgents
-	@sed "s|__BINDIR__|$(BINDIR)|g" support/com.agentch.plist > ~/Library/LaunchAgents/com.agentch.plist
-	@launchctl bootout gui/$$(id -u) ~/Library/LaunchAgents/com.agentch.plist 2>/dev/null || true
-	@launchctl bootstrap gui/$$(id -u) ~/Library/LaunchAgents/com.agentch.plist
-	@echo "agentch will start automatically on login"
-
-unlaunchd:
-	@launchctl bootout gui/$$(id -u) ~/Library/LaunchAgents/com.agentch.plist 2>/dev/null || true
-	@rm -f ~/Library/LaunchAgents/com.agentch.plist
-	@echo "Removed agentch from login items"
+	@rm -rf "$(APP_DIR)/$(APP_NAME).app"
+	@echo "Uninstalled $(APP_NAME).app"
 
 clean:
-	swift package clean
+	@rm -rf build DerivedData $(APP_NAME).xcodeproj

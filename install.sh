@@ -2,46 +2,41 @@
 set -e
 
 REPO="thibaudse/agentch"
-INSTALL_DIR="/usr/local/bin"
+APP_NAME="AgentCh"
+INSTALL_DIR="/Applications"
 
-# Detect architecture
-ARCH=$(uname -m)
-if [ "$ARCH" = "arm64" ]; then
-    ASSET="agentch-macos-arm64.tar.gz"
-elif [ "$ARCH" = "x86_64" ]; then
-    ASSET="agentch-macos-x86_64.tar.gz"
-else
-    echo "Unsupported architecture: $ARCH"
-    exit 1
-fi
-
-echo "Installing agentch..."
+echo "Installing $APP_NAME..."
 
 # Get latest release URL
 DOWNLOAD_URL=$(curl -sL "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep "browser_download_url.*$ASSET" \
+    | grep "browser_download_url.*$APP_NAME.app.zip" \
     | cut -d '"' -f 4)
 
 if [ -z "$DOWNLOAD_URL" ]; then
     echo "No release found. Building from source..."
+
+    # Check for xcodegen
+    if ! command -v xcodegen &> /dev/null; then
+        echo "Installing xcodegen..."
+        brew install xcodegen
+    fi
+
     TMPDIR=$(mktemp -d)
     git clone --depth 1 "https://github.com/$REPO.git" "$TMPDIR/agentch"
     cd "$TMPDIR/agentch"
-    swift build -c release
-    sudo mkdir -p "$INSTALL_DIR"
-    sudo cp .build/release/agentch "$INSTALL_DIR/agentch"
+    make install
     rm -rf "$TMPDIR"
 else
-    # Download and install binary
+    # Download and install .app
     TMPDIR=$(mktemp -d)
-    curl -sL "$DOWNLOAD_URL" | tar xz -C "$TMPDIR"
-    sudo mkdir -p "$INSTALL_DIR"
-    sudo mv "$TMPDIR/agentch" "$INSTALL_DIR/agentch"
+    curl -sL "$DOWNLOAD_URL" -o "$TMPDIR/$APP_NAME.app.zip"
+    unzip -q "$TMPDIR/$APP_NAME.app.zip" -d "$TMPDIR"
+    rm -rf "$INSTALL_DIR/$APP_NAME.app"
+    cp -R "$TMPDIR/$APP_NAME.app" "$INSTALL_DIR/$APP_NAME.app"
     rm -rf "$TMPDIR"
 fi
 
-echo "Installed to $INSTALL_DIR/agentch"
+echo "Installed to $INSTALL_DIR/$APP_NAME.app"
 echo ""
-echo "Run 'agentch' to start."
-echo "Run 'agentch --launchd' to auto-start on login."
-echo "Run 'agentch --unlaunchd' to remove from login items."
+echo "Open AgentCh from Applications or Spotlight."
+echo "Enable 'Launch at Login' in the app's settings."

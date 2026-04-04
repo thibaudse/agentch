@@ -1,4 +1,8 @@
-.build/
-.swiftpm/
+# Xcode
 *.xcodeproj/
 DerivedData/
+build/
+
+# Old SPM artifacts
+.build/
+.swiftpm/
