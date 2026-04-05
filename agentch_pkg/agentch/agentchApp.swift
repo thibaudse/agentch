@@ -164,6 +164,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private nonisolated func requestAccessibilityIfNeeded() {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         let trusted = AXIsProcessTrustedWithOptions(options)
+        if !trusted {
+            // Poll until the user grants accessibility, then relaunch
+            DispatchQueue.global(qos: .utility).async {
+                while !AXIsProcessTrusted() {
+                    Thread.sleep(forTimeInterval: 1)
+                }
+                DispatchQueue.main.async {
+                    let url = Bundle.main.bundleURL
+                    let config = NSWorkspace.OpenConfiguration()
+                    config.createsNewApplicationInstance = true
+                    NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in
+                        exit(0)
+                    }
+                }
+            }
+        }
     }
 
     private func autoInstallHooksIfNeeded() {
