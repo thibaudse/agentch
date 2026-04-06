@@ -11,6 +11,7 @@ struct PillGroupView: View {
     @State private var squish: CGFloat = 1.0
     @State private var badgePop: CGFloat = 1.0
     @State private var expandedRowId: String?
+    @State private var contentVisible = false
     @State private var pageOffset: Int = 0
     private var scale: CGFloat { CGFloat(pillScale) }
     private var mascotSize: CGFloat { 16 * scale }
@@ -96,6 +97,17 @@ struct PillGroupView: View {
                 peek()
             }
         }
+        .onChange(of: isExpanded) { old, new in
+            if new && !old {
+                // Pill just expanded: delay content appearance
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    guard isExpanded else { return }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        contentVisible = true
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Badge pop
@@ -134,8 +146,14 @@ struct PillGroupView: View {
         peekTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(peekDurationSetting))
             guard !Task.isCancelled else { return }
-            withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
-                isPeeking = false
+            guard !isHovering else { return }
+            withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
+                contentVisible = false
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
+                    isPeeking = false
+                }
             }
         }
     }
@@ -194,6 +212,7 @@ struct PillGroupView: View {
             let beforeCount = isExpanded ? clampedOffset : 0
             let afterCount = isExpanded ? max(0, sessions.count - pageEnd) : 0
 
+
             // "N more" at top to go back
             if isExpanded && beforeCount > 0 {
                 Button {
@@ -218,14 +237,21 @@ struct PillGroupView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.bottom, 2 * scale)
+                .blur(radius: contentVisible ? 0 : 4)
+                .opacity(contentVisible ? 1 : 0)
                 .transition(.blurReplace)
             }
 
             ForEach(Array(visibleSessions.enumerated()), id: \.element.id) { index, session in
                 let isFirst = expandsDown ? index == 0 : index == visibleSessions.count - 1
 
-                if isFirst || isExpanded {
-                    sessionRow(session: session, isFirst: isFirst)
+                if isFirst {
+                    sessionRow(session: session, isFirst: true)
+                        .transition(.blurReplace)
+                } else if isExpanded {
+                    sessionRow(session: session, isFirst: false)
+                        .blur(radius: contentVisible ? 0 : 4)
+                        .opacity(contentVisible ? 1 : 0)
                         .transition(.blurReplace)
                 }
             }
@@ -254,6 +280,8 @@ struct PillGroupView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 2 * scale)
+                .blur(radius: contentVisible ? 0 : 4)
+                .opacity(contentVisible ? 1 : 0)
                 .transition(.blurReplace)
             }
         }
@@ -270,15 +298,25 @@ struct PillGroupView: View {
         .contentShape(Rectangle())
         .onHover { hovering in
             pillPosition.isMouseOverPill = hovering
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
-                isHovering = hovering
-            }
             if hovering {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
+                    isHovering = true
+                }
                 cancelPeek()
                 NSCursor.openHand.push()
             } else {
                 NSCursor.pop()
                 pageOffset = 0
+                // 1. Hide content now
+                withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
+                    contentVisible = false
+                }
+                // 2. Shrink pill after 200ms
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
+                        isHovering = false
+                    }
+                }
             }
         }
         .padding(-20)
@@ -291,6 +329,7 @@ struct PillGroupView: View {
     @ViewBuilder
     private func sessionRow(session: Session, isFirst: Bool) -> some View {
         let isRowExpanded = isExpanded && expandedRowId == session.id
+        let showContent = isRowExpanded
         let hasAction = session.pendingPermission != nil || session.pendingQuestion != nil
 
         VStack(alignment: .leading, spacing: 0) {
@@ -304,57 +343,62 @@ struct PillGroupView: View {
                 )
 
                 if isExpanded {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(session.label)
-                            .font(.system(size: 11 * scale, weight: .medium, design: .rounded))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                    Group {
 
-                        if let msg = session.lastAssistantMessage, !msg.isEmpty, !hasAction, session.status == .waiting {
-                            Text(msg.components(separatedBy: .newlines).last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? statusLabel(session.status))
-                                .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
-                                .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(session.label)
+                                .font(.system(size: 11 * scale, weight: .medium, design: .rounded))
+                                .foregroundStyle(.primary)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
-                        } else {
-                            Text(statusLabel(session.status))
-                                .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
 
-                    Spacer(minLength: 4 * scale)
-
-                    // Action indicator when row is collapsed but has pending permission
-                    if hasAction && !isRowExpanded {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .font(.system(size: 10 * scale))
-                            .foregroundStyle(.orange)
-                            .transition(.blurReplace)
-                    }
-
-                    // Acknowledge button for non-permission waiting
-                    if session.status == .waiting && session.pendingPermission == nil {
-                        Button {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                sessionManager.sessions[sessionManager.sessions.firstIndex(where: { $0.id == session.id })!].status = .idle
+                            if let msg = session.lastAssistantMessage, !msg.isEmpty, !hasAction, session.status == .waiting {
+                                Text(msg.components(separatedBy: .newlines).last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? statusLabel(session.status))
+                                    .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            } else {
+                                Text(statusLabel(session.status))
+                                    .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
+                                    .foregroundStyle(.secondary)
                             }
-                        } label: {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 7 * scale, weight: .bold))
-                                .foregroundStyle(.orange.opacity(0.6))
-                                .frame(width: 18 * scale, height: 18 * scale)
-                                .background(Circle().fill(.orange.opacity(0.1)))
                         }
-                        .buttonStyle(.plain)
+
+                        Spacer(minLength: 4 * scale)
+
+                        // Action indicator when row is collapsed but has pending permission
+                        if hasAction && !isRowExpanded {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .font(.system(size: 10 * scale))
+                                .foregroundStyle(.orange)
+                                .transition(.blurReplace)
+                        }
+
+                        // Acknowledge button for non-permission waiting
+                        if session.status == .waiting && session.pendingPermission == nil {
+                            Button {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    sessionManager.sessions[sessionManager.sessions.firstIndex(where: { $0.id == session.id })!].status = .idle
+                                }
+                            } label: {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 7 * scale, weight: .bold))
+                                    .foregroundStyle(.orange.opacity(0.6))
+                                    .frame(width: 18 * scale, height: 18 * scale)
+                                    .background(Circle().fill(.orange.opacity(0.1)))
+                            }
+                            .buttonStyle(.plain)
+                            .transition(.blurReplace)
+                        }
+
+                        JumpButton {
+                            TerminalFocuser.focus(session: session)
+                        }
                         .transition(.blurReplace)
                     }
-
-                    JumpButton {
-                        TerminalFocuser.focus(session: session)
-                    }
-                    .transition(.blurReplace)
+                    .blur(radius: contentVisible ? 0 : 4)
+                    .opacity(contentVisible ? 1 : 0)
                 }
 
                 if isFirst && !isExpanded && sessionManager.sessions.count > 1 {
@@ -372,7 +416,7 @@ struct PillGroupView: View {
             }
 
             // Last assistant message (when row expanded and no pending action)
-            if isRowExpanded, !hasAction, session.status == .waiting,
+            if showContent, !hasAction, session.status == .waiting,
                let msg = session.lastAssistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
                !msg.isEmpty {
                 ScrollView {
@@ -389,17 +433,14 @@ struct PillGroupView: View {
                     RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
                         .fill(.primary.opacity(0.06))
                 )
-                .padding(6 * scale)
-                .background(
-                    RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
-                        .fill(.primary.opacity(0.06))
-                )
                 .padding(.top, 6 * scale)
+                .blur(radius: contentVisible ? 0 : 4)
+                .opacity(contentVisible ? 1 : 0)
                 .transition(.blurReplace)
             }
 
             // Permission prompt
-            if isRowExpanded, let permission = session.pendingPermission {
+            if showContent, let permission = session.pendingPermission {
                 PermissionPromptView(
                     permission: permission,
                     scale: scale,
@@ -418,11 +459,13 @@ struct PillGroupView: View {
                 .padding(.leading, 2 * scale)
                 .padding(.top, 6 * scale)
                 .padding(.bottom, 4 * scale)
+                .blur(radius: contentVisible ? 0 : 4)
+                .opacity(contentVisible ? 1 : 0)
                 .transition(.blurReplace)
             }
 
             // Question prompt
-            if isRowExpanded, let question = session.pendingQuestion {
+            if showContent, let question = session.pendingQuestion {
                 QuestionPromptView(
                     question: question,
                     scale: scale,
@@ -441,6 +484,8 @@ struct PillGroupView: View {
                 .padding(.leading, 2 * scale)
                 .padding(.top, 6 * scale)
                 .padding(.bottom, 4 * scale)
+                .blur(radius: contentVisible ? 0 : 4)
+                .opacity(contentVisible ? 1 : 0)
                 .transition(.blurReplace)
             }
         }
@@ -453,6 +498,7 @@ struct PillGroupView: View {
                     style: .continuous
                 )
                 .fill(.primary.opacity(isRowExpanded ? 0.1 : 0.07))
+                .opacity(contentVisible ? 1 : 0)
             }
         }
         .contentShape(Rectangle())
