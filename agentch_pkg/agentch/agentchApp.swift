@@ -40,7 +40,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
             self?.eventServer?.resolveDecision(sessionId: sessionId, allow: allow)
         }
         sessionManager.onResolveQuestion = { [weak self] sessionId, answer in
-            self?.eventServer?.resolveQuestion(sessionId: sessionId, answer: answer)
+            // Check if this was an AskUserQuestion (PermissionRequest) or a real Elicitation
+            if let session = self?.sessionManager.sessions.first(where: { $0.id == sessionId }),
+               session.isAskUserQuestion {
+                // AskUserQuestion is a PermissionRequest — allow it
+                self?.eventServer?.resolveDecision(sessionId: sessionId, allow: answer != nil)
+            } else {
+                self?.eventServer?.resolveQuestion(sessionId: sessionId, answer: answer)
+            }
         }
         eventServer?.onDecisionExpired = { [weak self] sessionId in
             Task { @MainActor in
@@ -103,11 +110,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                     Task { @MainActor in
                         guard let self else { return }
                         self.sessionManager.handleEvent(event)
-                        if event.event == .elicitation {
+                        if event.event == .elicitation || event.toolName == "AskUserQuestion" {
                             self.sessionManager.setQuestion(
                                 sessionId: event.sessionId,
                                 question: event.question ?? "Claude is asking a question",
-                                options: event.questionOptions ?? []
+                                options: event.questionOptions ?? [],
+                                isAskUserQuestion: event.toolName == "AskUserQuestion"
                             )
                         } else {
                             self.sessionManager.setPermission(

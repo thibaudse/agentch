@@ -35,6 +35,7 @@ struct Session: Identifiable, Sendable {
     var tabTitle: String?
     var pendingPermission: PermissionRequest?
     var pendingQuestion: PendingQuestion?
+    var isAskUserQuestion = false
 
     static let defaultBranches: Set<String> = ["main", "master"]
 

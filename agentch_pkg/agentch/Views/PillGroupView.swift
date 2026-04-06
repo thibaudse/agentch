@@ -10,7 +10,7 @@ struct PillGroupView: View {
     @State private var peekTask: Task<Void, Never>?
     @State private var squish: CGFloat = 1.0
     @State private var badgePop: CGFloat = 1.0
-    @State private var hoveredRowId: String?
+    @State private var expandedRowId: String?
     @State private var pageOffset: Int = 0
     private var scale: CGFloat { CGFloat(pillScale) }
     private var mascotSize: CGFloat { 16 * scale }
@@ -85,6 +85,7 @@ struct PillGroupView: View {
         .onChange(of: sessionsSnapshot) { _, _ in
             peek()
             triggerSquish()
+            autoExpandTopAction()
         }
         .onChange(of: sessionManager.sessions.count) { _, _ in
             triggerSquish()
@@ -146,6 +147,15 @@ struct PillGroupView: View {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) {
                 isPeeking = false
             }
+        }
+    }
+
+    // MARK: - Auto-expand
+
+    private func autoExpandTopAction() {
+        let topAction = sortedSessions.first { $0.pendingPermission != nil || $0.pendingQuestion != nil }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            expandedRowId = topAction?.id
         }
     }
 
@@ -242,9 +252,8 @@ struct PillGroupView: View {
         }
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: hoveredRowId)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: expandedRowId)
         .background(pillBackground)
-        .clipShape(.rect(cornerRadius: 20 * scale, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 20 * scale, style: .continuous)
                 .stroke(.primary.opacity(0.06), lineWidth: 0.5)
@@ -273,8 +282,7 @@ struct PillGroupView: View {
 
     @ViewBuilder
     private func sessionRow(session: Session, isFirst: Bool) -> some View {
-        let isRowHovered = hoveredRowId == session.id
-        let isRowExpanded = isExpanded && isRowHovered
+        let isRowExpanded = isExpanded && expandedRowId == session.id
         let hasAction = session.pendingPermission != nil || session.pendingQuestion != nil
 
         VStack(alignment: .leading, spacing: 0) {
@@ -401,14 +409,14 @@ struct PillGroupView: View {
                     cornerRadius: 14 * scale,
                     style: .continuous
                 )
-                .fill(.primary.opacity(hasAction && isRowHovered ? 0.1 : 0.07))
+                .fill(.primary.opacity(isRowExpanded ? 0.1 : 0.07))
             }
         }
-        .onHover { hovering in
-            if hasAction {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    hoveredRowId = hovering ? session.id : nil
-                }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard hasAction else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                expandedRowId = expandedRowId == session.id ? nil : session.id
             }
         }
     }

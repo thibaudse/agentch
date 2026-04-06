@@ -71,7 +71,7 @@ struct SessionEvent: Sendable {
         } else {
             toolInput = nil
         }
-        // Parse question for Elicitation events
+        // Parse question for Elicitation events and AskUserQuestion tool
         let question: String?
         var questionOptions: [[String: Any]]?
         var questionMultiSelect: Bool?
@@ -81,6 +81,13 @@ struct SessionEvent: Sendable {
                 ?? (json["description"] as? String)
             questionOptions = json["options"] as? [[String: Any]]
             questionMultiSelect = json["multiSelect"] as? Bool
+        } else if toolName == "AskUserQuestion",
+                  let input = json["tool_input"] as? [String: Any],
+                  let questions = input["questions"] as? [[String: Any]],
+                  let first = questions.first {
+            question = first["question"] as? String
+            questionOptions = first["options"] as? [[String: Any]]
+            questionMultiSelect = first["multiSelect"] as? Bool
         } else {
             question = nil
         }
@@ -277,9 +284,10 @@ final class SessionManager: ObservableObject {
         if wasNotWaiting { SoundPlayer.playAttentionSound() }
     }
 
-    func setQuestion(sessionId: String, question: String, options: [QuestionOption] = []) {
+    func setQuestion(sessionId: String, question: String, options: [QuestionOption] = [], isAskUserQuestion: Bool = false) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
         sessions[index].pendingQuestion = PendingQuestion(question: question, options: options)
+        sessions[index].isAskUserQuestion = isAskUserQuestion
         let wasNotWaiting = sessions[index].status != .waiting
         sessions[index].status = .waiting
         if wasNotWaiting { SoundPlayer.playAttentionSound() }
