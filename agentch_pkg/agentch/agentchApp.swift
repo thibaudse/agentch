@@ -161,81 +161,60 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
     }
 
+    private static let playerBundleIDs: Set<String> = [
+        // Browsers
+        "com.apple.Safari", "com.google.Chrome", "org.mozilla.firefox",
+        "company.thebrowser.Browser", "com.microsoft.edgemac",
+        "com.brave.Browser", "com.operasoftware.Opera",
+        // Media players
+        "com.apple.QuickTimePlayerX", "com.apple.TV", "org.videolan.vlc",
+        "com.colliderli.iina", "io.mpv", "tv.plex.player",
+    ]
+
     private func observeFullScreen() {
-        // Load MediaRemote via dlopen
-        guard let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_LAZY) else {
-            NSLog("[agentch] MediaRemote dlopen failed"); return
+        let check = { [weak self] in
+            self?.updateFullScreenVisibility()
         }
-        guard let pIsPlaying = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying"),
-              let pGetPID = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationPID") else {
-            NSLog("[agentch] MediaRemote symbols not found"); return
-        }
-        NSLog("[agentch] Full-screen player detection active")
-
-        typealias IsPlayingFn = @convention(c) (DispatchQueue, @escaping @Sendable (Bool) -> Void) -> Void
-        typealias NowPlayingPIDFn = @convention(c) (DispatchQueue, @escaping @Sendable (Int32) -> Void) -> Void
-
-        let getIsPlaying = unsafeBitCast(pIsPlaying, to: IsPlayingFn.self)
-        let getPID = unsafeBitCast(pGetPID, to: NowPlayingPIDFn.self)
-
-        // Check every 2 seconds on a background thread to avoid blocking main
-        let checkFullScreen = { [weak self] in
-            nonisolated(unsafe) var playing = false
-            nonisolated(unsafe) var playerPID: Int32 = 0
-
-            let semaphore = DispatchSemaphore(value: 0)
-            getIsPlaying(DispatchQueue.global()) { isPlaying in
-                playing = isPlaying
-                semaphore.signal()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil, queue: .main) { _ in check() }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil, queue: .main) { _ in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { check() }
             }
-            semaphore.wait()
+    }
 
-            guard playing else { return false }
-
-            let sem2 = DispatchSemaphore(value: 0)
-            getPID(DispatchQueue.global()) { pid in
-                playerPID = pid
-                sem2.signal()
-            }
-            sem2.wait()
-
-            guard playerPID > 0 else { return false }
-            return self?.isPlayerFullScreen(pid: playerPID) ?? false
+    private func updateFullScreenVisibility() {
+        guard let panel else { return }
+        guard let frontApp = NSWorkspace.shared.frontmostApplication,
+              let bundleID = frontApp.bundleIdentifier,
+              Self.playerBundleIDs.contains(bundleID) else {
+            if !panel.isVisible { panel.orderFrontRegardless() }
+            return
         }
 
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            while self != nil {
-                Thread.sleep(forTimeInterval: 2)
-                let shouldHide = checkFullScreen()
-                Task { @MainActor [weak self] in
-                    guard let panel = self?.panel else { return }
-                    if shouldHide && panel.isVisible {
-                        panel.orderOut(nil)
-                    } else if !shouldHide && !panel.isVisible {
-                        panel.orderFrontRegardless()
-                    }
+        let screenFrame = NSScreen.main?.frame ?? .zero
+        var isFullScreen = false
+        if let wl = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] {
+            for w in wl {
+                guard let wPid = w[kCGWindowOwnerPID as String] as? Int32,
+                      wPid == frontApp.processIdentifier,
+                      let b = w[kCGWindowBounds as String] as? [String: Any] else { continue }
+                let width = CGFloat((b["Width"] as? Int) ?? 0)
+                let height = CGFloat((b["Height"] as? Int) ?? 0)
+                if width >= screenFrame.width && height >= screenFrame.height - 50 {
+                    isFullScreen = true
+                    break
                 }
             }
         }
-    }
 
-    private nonisolated func isPlayerFullScreen(pid: Int32) -> Bool {
-        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return false }
-        let screenFrame = NSScreen.main?.frame ?? .zero
-
-        for window in windowList {
-            guard let wPid = window[kCGWindowOwnerPID as String] as? Int32,
-                  wPid == pid,
-                  let bounds = window[kCGWindowBounds as String] as? [String: Any] else { continue }
-            let w = (bounds["Width"] as? Int).map(CGFloat.init) ?? (bounds["Width"] as? CGFloat) ?? 0
-            let h = (bounds["Height"] as? Int).map(CGFloat.init) ?? (bounds["Height"] as? CGFloat) ?? 0
-            // Full-screen windows cover the entire screen including menu bar
-            // Allow small tolerance for the menu bar (< 50px difference)
-            if w >= screenFrame.width && h >= screenFrame.height - 50 {
-                return true
-            }
+        if isFullScreen && panel.isVisible {
+            panel.orderOut(nil)
+        } else if !isFullScreen && !panel.isVisible {
+            panel.orderFrontRegardless()
         }
-        return false
     }
 
     private func autoInstallHooksIfNeeded() {
