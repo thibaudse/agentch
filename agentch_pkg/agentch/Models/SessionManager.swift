@@ -26,6 +26,8 @@ struct SessionEvent: Sendable {
     var question: String?
     var questionOptions: [QuestionOption]?
     var questionMultiSelect: Bool?
+    var lastAssistantMessage: String?
+    var permissionSuggestions: [PermissionSuggestion]?
 
     static func from(json: [String: Any], queryParams: [String: String] = [:]) -> SessionEvent? {
         guard let hookEventName = json["hook_event_name"] as? String,
@@ -92,6 +94,36 @@ struct SessionEvent: Sendable {
             question = nil
         }
 
+        // Parse last_assistant_message from Stop events
+        let lastAssistantMessage = hookEventName == "Stop"
+            ? json["last_assistant_message"] as? String
+            : nil
+
+        // Parse permission_suggestions from PermissionRequest events
+        let permissionSuggestions: [PermissionSuggestion]?
+        if hookEventName == "PermissionRequest",
+           let suggestions = json["permission_suggestions"] as? [[String: Any]] {
+            permissionSuggestions = suggestions.compactMap { s in
+                let type = s["type"] as? String ?? ""
+                let behavior = s["behavior"] as? String
+                let mode = s["mode"] as? String
+                // Build human-readable label
+                let label: String
+                if type == "setMode", let mode {
+                    label = "Set mode: \(mode)"
+                } else if let rules = s["rules"] as? [[String: Any]], let first = rules.first {
+                    let tool = first["toolName"] as? String ?? ""
+                    let rule = first["ruleContent"] as? String ?? ""
+                    label = "\(behavior ?? "allow") \(tool) \(rule)"
+                } else {
+                    label = type
+                }
+                return PermissionSuggestion(type: type, behavior: behavior, mode: mode, label: label)
+            }
+        } else {
+            permissionSuggestions = nil
+        }
+
         return SessionEvent(
             event: event, sessionId: sessionId, cwd: cwd, agentType: agentType,
             termProgram: termProgram, termPid: termPid, tty: tty,
@@ -101,7 +133,9 @@ struct SessionEvent: Sendable {
                 guard let label = opt["label"] as? String else { return nil }
                 return QuestionOption(label: label)
             },
-            questionMultiSelect: questionMultiSelect
+            questionMultiSelect: questionMultiSelect,
+            lastAssistantMessage: lastAssistantMessage,
+            permissionSuggestions: permissionSuggestions
         )
     }
 
@@ -232,7 +266,17 @@ final class SessionManager: ObservableObject {
             sessions[index].status = .thinking
             updateTermInfo(at: index, from: event)
 
-        case .stop, .permissionRequest:
+        case .stop:
+            guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
+            let wasNotWaiting = sessions[index].status != .waiting
+            sessions[index].status = .waiting
+            if let msg = event.lastAssistantMessage {
+                sessions[index].lastAssistantMessage = msg
+            }
+            updateTermInfo(at: index, from: event)
+            if wasNotWaiting { SoundPlayer.playAttentionSound() }
+
+        case .permissionRequest:
             guard let index = sessions.firstIndex(where: { $0.id == event.sessionId }) else { return }
             let wasNotWaiting = sessions[index].status != .waiting
             sessions[index].status = .waiting
@@ -272,12 +316,13 @@ final class SessionManager: ObservableObject {
         onResolvePermission?(sessionId, allow)
     }
 
-    func setPermission(sessionId: String, toolName: String, toolInput: String?, filePath: String?) {
+    func setPermission(sessionId: String, toolName: String, toolInput: String?, filePath: String?, suggestions: [PermissionSuggestion] = []) {
         guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
         sessions[index].pendingPermission = PermissionRequest(
             toolName: toolName,
             toolInput: toolInput ?? "",
-            filePath: filePath
+            filePath: filePath,
+            suggestions: suggestions
         )
         let wasNotWaiting = sessions[index].status != .waiting
         sessions[index].status = .waiting

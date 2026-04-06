@@ -122,7 +122,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                                 sessionId: event.sessionId,
                                 toolName: event.toolName ?? "Permission",
                                 toolInput: event.toolInput,
-                                filePath: event.toolFilePath
+                                filePath: event.toolFilePath,
+                                suggestions: event.permissionSuggestions ?? []
                             )
                         }
                     }

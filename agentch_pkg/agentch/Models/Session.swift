@@ -36,6 +36,7 @@ struct Session: Identifiable, Sendable {
     var pendingPermission: PermissionRequest?
     var pendingQuestion: PendingQuestion?
     var isAskUserQuestion = false
+    var lastAssistantMessage: String?
 
     static let defaultBranches: Set<String> = ["main", "master"]
 
@@ -58,10 +59,18 @@ struct Session: Identifiable, Sendable {
     }
 }
 
+struct PermissionSuggestion: Sendable {
+    let type: String       // "addRules", "setMode", etc.
+    let behavior: String?  // "allow", "deny"
+    let mode: String?      // for setMode
+    let label: String      // human-readable summary
+}
+
 struct PermissionRequest: Sendable {
     let toolName: String
     let toolInput: String
     let filePath: String?
+    var suggestions: [PermissionSuggestion] = []
 }
 
 struct QuestionOption: Sendable {

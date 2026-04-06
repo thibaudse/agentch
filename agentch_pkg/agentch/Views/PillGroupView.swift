@@ -155,7 +155,14 @@ struct PillGroupView: View {
     private func autoExpandTopAction() {
         let topAction = sortedSessions.first { $0.pendingPermission != nil || $0.pendingQuestion != nil }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            expandedRowId = topAction?.id
+            // Auto-expand the top pending action, or collapse if none
+            if let id = topAction?.id {
+                expandedRowId = id
+            } else if let expandedId = expandedRowId,
+                      let session = sessionManager.sessions.first(where: { $0.id == expandedId }),
+                      session.pendingPermission == nil && session.pendingQuestion == nil {
+                expandedRowId = nil
+            }
         }
     }
 
@@ -252,6 +259,7 @@ struct PillGroupView: View {
         }
         .padding(.horizontal, hPadding)
         .padding(.vertical, vPadding)
+        .frame(maxWidth: (NSScreen.main?.frame.width ?? 1920) / 3)
         .animation(.spring(response: 0.35, dampingFraction: 0.7), value: expandedRowId)
         .background(pillBackground)
         .overlay(
@@ -303,9 +311,17 @@ struct PillGroupView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
 
-                        Text(statusLabel(session.status))
-                            .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
-                            .foregroundStyle(.secondary)
+                        if let msg = session.lastAssistantMessage, !msg.isEmpty, !hasAction, session.status == .waiting {
+                            Text(msg.components(separatedBy: .newlines).last(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) ?? statusLabel(session.status))
+                                .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        } else {
+                            Text(statusLabel(session.status))
+                                .font(.system(size: 9 * scale, weight: .regular, design: .rounded))
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Spacer(minLength: 4 * scale)
@@ -355,7 +371,34 @@ struct PillGroupView: View {
                 }
             }
 
-            // Permission prompt only shown when this specific row is hovered
+            // Last assistant message (when row expanded and no pending action)
+            if isRowExpanded, !hasAction, session.status == .waiting,
+               let msg = session.lastAssistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !msg.isEmpty {
+                ScrollView {
+                    Text(LocalizedStringKey(msg))
+                        .font(.system(size: 9 * scale, design: .rounded))
+                        .foregroundStyle(.primary.opacity(0.8))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                }
+                .frame(idealHeight: 120 * scale)
+                .frame(maxWidth: maxPermissionWidth)
+                .padding(6 * scale)
+                .background(
+                    RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+                        .fill(.primary.opacity(0.06))
+                )
+                .padding(6 * scale)
+                .background(
+                    RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+                        .fill(.primary.opacity(0.06))
+                )
+                .padding(.top, 6 * scale)
+                .transition(.blurReplace)
+            }
+
+            // Permission prompt
             if isRowExpanded, let permission = session.pendingPermission {
                 PermissionPromptView(
                     permission: permission,
@@ -414,7 +457,9 @@ struct PillGroupView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            guard hasAction else { return }
+            let hasMessage = session.status == .waiting && session.lastAssistantMessage != nil && !session.lastAssistantMessage!.isEmpty
+            let hasContent = hasAction || hasMessage
+            guard hasContent else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 expandedRowId = expandedRowId == session.id ? nil : session.id
             }
@@ -469,13 +514,17 @@ struct PermissionPromptView: View {
                 .font(.system(size: 10 * scale, weight: .bold, design: .rounded))
                 .foregroundStyle(Color(red: 0.85, green: 0.5, blue: 0.0))
 
-            // File path above code block
+            // File path above code block (clickable to open)
             if let filePath = permission.filePath {
                 Text(filePath)
                     .font(.system(size: 8 * scale, design: .monospaced))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.blue.opacity(0.8))
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .onTapGesture {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: filePath))
+                    }
+                    .cursor(.pointingHand)
             }
 
             // Code block — diff view for edits, plain text for others
@@ -540,6 +589,28 @@ struct PermissionPromptView: View {
                 }
                 .buttonStyle(.plain)
                 .cursor(.pointingHand)
+            }
+
+            // Permission suggestions
+            if !permission.suggestions.isEmpty {
+                VStack(alignment: .leading, spacing: 2 * scale) {
+                    ForEach(Array(permission.suggestions.enumerated()), id: \.offset) { _, suggestion in
+                        Button { onAllow() } label: {
+                            Text(suggestion.label)
+                                .font(.system(size: 9 * scale, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.primary.opacity(0.8))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 8 * scale)
+                                .padding(.vertical, 5 * scale)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+                                        .fill(.primary.opacity(0.08))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .cursor(.pointingHand)
+                    }
+                }
             }
         }
     }
