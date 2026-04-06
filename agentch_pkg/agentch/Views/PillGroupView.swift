@@ -13,6 +13,7 @@ struct PillGroupView: View {
     @State private var expandedRowId: String?
     @State private var contentVisible = false
     @State private var pageOffset: Int = 0
+    @State private var actionCooldown = false
     private var scale: CGFloat { CGFloat(pillScale) }
     private var mascotSize: CGFloat { 16 * scale }
     private var hPadding: CGFloat { 14 * scale }
@@ -84,7 +85,7 @@ struct PillGroupView: View {
         .background(ParticleTrailView(pillPosition: pillPosition))
         .background(Color.white.opacity(0.0001))
         .onChange(of: sessionsSnapshot) { _, _ in
-            peek()
+            if !actionCooldown { peek() }
             triggerSquish()
             autoExpandTopAction()
         }
@@ -168,12 +169,32 @@ struct PillGroupView: View {
         }
     }
 
+    // MARK: - Action cooldown
+
+    private func startActionCooldown() {
+        actionCooldown = true
+        cancelPeek()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            actionCooldown = false
+            cancelPeek()
+            if !pillPosition.isMouseOverPill {
+                withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
+                    contentVisible = false
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
+                        isHovering = false
+                    }
+                }
+            }
+        }
+    }
+
     // MARK: - Auto-expand
 
     private func autoExpandTopAction() {
         let topAction = sortedSessions.first { $0.pendingPermission != nil || $0.pendingQuestion != nil }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            // Auto-expand the top pending action, or collapse if none
             if let id = topAction?.id {
                 expandedRowId = id
             } else if let expandedId = expandedRowId,
@@ -307,6 +328,10 @@ struct PillGroupView: View {
             } else {
                 NSCursor.pop()
                 pageOffset = 0
+                guard !actionCooldown else {
+                    pillPosition.isMouseOverPill = false
+                    return
+                }
                 // 1. Hide content now
                 withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
                     contentVisible = false
@@ -378,6 +403,7 @@ struct PillGroupView: View {
                         // Acknowledge button for non-permission waiting
                         if session.status == .waiting && session.pendingPermission == nil {
                             Button {
+                                startActionCooldown()
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     sessionManager.sessions[sessionManager.sessions.firstIndex(where: { $0.id == session.id })!].status = .idle
                                 }
@@ -445,11 +471,13 @@ struct PillGroupView: View {
                     permission: permission,
                     scale: scale,
                     onAllow: {
+                        startActionCooldown()
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             sessionManager.resolvePermission(sessionId: session.id, allow: true)
                         }
                     },
                     onDeny: {
+                        startActionCooldown()
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             sessionManager.resolvePermission(sessionId: session.id, allow: false)
                         }
@@ -470,11 +498,13 @@ struct PillGroupView: View {
                     question: question,
                     scale: scale,
                     onSubmit: { answer in
+                        startActionCooldown()
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             sessionManager.resolveQuestion(sessionId: session.id, answer: answer)
                         }
                     },
                     onSkip: {
+                        startActionCooldown()
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             sessionManager.resolveQuestion(sessionId: session.id, answer: nil)
                         }
@@ -553,10 +583,29 @@ struct PermissionPromptView: View {
     let onAllow: () -> Void
     let onDeny: () -> Void
 
+    private var formattedToolName: String {
+        let name = permission.toolName
+        guard name.hasPrefix("mcp__") else { return name }
+        let rest = String(name.dropFirst(5))
+        let parts = rest.components(separatedBy: "__").filter { !$0.isEmpty }
+        guard parts.count >= 2 else { return name }
+        return "\(parts[0]) · \(parts.dropFirst().joined(separator: "."))"
+    }
+
+    private var formattedInput: String {
+        let input = permission.toolInput
+        guard input.hasPrefix("{"), let data = input.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return input }
+        return json.map { key, val in
+            if let str = val as? String { return "\(key): \"\(str)\"" }
+            return "\(key): \(val)"
+        }.joined(separator: "\n")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4 * scale) {
             // Tool name
-            Text(permission.toolName)
+            Text(formattedToolName)
                 .font(.system(size: 10 * scale, weight: .bold, design: .rounded))
                 .foregroundStyle(Color(red: 0.85, green: 0.5, blue: 0.0))
 
@@ -574,7 +623,7 @@ struct PermissionPromptView: View {
             }
 
             // Code block — diff view for edits, plain text for others
-            if !permission.toolInput.isEmpty {
+            if !formattedInput.isEmpty {
                 let isDiff = permission.toolName == "Edit"
                 ScrollView {
                     if isDiff {
@@ -585,7 +634,7 @@ struct PermissionPromptView: View {
                         }
                         .padding(6 * scale)
                     } else {
-                        Text(permission.toolInput)
+                        Text(formattedInput)
                             .font(.system(size: 9 * scale, design: .monospaced))
                             .foregroundStyle(.primary.opacity(0.8))
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -599,66 +648,47 @@ struct PermissionPromptView: View {
                 )
             }
 
-            HStack(spacing: 4 * scale) {
-                Button { onAllow() } label: {
-                    HStack(spacing: 3 * scale) {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 7 * scale, weight: .bold))
-                        Text("Allow")
-                            .font(.system(size: 9 * scale, weight: .semibold, design: .rounded))
-                    }
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 10 * scale)
-                    .padding(.vertical, 5 * scale)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
-                            .fill(Color.green.opacity(0.12))
-                    )
-                }
-                .buttonStyle(.plain)
-                .cursor(.pointingHand)
+            VStack(alignment: .leading, spacing: 2 * scale) {
+                PermissionActionButton(icon: "checkmark", label: "Allow", scale: scale, action: onAllow)
+                PermissionActionButton(icon: "xmark", label: "Deny", scale: scale, action: onDeny)
 
-                Button { onDeny() } label: {
-                    HStack(spacing: 3 * scale) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 7 * scale, weight: .bold))
-                        Text("Deny")
-                            .font(.system(size: 9 * scale, weight: .semibold, design: .rounded))
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10 * scale)
-                    .padding(.vertical, 5 * scale)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
-                            .fill(.primary.opacity(0.06))
-                    )
-                }
-                .buttonStyle(.plain)
-                .cursor(.pointingHand)
-            }
-
-            // Permission suggestions
-            if !permission.suggestions.isEmpty {
-                VStack(alignment: .leading, spacing: 2 * scale) {
-                    ForEach(Array(permission.suggestions.enumerated()), id: \.offset) { _, suggestion in
-                        Button { onAllow() } label: {
-                            Text(suggestion.label)
-                                .font(.system(size: 9 * scale, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.primary.opacity(0.8))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 8 * scale)
-                                .padding(.vertical, 5 * scale)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
-                                        .fill(.primary.opacity(0.08))
-                                )
-                        }
-                        .buttonStyle(.plain)
-                        .cursor(.pointingHand)
-                    }
+                ForEach(Array(permission.suggestions.enumerated()), id: \.offset) { _, suggestion in
+                    PermissionActionButton(icon: suggestion.icon, label: suggestion.label, scale: scale, action: onAllow)
                 }
             }
         }
+    }
+}
+
+struct PermissionActionButton: View {
+    let icon: String
+    let label: String
+    let scale: CGFloat
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4 * scale) {
+                Image(systemName: icon)
+                    .font(.system(size: 8 * scale, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 9 * scale, weight: .medium, design: .rounded))
+            }
+            .foregroundStyle(.primary.opacity(0.6))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8 * scale)
+            .padding(.vertical, 5 * scale)
+            .background(
+                RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+                    .fill(.primary.opacity(0.04))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+                            .stroke(.primary.opacity(0.06), lineWidth: 0.5)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .cursor(.pointingHand)
     }
 }
 

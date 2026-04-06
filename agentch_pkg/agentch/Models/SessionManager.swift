@@ -107,18 +107,30 @@ struct SessionEvent: Sendable {
                 let type = s["type"] as? String ?? ""
                 let behavior = s["behavior"] as? String
                 let mode = s["mode"] as? String
+                let dest = s["destination"] as? String ?? "session"
                 // Build human-readable label
                 let label: String
+                let icon: String
                 if type == "setMode", let mode {
-                    label = "Set mode: \(mode)"
+                    let modeLabel: String = switch mode {
+                    case "acceptEdits": "Accept Edits"
+                    case "auto": "Auto"
+                    case "bypassPermissions": "Bypass"
+                    default: mode
+                    }
+                    label = "Switch to \(modeLabel) mode"
+                    icon = "arrow.triangle.2.circlepath"
                 } else if let rules = s["rules"] as? [[String: Any]], let first = rules.first {
-                    let tool = first["toolName"] as? String ?? ""
                     let rule = first["ruleContent"] as? String ?? ""
-                    label = "\(behavior ?? "allow") \(tool) \(rule)"
+                    let shortRule = rule.components(separatedBy: "/").last ?? rule
+                    let scope = dest == "session" ? "this session" : "always"
+                    label = "Allow \(shortRule) for \(scope)"
+                    icon = "checkmark.shield"
                 } else {
                     label = type
+                    icon = "questionmark.circle"
                 }
-                return PermissionSuggestion(type: type, behavior: behavior, mode: mode, label: label)
+                return PermissionSuggestion(type: type, behavior: behavior, mode: mode, label: label, icon: icon)
             }
         } else {
             permissionSuggestions = nil

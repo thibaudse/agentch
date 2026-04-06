@@ -64,6 +64,7 @@ struct PermissionSuggestion: Sendable {
     let behavior: String?  // "allow", "deny"
     let mode: String?      // for setMode
     let label: String      // human-readable summary
+    let icon: String       // SF Symbol name
 }
 
 struct PermissionRequest: Sendable {
