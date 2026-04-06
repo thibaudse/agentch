@@ -8,6 +8,11 @@ struct PillGroupView: View {
     @State private var isHovering = false
     @State private var isPeeking = false
     @State private var peekTask: Task<Void, Never>?
+    @State private var expandTask: Task<Void, Never>?
+    @State private var collapseTask: Task<Void, Never>?
+    @State private var cooldownTask: Task<Void, Never>?
+    @State private var badgePopTask: Task<Void, Never>?
+    @State private var squishTask: Task<Void, Never>?
     @State private var squish: CGFloat = 1.0
     @State private var badgePop: CGFloat = 1.0
     @State private var expandedRowId: String?
@@ -100,9 +105,11 @@ struct PillGroupView: View {
         }
         .onChange(of: isExpanded) { old, new in
             if new && !old {
-                // Pill just expanded: delay content appearance
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    guard isExpanded else { return }
+                collapseTask?.cancel()
+                expandTask?.cancel()
+                expandTask = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(200))
+                    guard !Task.isCancelled, isExpanded else { return }
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         contentVisible = true
                     }
@@ -114,10 +121,13 @@ struct PillGroupView: View {
     // MARK: - Badge pop
 
     private func triggerBadgePop() {
+        badgePopTask?.cancel()
         withAnimation(.spring(response: 0.15, dampingFraction: 0.3)) {
             badgePop = 1.3
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        badgePopTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                 badgePop = 1.0
             }
@@ -127,10 +137,13 @@ struct PillGroupView: View {
     // MARK: - Squish
 
     private func triggerSquish() {
+        squishTask?.cancel()
         withAnimation(.spring(response: 0.15, dampingFraction: 0.3)) {
             squish = 0.92
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        squishTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                 squish = 1.0
             }
@@ -146,15 +159,14 @@ struct PillGroupView: View {
         }
         peekTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(peekDurationSetting))
-            guard !Task.isCancelled else { return }
-            guard !isHovering else { return }
+            guard !Task.isCancelled, !isHovering else { return }
             withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
                 contentVisible = false
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
-                    isPeeking = false
-                }
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
+                isPeeking = false
             }
         }
     }
@@ -174,18 +186,20 @@ struct PillGroupView: View {
     private func startActionCooldown() {
         actionCooldown = true
         cancelPeek()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        cooldownTask?.cancel()
+        cooldownTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
             actionCooldown = false
             cancelPeek()
-            if !pillPosition.isMouseOverPill {
-                withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
-                    contentVisible = false
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
-                        isHovering = false
-                    }
-                }
+            guard !pillPosition.isMouseOverPill else { return }
+            withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
+                contentVisible = false
+            }
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
+                isHovering = false
             }
         }
     }
@@ -320,6 +334,9 @@ struct PillGroupView: View {
         .onHover { hovering in
             pillPosition.isMouseOverPill = hovering
             if hovering {
+                collapseTask?.cancel()
+                cooldownTask?.cancel()
+                actionCooldown = false
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
                     isHovering = true
                 }
@@ -332,12 +349,14 @@ struct PillGroupView: View {
                     pillPosition.isMouseOverPill = false
                     return
                 }
-                // 1. Hide content now
-                withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
-                    contentVisible = false
-                }
-                // 2. Shrink pill after 200ms
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                expandTask?.cancel()
+                collapseTask?.cancel()
+                collapseTask = Task { @MainActor in
+                    withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
+                        contentVisible = false
+                    }
+                    try? await Task.sleep(for: .milliseconds(200))
+                    guard !Task.isCancelled else { return }
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
                         isHovering = false
                     }

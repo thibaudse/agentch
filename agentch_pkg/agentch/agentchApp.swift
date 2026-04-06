@@ -190,7 +190,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.activeSpaceDidChangeNotification,
             object: nil, queue: .main) { _ in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { check() }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(500))
+                    check()
+                }
             }
     }
 

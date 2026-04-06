@@ -8,7 +8,7 @@ struct TerminalFocuser {
         guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
         guard let appName = app.localizedName else { return }
         guard let tty = session.tty else {
-            DispatchQueue.global(qos: .userInitiated).async {
+            Task.detached {
                 runAppleScript("tell application \"\(appName)\" to activate")
             }
             return
@@ -16,14 +16,10 @@ struct TerminalFocuser {
 
         let marker = "agentch:\(session.id)"
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            // 1. Set a unique title on the session's TTY
+        Task.detached {
             setTerminalTitle(marker, onTTY: tty)
+            try? await Task.sleep(for: .milliseconds(50))
 
-            // 2. Small delay for the terminal to process the escape sequence
-            Thread.sleep(forTimeInterval: 0.05)
-
-            // 3. Activate the terminal and click the tab with our marker
             let escaped = escapeForAppleScript(marker)
             let script = """
             tell application "\(appName)" to activate
@@ -66,12 +62,11 @@ struct TerminalFocuser {
         guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
         guard let appName = app.localizedName else { return }
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            // Focus the right tab first
+        Task.detached {
             if let tty = session.tty {
                 let marker = "agentch:\(session.id)"
                 setTerminalTitle(marker, onTTY: tty)
-                Thread.sleep(forTimeInterval: 0.05)
+                try? await Task.sleep(for: .milliseconds(50))
                 let focusScript = """
                 tell application "\(appName)" to activate
                 delay 0.05
@@ -88,22 +83,19 @@ struct TerminalFocuser {
                 end tell
                 """
                 runAppleScript(focusScript)
-                Thread.sleep(forTimeInterval: 0.1)
+                try? await Task.sleep(for: .milliseconds(100))
             } else {
                 runAppleScript("tell application \"\(appName)\" to activate")
-                Thread.sleep(forTimeInterval: 0.1)
+                try? await Task.sleep(for: .milliseconds(100))
             }
 
-            // Send the keystroke
             if allow {
-                // Return confirms the default (Yes/Allow)
                 runAppleScript("""
                 tell application "System Events"
                     keystroke return
                 end tell
                 """)
             } else {
-                // Escape cancels/denies the permission prompt
                 runAppleScript("""
                 tell application "System Events"
                     key code 53

@@ -144,15 +144,12 @@ final class PillPosition: ObservableObject {
             }
         }
 
-        // Dispatch to main to ensure animation works from NSEvent callback
-        DispatchQueue.main.async { [self] in
+        Task { @MainActor [self] in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.65)) {
                 offset = bestOffset
             }
-            // Save after the offset is set
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [self] in
-                saveOffset()
-            }
+            try? await Task.sleep(for: .milliseconds(400))
+            saveOffset()
         }
     }
 
