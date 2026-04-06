@@ -18,7 +18,7 @@ jobs:
         run: brew install xcodegen
 
       - name: Build DMG
-        run: make dmg
+        run: make dmg XCODE_FLAGS='CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM='
 
       - name: Checksum
         run: shasum -a 256 AgentCh.dmg > AgentCh.dmg.sha256

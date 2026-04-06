@@ -27,12 +27,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        requestAccessibilityIfNeeded()
         setupPanel()
         startServer()
         autoInstallHooksIfNeeded()
         observeHooksToggle()
         observeScreenChange()
+        observeFullScreen()
         sessionManager.startCleanup()
         SettingsWindowController.shared.pillPosition = pillPosition
         SettingsWindowController.shared.screenManager = screenManager
@@ -161,25 +161,81 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
     }
 
-    private nonisolated func requestAccessibilityIfNeeded() {
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-        let trusted = AXIsProcessTrustedWithOptions(options)
-        if !trusted {
-            // Poll until the user grants accessibility, then relaunch
-            DispatchQueue.global(qos: .utility).async {
-                while !AXIsProcessTrusted() {
-                    Thread.sleep(forTimeInterval: 1)
-                }
-                DispatchQueue.main.async {
-                    let url = Bundle.main.bundleURL
-                    let config = NSWorkspace.OpenConfiguration()
-                    config.createsNewApplicationInstance = true
-                    NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in
-                        exit(0)
+    private func observeFullScreen() {
+        // Load MediaRemote via dlopen
+        guard let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_LAZY) else {
+            NSLog("[agentch] MediaRemote dlopen failed"); return
+        }
+        guard let pIsPlaying = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationIsPlaying"),
+              let pGetPID = dlsym(handle, "MRMediaRemoteGetNowPlayingApplicationPID") else {
+            NSLog("[agentch] MediaRemote symbols not found"); return
+        }
+        NSLog("[agentch] Full-screen player detection active")
+
+        typealias IsPlayingFn = @convention(c) (DispatchQueue, @escaping @Sendable (Bool) -> Void) -> Void
+        typealias NowPlayingPIDFn = @convention(c) (DispatchQueue, @escaping @Sendable (Int32) -> Void) -> Void
+
+        let getIsPlaying = unsafeBitCast(pIsPlaying, to: IsPlayingFn.self)
+        let getPID = unsafeBitCast(pGetPID, to: NowPlayingPIDFn.self)
+
+        // Check every 2 seconds on a background thread to avoid blocking main
+        let checkFullScreen = { [weak self] in
+            nonisolated(unsafe) var playing = false
+            nonisolated(unsafe) var playerPID: Int32 = 0
+
+            let semaphore = DispatchSemaphore(value: 0)
+            getIsPlaying(DispatchQueue.global()) { isPlaying in
+                playing = isPlaying
+                semaphore.signal()
+            }
+            semaphore.wait()
+
+            guard playing else { return false }
+
+            let sem2 = DispatchSemaphore(value: 0)
+            getPID(DispatchQueue.global()) { pid in
+                playerPID = pid
+                sem2.signal()
+            }
+            sem2.wait()
+
+            guard playerPID > 0 else { return false }
+            return self?.isPlayerFullScreen(pid: playerPID) ?? false
+        }
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            while self != nil {
+                Thread.sleep(forTimeInterval: 2)
+                let shouldHide = checkFullScreen()
+                Task { @MainActor [weak self] in
+                    guard let panel = self?.panel else { return }
+                    if shouldHide && panel.isVisible {
+                        panel.orderOut(nil)
+                    } else if !shouldHide && !panel.isVisible {
+                        panel.orderFrontRegardless()
                     }
                 }
             }
         }
+    }
+
+    private nonisolated func isPlayerFullScreen(pid: Int32) -> Bool {
+        guard let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return false }
+        let screenFrame = NSScreen.main?.frame ?? .zero
+
+        for window in windowList {
+            guard let wPid = window[kCGWindowOwnerPID as String] as? Int32,
+                  wPid == pid,
+                  let bounds = window[kCGWindowBounds as String] as? [String: Any] else { continue }
+            let w = (bounds["Width"] as? Int).map(CGFloat.init) ?? (bounds["Width"] as? CGFloat) ?? 0
+            let h = (bounds["Height"] as? Int).map(CGFloat.init) ?? (bounds["Height"] as? CGFloat) ?? 0
+            // Full-screen windows cover the entire screen including menu bar
+            // Allow small tolerance for the menu bar (< 50px difference)
+            if w >= screenFrame.width && h >= screenFrame.height - 50 {
+                return true
+            }
+        }
+        return false
     }
 
     private func autoInstallHooksIfNeeded() {

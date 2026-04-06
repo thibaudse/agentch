@@ -1,5 +1,6 @@
 # Xcode
 *.xcodeproj/
+local.xcconfig
 DerivedData/
 build/
 *.dmg

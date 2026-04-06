@@ -1,5 +1,4 @@
 import AppKit
-import ApplicationServices
 
 struct TerminalFocuser {
 

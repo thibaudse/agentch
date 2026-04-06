@@ -7,8 +7,11 @@ generate:
 	@which xcodegen > /dev/null || (echo "Install xcodegen: brew install xcodegen" && exit 1)
 	xcodegen generate
 
+XCCONFIG = $(wildcard local.xcconfig)
+XCODE_FLAGS ?= $(if $(XCCONFIG),-xcconfig $(XCCONFIG))
+
 build: generate
-	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Release build SYMROOT=build 2>&1 | tail -3
+	xcodebuild -project $(APP_NAME).xcodeproj -scheme $(APP_NAME) -configuration Release build SYMROOT=build $(XCODE_FLAGS) 2>&1 | tail -3
 
 install: build
 	@rm -rf "$(APP_DIR)/$(APP_NAME).app"
