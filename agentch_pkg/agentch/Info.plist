@@ -26,5 +26,7 @@
     <string>6.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>AgentCh needs to control your terminal to switch tabs and focus sessions.</string>
 </dict>
 </plist>

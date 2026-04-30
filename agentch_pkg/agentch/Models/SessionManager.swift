@@ -151,34 +151,114 @@ struct SessionEvent: Sendable {
         )
     }
 
-    /// Format old/new strings as a unified diff with line numbers.
-    /// Lines are formatted as "NNN - old" or "NNN + new" where NNN is the file line number.
+    /// Format old/new strings as a unified diff with context lines from the file.
+    /// Lines: "NNN   context", "NNN - removed", "NNN + added"
     private static func formatDiff(old: String, new: String, filePath: String?) -> String {
+        let contextCount = 3
         var startLine = 1
+        var fileLines: [String] = []
+
         if let filePath,
            let content = try? String(contentsOfFile: filePath, encoding: .utf8) {
-            let fileLines = content.components(separatedBy: "\n")
+            fileLines = content.components(separatedBy: "\n")
             let oldFirstLine = old.components(separatedBy: "\n").first ?? ""
-            for (i, line) in fileLines.enumerated() {
-                if line.contains(oldFirstLine) {
-                    startLine = i + 1
-                    break
+            if !oldFirstLine.isEmpty {
+                for (i, line) in fileLines.enumerated() {
+                    if line.contains(oldFirstLine) {
+                        startLine = i + 1
+                        break
+                    }
                 }
             }
         }
 
         let oldLines = old.components(separatedBy: "\n")
         let newLines = new.components(separatedBy: "\n")
+
+        // LCS-based diff between old and new lines
+        let diff = lineDiff(old: oldLines, new: newLines)
+
         var result: [String] = []
-        for (i, line) in oldLines.enumerated() {
-            let lineNum = String(format: "%3d", startLine + i)
-            result.append("\(lineNum) - \(line)")
+
+        // Context before
+        let ctxStart = max(0, startLine - 1 - contextCount)
+        for i in ctxStart..<(startLine - 1) {
+            if i < fileLines.count {
+                let lineNum = String(format: "%3d", i + 1)
+                result.append("\(lineNum)   \(fileLines[i])")
+            }
         }
-        for (i, line) in newLines.enumerated() {
-            let lineNum = String(format: "%3d", startLine + i)
-            result.append("\(lineNum) + \(line)")
+
+        // Diff lines
+        var oldIdx = 0
+        var newIdx = 0
+        for entry in diff {
+            switch entry {
+            case .same(let line):
+                let lineNum = String(format: "%3d", startLine + oldIdx)
+                result.append("\(lineNum)   \(line)")
+                oldIdx += 1
+                newIdx += 1
+            case .removed(let line):
+                let lineNum = String(format: "%3d", startLine + oldIdx)
+                result.append("\(lineNum) - \(line)")
+                oldIdx += 1
+            case .added(let line):
+                let lineNum = String(format: "%3d", startLine + newIdx)
+                result.append("\(lineNum) + \(line)")
+                newIdx += 1
+            }
         }
+
+        // Context after
+        let afterStart = startLine - 1 + oldLines.count
+        let afterEnd = min(fileLines.count, afterStart + contextCount)
+        for i in afterStart..<afterEnd {
+            let lineNum = String(format: "%3d", i + 1)
+            result.append("\(lineNum)   \(fileLines[i])")
+        }
+
         return result.joined(separator: "\n")
+    }
+
+    /// Simple LCS-based line diff
+    private enum DiffEntry {
+        case same(String)
+        case removed(String)
+        case added(String)
+    }
+
+    private static func lineDiff(old: [String], new: [String]) -> [DiffEntry] {
+        let m = old.count, n = new.count
+        // Build LCS table
+        var dp = Array(repeating: Array(repeating: 0, count: n + 1), count: m + 1)
+        for i in 1...max(m, 1) {
+            for j in 1...max(n, 1) {
+                guard i <= m, j <= n else { continue }
+                if old[i - 1] == new[j - 1] {
+                    dp[i][j] = dp[i - 1][j - 1] + 1
+                } else {
+                    dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+                }
+            }
+        }
+
+        // Backtrack to build diff
+        var result: [DiffEntry] = []
+        var i = m, j = n
+        while i > 0 || j > 0 {
+            if i > 0 && j > 0 && old[i - 1] == new[j - 1] {
+                result.append(.same(old[i - 1]))
+                i -= 1; j -= 1
+            } else if j > 0 && (i == 0 || dp[i][j - 1] >= dp[i - 1][j]) {
+                result.append(.added(new[j - 1]))
+                j -= 1
+            } else {
+                result.append(.removed(old[i - 1]))
+                i -= 1
+            }
+        }
+        return result.reversed()
     }
 
     /// Detect agent type from the process name at the given PID.

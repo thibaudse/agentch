@@ -3,12 +3,14 @@ import AppKit
 struct TerminalFocuser {
 
     static func focus(session: Session) {
-        guard let claudePid = session.termPid else { return }
-        guard let terminalPid = findTerminalPid(from: claudePid) else { return }
-        guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
-        guard let appName = app.localizedName else { return }
+        NSLog("[Focus] focus called pid=%@ tty=%@", String(describing: session.termPid), String(describing: session.tty))
+        guard let claudePid = session.termPid else { NSLog("[Focus] no termPid"); return }
+        guard let terminalPid = findTerminalPid(from: claudePid) else { NSLog("[Focus] no terminal for pid %d", claudePid); return }
+        guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { NSLog("[Focus] no app for pid %d", terminalPid); return }
+        guard let appName = app.localizedName else { NSLog("[Focus] no app name"); return }
+        NSLog("[Focus] terminal=%@ pid=%d", appName, terminalPid)
         guard let tty = session.tty else {
-            Task.detached {
+            Thread.detachNewThread {
                 runAppleScript("tell application \"\(appName)\" to activate")
             }
             return
@@ -16,26 +18,25 @@ struct TerminalFocuser {
 
         let marker = "agentch:\(session.id)"
 
-        Task.detached {
-            setTerminalTitle(marker, onTTY: tty)
-            try? await Task.sleep(for: .milliseconds(50))
-
-            let escaped = escapeForAppleScript(marker)
-            let script = """
-            tell application "\(appName)" to activate
-            delay 0.05
-            tell application "System Events"
-                tell process "\(appName)"
-                    set tabGroup to first UI element of front window whose role is "AXTabGroup"
-                    repeat with btn in (UI elements of tabGroup whose role is "AXRadioButton")
-                        if name of btn contains "\(escaped)" then
-                            click btn
-                            return
-                        end if
-                    end repeat
-                end tell
+        let escaped = escapeForAppleScript(marker)
+        let script = """
+        tell application "\(appName)" to activate
+        delay 0.05
+        tell application "System Events"
+            tell process "\(appName)"
+                set tabGroup to first UI element of front window whose role is "AXTabGroup"
+                repeat with btn in (UI elements of tabGroup whose role is "AXRadioButton")
+                    if name of btn contains "\(escaped)" then
+                        click btn
+                        return
+                    end if
+                end repeat
             end tell
-            """
+        end tell
+        """
+        Thread.detachNewThread {
+            setTerminalTitle(marker, onTTY: tty)
+            Thread.sleep(forTimeInterval: 0.05)
             runAppleScript(script)
         }
     }
@@ -62,11 +63,11 @@ struct TerminalFocuser {
         guard let app = NSRunningApplication(processIdentifier: pid_t(terminalPid)) else { return }
         guard let appName = app.localizedName else { return }
 
-        Task.detached {
+        Thread.detachNewThread {
             if let tty = session.tty {
                 let marker = "agentch:\(session.id)"
                 setTerminalTitle(marker, onTTY: tty)
-                try? await Task.sleep(for: .milliseconds(50))
+                Thread.sleep(forTimeInterval: 0.05)
                 let focusScript = """
                 tell application "\(appName)" to activate
                 delay 0.05
@@ -83,10 +84,10 @@ struct TerminalFocuser {
                 end tell
                 """
                 runAppleScript(focusScript)
-                try? await Task.sleep(for: .milliseconds(100))
+                Thread.sleep(forTimeInterval: 0.1)
             } else {
                 runAppleScript("tell application \"\(appName)\" to activate")
-                try? await Task.sleep(for: .milliseconds(100))
+                Thread.sleep(forTimeInterval: 0.1)
             }
 
             if allow {
@@ -134,9 +135,11 @@ struct TerminalFocuser {
     private static func runAppleScript(_ source: String) {
         if let script = NSAppleScript(source: source) {
             var error: NSDictionary?
-            script.executeAndReturnError(&error)
+            let result = script.executeAndReturnError(&error)
             if let error {
-                NSLog("[Focus] AppleScript error: %@", error)
+                NSLog("[Focus] AppleScript error: %@ source: %@", error, String(source.prefix(100)))
+            } else {
+                NSLog("[Focus] AppleScript OK result=%@", result.stringValue ?? "nil")
             }
         }
     }

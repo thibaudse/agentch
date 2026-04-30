@@ -19,6 +19,11 @@ struct PillGroupView: View {
     @State private var contentVisible = false
     @State private var pageOffset: Int = 0
     @State private var actionCooldown = false
+
+    // Shared animation timings (milliseconds)
+    private let contentFadeMs: UInt64 = 150
+    private let collapseDelayMs: UInt64 = 200
+    private let expandDelayMs: UInt64 = 200
     private var scale: CGFloat { CGFloat(pillScale) }
     private var mascotSize: CGFloat { 16 * scale }
     private var hPadding: CGFloat { 14 * scale }
@@ -108,7 +113,7 @@ struct PillGroupView: View {
                 collapseTask?.cancel()
                 expandTask?.cancel()
                 expandTask = Task { @MainActor in
-                    try? await Task.sleep(for: .milliseconds(200))
+                    try? await Task.sleep(for: .milliseconds(expandDelayMs))
                     guard !Task.isCancelled, isExpanded else { return }
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         contentVisible = true
@@ -163,7 +168,7 @@ struct PillGroupView: View {
             withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
                 contentVisible = false
             }
-            try? await Task.sleep(for: .milliseconds(200))
+            try? await Task.sleep(for: .milliseconds(collapseDelayMs))
             guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.45, dampingFraction: 0.6)) {
                 isPeeking = false
@@ -188,7 +193,8 @@ struct PillGroupView: View {
         cancelPeek()
         cooldownTask?.cancel()
         cooldownTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(500))
+            // Wait for content fade + collapse delay before checking hover
+            try? await Task.sleep(for: .milliseconds(contentFadeMs + collapseDelayMs))
             guard !Task.isCancelled else { return }
             actionCooldown = false
             cancelPeek()
@@ -196,7 +202,7 @@ struct PillGroupView: View {
             withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
                 contentVisible = false
             }
-            try? await Task.sleep(for: .milliseconds(200))
+            try? await Task.sleep(for: .milliseconds(collapseDelayMs))
             guard !Task.isCancelled else { return }
             withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
                 isHovering = false
@@ -337,6 +343,17 @@ struct PillGroupView: View {
                 collapseTask?.cancel()
                 cooldownTask?.cancel()
                 actionCooldown = false
+                // Restore content if collapse cancelled it mid-way
+                if isExpanded && !contentVisible {
+                    expandTask?.cancel()
+                    expandTask = Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(expandDelayMs))
+                        guard !Task.isCancelled, isExpanded else { return }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            contentVisible = true
+                        }
+                    }
+                }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
                     isHovering = true
                 }
@@ -355,7 +372,7 @@ struct PillGroupView: View {
                     withAnimation(.spring(response: 0.15, dampingFraction: 0.8)) {
                         contentVisible = false
                     }
-                    try? await Task.sleep(for: .milliseconds(200))
+                    try? await Task.sleep(for: .milliseconds(collapseDelayMs))
                     guard !Task.isCancelled else { return }
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.65)) {
                         isHovering = false
@@ -660,7 +677,7 @@ struct PermissionPromptView: View {
                             .padding(6 * scale)
                     }
                 }
-                .frame(maxHeight: 80 * scale)
+                .frame(maxHeight: 120 * scale)
                 .background(
                     RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
                         .fill(.primary.opacity(0.06))
@@ -715,9 +732,8 @@ struct DiffLineView: View {
     let line: String
     let scale: CGFloat
 
-    // Format: "NNN - content" or "NNN + content"
+    // Format: "NNN - content", "NNN + content", or "NNN   content" (context)
     private var parsed: (lineNum: String, sign: String, content: String) {
-        // Find the " - " or " + " separator after the line number
         if let range = line.range(of: " - ", options: [], range: line.startIndex..<line.endIndex) {
             let num = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
             let content = String(line[range.upperBound...])
@@ -727,6 +743,14 @@ struct DiffLineView: View {
             let num = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
             let content = String(line[range.upperBound...])
             return (num, "+", content)
+        }
+        // Context line: "NNN   content" (3 spaces after number)
+        if let range = line.range(of: "   ", options: [], range: line.startIndex..<line.endIndex) {
+            let num = String(line[..<range.lowerBound]).trimmingCharacters(in: .whitespaces)
+            if !num.isEmpty, num.allSatisfy(\.isNumber) {
+                let content = String(line[range.upperBound...])
+                return (num, " ", content)
+            }
         }
         return ("", " ", line)
     }

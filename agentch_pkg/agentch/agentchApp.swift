@@ -27,6 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     @AppStorage("hooksDisabled") var hooksDisabled: Bool = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        requestAccessibilityOnce()
         setupPanel()
         startServer()
         autoInstallHooksIfNeeded()
@@ -166,6 +167,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
                 self.panel?.coverScreen(selectedScreen)
                 self.pillPosition.screen = selectedScreen
                 self.pillPosition.resetToDefault()
+            }
+        }
+    }
+
+    private nonisolated func requestAccessibilityOnce() {
+        guard !AXIsProcessTrusted() else { return }
+        let flag = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".agentch/.accessibility-prompted").path
+        guard !FileManager.default.fileExists(atPath: flag) else { return }
+        FileManager.default.createFile(atPath: flag, contents: nil)
+        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        AXIsProcessTrustedWithOptions(options)
+        // Auto-relaunch after user grants accessibility
+        Task.detached {
+            while !AXIsProcessTrusted() {
+                try? await Task.sleep(for: .seconds(1))
+            }
+            await MainActor.run {
+                let url = Bundle.main.bundleURL
+                let config = NSWorkspace.OpenConfiguration()
+                config.createsNewApplicationInstance = true
+                NSWorkspace.shared.openApplication(at: url, configuration: config) { _, _ in
+                    exit(0)
+                }
             }
         }
     }
